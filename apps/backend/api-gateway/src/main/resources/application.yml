@@ -1,0 +1,61 @@
+server:
+  port: 8080
+  shutdown: graceful
+
+spring:
+  application:
+    name: api-gateway
+  lifecycle:
+    timeout-per-shutdown-phase: 20s
+  cloud:
+    gateway:
+      httpclient:
+        connect-timeout: 2000
+        response-timeout: 10s
+      routes:
+        - id: auth-service
+          uri: ${services.auth-service-uri}
+          predicates:
+            - Path=/api/v1/auth/**
+        - id: user-service
+          uri: ${services.user-service-uri}
+          predicates:
+            - Path=/api/v1/users/**
+        - id: monitoring-service
+          uri: ${services.monitoring-service-uri}
+          predicates:
+            - Path=/api/v1/monitoring/**
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: always
+      group:
+        readiness:
+          include: readinessState,ping
+        liveness:
+          include: livenessState,ping
+  health:
+    readinessstate:
+      enabled: true
+    livenessstate:
+      enabled: true
+
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+
+services:
+  auth-service-uri: ${AUTH_SERVICE_URI:http://localhost:8081}
+  user-service-uri: ${USER_SERVICE_URI:http://localhost:8082}
+  monitoring-service-uri: ${MONITORING_SERVICE_URI:http://localhost:8083}
+
+security:
+  jwt:
+    secret: ${SECURITY_JWT_SECRET}

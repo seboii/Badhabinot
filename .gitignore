@@ -1,0 +1,14 @@
+/target/
+/.idea/
+/.vscode/
+/.env
+node_modules/
+apps/web/frontend-app/dist/
+coverage/
+.coverage
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+*.iml
+*.log

@@ -1,0 +1,13 @@
+.git
+.idea
+.vscode
+**/target
+.env
+**/node_modules
+**/dist
+**/__pycache__
+**/*.pyc
+**/.pytest_cache
+**/.venv
+coverage
+.coverage
