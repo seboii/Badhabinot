@@ -1,9 +1,15 @@
 name: badhabinot-platform
 
+x-runtime-defaults: &runtime-defaults
+  restart: unless-stopped
+  init: true
+  env_file:
+    - ../../../.env
+
 services:
   postgres:
+    <<: *runtime-defaults
     image: postgres:16-alpine
-    restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-badhabinot}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-badhabinot}
@@ -15,6 +21,7 @@ services:
       - ../../db/postgres/init:/docker-entrypoint-initdb.d:ro
     networks:
       - platform
+    stop_grace_period: 30s
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-badhabinot} -d postgres"]
       interval: 10s
@@ -23,8 +30,8 @@ services:
       start_period: 10s
 
   redis:
+    <<: *runtime-defaults
     image: redis:7.2-alpine
-    restart: unless-stopped
     command: ["redis-server", "/usr/local/etc/redis/redis.conf"]
     expose:
       - "6379"
@@ -32,6 +39,7 @@ services:
       - ../../redis/redis.conf:/usr/local/etc/redis/redis.conf:ro
     networks:
       - platform
+    stop_grace_period: 20s
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
@@ -40,13 +48,13 @@ services:
       start_period: 5s
 
   user-service:
+    <<: *runtime-defaults
     build:
       context: ../../..
       dockerfile: infra/docker/dockerfiles/spring-service.Dockerfile
       args:
         SERVICE_MODULE: apps/backend/user-service
         SERVICE_ARTIFACT: user-service
-    restart: unless-stopped
     environment:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/badhabinot_user
       SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-badhabinot}
@@ -66,6 +74,7 @@ services:
         condition: service_healthy
     networks:
       - platform
+    stop_grace_period: 40s
     healthcheck:
       test: ["CMD-SHELL", "curl --fail --silent http://localhost:8082/actuator/health/readiness > /dev/null || exit 1"]
       interval: 15s
@@ -74,20 +83,20 @@ services:
       start_period: 35s
 
   auth-service:
+    <<: *runtime-defaults
     build:
       context: ../../..
       dockerfile: infra/docker/dockerfiles/spring-service.Dockerfile
       args:
         SERVICE_MODULE: apps/backend/auth-service
         SERVICE_ARTIFACT: auth-service
-    restart: unless-stopped
     environment:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/badhabinot_auth
       SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-badhabinot}
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-badhabinot}
       SECURITY_JWT_SECRET: ${SECURITY_JWT_SECRET:-YmFkaGFiaW5vdC1kZXZlbG9wbWVudC1zZWNyZXQta2V5LTIwMjYtYmFkaGFiaW5vdA==}
       INTERNAL_API_KEY: ${INTERNAL_API_KEY:-change-me-in-real-environments}
-      USER_SERVICE_BASE_URL: ${USER_SERVICE_BASE_URL:-http://user-service:8082}
+      USER_SERVICE_URL: ${USER_SERVICE_URL:-http://user-service:8082}
       JAVA_OPTS: ${AUTH_SERVICE_JAVA_OPTS:-}
     expose:
       - "8081"
@@ -98,6 +107,7 @@ services:
         condition: service_healthy
     networks:
       - platform
+    stop_grace_period: 40s
     healthcheck:
       test: ["CMD-SHELL", "curl --fail --silent http://localhost:8081/actuator/health/readiness > /dev/null || exit 1"]
       interval: 15s
@@ -106,13 +116,13 @@ services:
       start_period: 35s
 
   ai-service:
+    <<: *runtime-defaults
     build:
       context: ../../..
       dockerfile: infra/docker/dockerfiles/python-service.Dockerfile
       args:
         SERVICE_PATH: apps/python-services/ai-service
         APP_PORT: 8092
-    restart: unless-stopped
     environment:
       INTERNAL_API_KEY: ${INTERNAL_API_KEY:-change-me-in-real-environments}
       AI_PROVIDER: ${AI_PROVIDER:-mock}
@@ -129,21 +139,22 @@ services:
       - "8092"
     networks:
       - platform
+    stop_grace_period: 20s
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8092/ready')"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8092/ready', timeout=3)"]
       interval: 10s
       timeout: 5s
       retries: 10
       start_period: 10s
 
   vision-service:
+    <<: *runtime-defaults
     build:
       context: ../../..
       dockerfile: infra/docker/dockerfiles/python-service.Dockerfile
       args:
         SERVICE_PATH: apps/python-services/vision-service
         APP_PORT: 8091
-    restart: unless-stopped
     environment:
       INTERNAL_API_KEY: ${INTERNAL_API_KEY:-change-me-in-real-environments}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
@@ -152,21 +163,22 @@ services:
       - "8091"
     networks:
       - platform
+    stop_grace_period: 20s
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8091/ready')"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8091/ready', timeout=3)"]
       interval: 10s
       timeout: 5s
       retries: 10
       start_period: 10s
 
   monitoring-service:
+    <<: *runtime-defaults
     build:
       context: ../../..
       dockerfile: infra/docker/dockerfiles/spring-service.Dockerfile
       args:
         SERVICE_MODULE: apps/backend/monitoring-service
         SERVICE_ARTIFACT: monitoring-service
-    restart: unless-stopped
     environment:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/badhabinot_monitoring
       SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-badhabinot}
@@ -175,9 +187,9 @@ services:
       SPRING_DATA_REDIS_PORT: 6379
       SECURITY_JWT_SECRET: ${SECURITY_JWT_SECRET:-YmFkaGFiaW5vdC1kZXZlbG9wbWVudC1zZWNyZXQta2V5LTIwMjYtYmFkaGFiaW5vdA==}
       INTERNAL_API_KEY: ${INTERNAL_API_KEY:-change-me-in-real-environments}
-      USER_SERVICE_BASE_URL: ${USER_SERVICE_BASE_URL:-http://user-service:8082}
-      VISION_SERVICE_BASE_URL: ${VISION_SERVICE_BASE_URL:-http://vision-service:8091}
-      AI_SERVICE_BASE_URL: ${AI_SERVICE_BASE_URL:-http://ai-service:8092}
+      USER_SERVICE_URL: ${USER_SERVICE_URL:-http://user-service:8082}
+      VISION_SERVICE_URL: ${VISION_SERVICE_URL:-http://vision-service:8091}
+      AI_SERVICE_URL: ${AI_SERVICE_URL:-http://ai-service:8092}
       VISION_SERVICE_READ_TIMEOUT: ${VISION_SERVICE_READ_TIMEOUT:-PT10S}
       AI_SERVICE_READ_TIMEOUT: ${AI_SERVICE_READ_TIMEOUT:-PT25S}
       ANALYSIS_JOB_CACHE_TTL: ${ANALYSIS_JOB_CACHE_TTL:-PT15M}
@@ -198,6 +210,7 @@ services:
         condition: service_healthy
     networks:
       - platform
+    stop_grace_period: 40s
     healthcheck:
       test: ["CMD-SHELL", "curl --fail --silent http://localhost:8083/actuator/health/readiness > /dev/null || exit 1"]
       interval: 15s
@@ -206,18 +219,18 @@ services:
       start_period: 45s
 
   api-gateway:
+    <<: *runtime-defaults
     build:
       context: ../../..
       dockerfile: infra/docker/dockerfiles/spring-service.Dockerfile
       args:
         SERVICE_MODULE: apps/backend/api-gateway
         SERVICE_ARTIFACT: api-gateway
-    restart: unless-stopped
     environment:
       SECURITY_JWT_SECRET: ${SECURITY_JWT_SECRET:-YmFkaGFiaW5vdC1kZXZlbG9wbWVudC1zZWNyZXQta2V5LTIwMjYtYmFkaGFiaW5vdA==}
-      AUTH_SERVICE_URI: ${AUTH_SERVICE_URI:-http://auth-service:8081}
-      USER_SERVICE_URI: ${USER_SERVICE_URI:-http://user-service:8082}
-      MONITORING_SERVICE_URI: ${MONITORING_SERVICE_URI:-http://monitoring-service:8083}
+      AUTH_SERVICE_URL: ${AUTH_SERVICE_URL:-http://auth-service:8081}
+      USER_SERVICE_URL: ${USER_SERVICE_URL:-http://user-service:8082}
+      MONITORING_SERVICE_URL: ${MONITORING_SERVICE_URL:-http://monitoring-service:8083}
       JAVA_OPTS: ${GATEWAY_JAVA_OPTS:-}
     expose:
       - "8080"
@@ -230,6 +243,7 @@ services:
         condition: service_healthy
     networks:
       - platform
+    stop_grace_period: 40s
     healthcheck:
       test: ["CMD-SHELL", "curl --fail --silent http://localhost:8080/actuator/health/readiness > /dev/null || exit 1"]
       interval: 15s
@@ -238,10 +252,12 @@ services:
       start_period: 25s
 
   frontend-app:
+    <<: *runtime-defaults
     build:
       context: ../../..
       dockerfile: infra/docker/dockerfiles/frontend-app.Dockerfile
-    restart: unless-stopped
+      args:
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-}
     expose:
       - "80"
     depends_on:
@@ -249,6 +265,7 @@ services:
         condition: service_healthy
     networks:
       - platform
+    stop_grace_period: 15s
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1/healthz > /dev/null || exit 1"]
       interval: 15s

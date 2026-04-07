@@ -1,4 +1,18 @@
 import os
+from pathlib import Path
+
+from dotenv import load_dotenv
+
+
+def _load_root_dotenv() -> None:
+    for parent in Path(__file__).resolve().parents:
+        candidate = parent / ".env"
+        if candidate.exists():
+            load_dotenv(candidate, override=False)
+            break
+
+
+_load_root_dotenv()
 
 
 class Settings:

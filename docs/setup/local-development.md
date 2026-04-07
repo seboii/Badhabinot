@@ -16,6 +16,8 @@ docker compose up --build
 
 This works from the repository root because `compose.yaml` is the local entrypoint that extends the base service mesh under `infra/docker/compose/docker-compose.yml`. Docker Desktop must be running before you invoke the command.
 
+All runtime configuration is centralized in the root `.env`. Do not create per-service `.env` files.
+
 The local compose entrypoint publishes:
 
 - `frontend-app` on `FRONTEND_PORT`
@@ -76,11 +78,11 @@ powershell -ExecutionPolicy Bypass -File infra/docker/scripts/smoke-test.ps1
 ### Frontend
 
 - `cd apps/web/frontend-app`
-- `Copy-Item .env.example .env`
 - `npm install`
 - `npm run dev`
 
 ## Environment notes
 
 - Docker service-to-service communication uses container DNS names such as `user-service`, `monitoring-service`, `vision-service`, and `ai-service`.
-- Direct local development defaults to `localhost` values from each service configuration.
+- Vite reads the repository root `.env`, so frontend and Docker share the same API settings.
+- Direct Spring and FastAPI runs should inherit environment values from the same root `.env`.

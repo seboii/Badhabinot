@@ -4,7 +4,7 @@ React + TypeScript frontend for the BADHABINOT platform.
 
 ## Local development
 
-1. Copy `.env.example` to `.env`.
+1. Configure the repository root `.env`.
 2. Start the backend stack from the repository root.
 3. Run:
 
@@ -25,6 +25,8 @@ docker compose up --build
 ```
 
 Then open `http://localhost:3000`.
+
+The frontend build reads `VITE_API_BASE_URL` from the repository root `.env`.
 
 Container flow:
 

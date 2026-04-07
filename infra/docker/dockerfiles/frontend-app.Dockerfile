@@ -1,6 +1,8 @@
 # syntax=docker/dockerfile:1.7
 
 FROM node:22-alpine AS build
+ARG VITE_API_BASE_URL=
+ENV VITE_API_BASE_URL=${VITE_API_BASE_URL}
 WORKDIR /workspace
 
 COPY apps/web/frontend-app/package*.json ./

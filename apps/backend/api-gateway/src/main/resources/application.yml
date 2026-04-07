@@ -52,9 +52,9 @@ springdoc:
     path: /swagger-ui.html
 
 services:
-  auth-service-uri: ${AUTH_SERVICE_URI:http://localhost:8081}
-  user-service-uri: ${USER_SERVICE_URI:http://localhost:8082}
-  monitoring-service-uri: ${MONITORING_SERVICE_URI:http://localhost:8083}
+  auth-service-uri: ${AUTH_SERVICE_URL:http://localhost:8081}
+  user-service-uri: ${USER_SERVICE_URL:http://localhost:8082}
+  monitoring-service-uri: ${MONITORING_SERVICE_URL:http://localhost:8083}
 
 security:
   jwt:

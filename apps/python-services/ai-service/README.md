@@ -13,11 +13,10 @@ FastAPI microservice responsible for higher-level analysis through configurable 
 
 ```powershell
 pip install -r requirements.txt
-Copy-Item .env.example .env
 uvicorn app.main:app --reload --port 8092
 ```
 
-For local Docker, `.env.example` defaults to `AI_PROVIDER=mock` so the stack starts without external credentials. Switch to `openai-compatible` and provide `AI_API_KEY` for real API-backed analysis.
+This service reads configuration from the repository root `.env`. For local Docker, `.env.example` defaults to `AI_PROVIDER=mock` so the stack starts without external credentials. Switch the root `.env` to `openai-compatible` and provide `AI_API_KEY` for real API-backed analysis.
 
 ## Test
 

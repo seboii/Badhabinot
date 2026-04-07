@@ -1,7 +1,3 @@
-SHELL := /bin/bash
-
-COMPOSE_FILES := -f infra/docker/compose/docker-compose.yml -f infra/docker/compose/docker-compose.dev.yml
-
 .PHONY: yardim up down build rebuild smoke backend-build frontend-build python-check ci
 
 yardim:
@@ -17,18 +13,18 @@ yardim:
 	@echo "  make ci              -> Tum lokal CI adimlarini calistirir"
 
 up:
-	docker compose $(COMPOSE_FILES) up -d
+	docker compose up -d
 
 down:
-	docker compose $(COMPOSE_FILES) down
+	docker compose down
 
 build:
-	docker compose $(COMPOSE_FILES) build
+	docker compose build
 
 rebuild:
-	docker compose $(COMPOSE_FILES) down
-	docker compose $(COMPOSE_FILES) build
-	docker compose $(COMPOSE_FILES) up -d
+	docker compose down
+	docker compose build
+	docker compose up -d
 
 smoke:
 	powershell -ExecutionPolicy Bypass -File infra/docker/scripts/smoke-test.ps1 -GatewayBaseUrl http://localhost:8080

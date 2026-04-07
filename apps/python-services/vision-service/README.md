@@ -12,9 +12,10 @@ FastAPI microservice responsible for OpenCV preprocessing and feature extraction
 
 ```powershell
 pip install -r requirements.txt
-Copy-Item .env.example .env
 uvicorn app.main:app --reload --port 8091
 ```
+
+This service reads configuration from the repository root `.env`.
 
 ## Test
 

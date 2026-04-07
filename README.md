@@ -57,8 +57,10 @@ packages/
 
 ```powershell
 Copy-Item .env.example .env
-docker compose -f infra/docker/compose/docker-compose.yml -f infra/docker/compose/docker-compose.dev.yml up -d --build
+docker compose up --build
 ```
+
+Tüm gercek ortam degiskenleri depo kokundeki `.env` dosyasinda toplanmistir. Servis klasorlerinde ayri `.env` dosyalari kullanilmaz.
 
 Temel endpointler:
 
@@ -75,7 +77,7 @@ powershell -ExecutionPolicy Bypass -File infra/docker/scripts/smoke-test.ps1 -Ga
 Kapatma:
 
 ```powershell
-docker compose -f infra/docker/compose/docker-compose.yml -f infra/docker/compose/docker-compose.dev.yml down
+docker compose down
 ```
 
 ## Lokal Gelistirme
@@ -133,13 +135,3 @@ Ornek calisma dallari:
 - `dokumantasyon/muhendislik-standartlari`
 
 Detayli surec: [`docs/workflows/git-dallanma-stratejisi.md`](docs/workflows/git-dallanma-stratejisi.md)
-
-## Katki
-
-PR sureci, commit kurallari ve inceleme beklentileri icin:
-
-- [`CONTRIBUTING.md`](CONTRIBUTING.md)
-
-AI ajan kurallari icin:
-
-- [`AGENTS.md`](AGENTS.md)

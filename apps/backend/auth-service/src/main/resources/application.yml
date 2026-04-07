@@ -60,7 +60,7 @@ security:
 
 integration:
   user-service:
-    base-url: ${USER_SERVICE_BASE_URL:http://localhost:8082}
+    base-url: ${USER_SERVICE_URL:http://localhost:8082}
     internal-api-key: ${INTERNAL_API_KEY:change-me-in-real-environments}
     connect-timeout: PT2S
     read-timeout: PT5S

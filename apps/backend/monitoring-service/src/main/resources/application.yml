@@ -65,15 +65,15 @@ security:
 integration:
   internal-api-key: ${INTERNAL_API_KEY:change-me-in-real-environments}
   user-service:
-    base-url: ${USER_SERVICE_BASE_URL:http://localhost:8082}
+    base-url: ${USER_SERVICE_URL:http://localhost:8082}
     connect-timeout: PT2S
     read-timeout: PT5S
   vision-service:
-    base-url: ${VISION_SERVICE_BASE_URL:http://localhost:8091}
+    base-url: ${VISION_SERVICE_URL:http://localhost:8091}
     connect-timeout: PT2S
     read-timeout: ${VISION_SERVICE_READ_TIMEOUT:PT10S}
   ai-service:
-    base-url: ${AI_SERVICE_BASE_URL:http://localhost:8092}
+    base-url: ${AI_SERVICE_URL:http://localhost:8092}
     connect-timeout: PT2S
     read-timeout: ${AI_SERVICE_READ_TIMEOUT:PT25S}
 
