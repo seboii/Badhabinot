@@ -5,6 +5,7 @@ import type {
   AnalyzeFrameResponse,
   BehaviorEventResponse,
   ChatRequest,
+  ChatHistoryResponse,
   ChatResponse,
   DashboardResponse,
   DailyReportResponse,
@@ -80,6 +81,16 @@ export const monitoringApi = {
 
   async chat(payload: ChatRequest) {
     const response = await apiClient.post<ChatResponse>('/api/v1/monitoring/chat', payload)
+    return response.data
+  },
+
+  async getChatHistory(conversationId?: string | null, limit = 40) {
+    const response = await apiClient.get<ChatHistoryResponse>('/api/v1/monitoring/chat/history', {
+      params: {
+        ...(conversationId ? { conversation_id: conversationId } : {}),
+        limit,
+      },
+    })
     return response.data
   },
 }

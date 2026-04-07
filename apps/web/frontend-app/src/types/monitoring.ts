@@ -170,6 +170,7 @@ export type ChatMessageResponse = {
   role: 'user' | 'assistant'
   content: string
   created_at: string
+  metadata: Record<string, unknown>
 }
 
 export type ChatResponse = {
@@ -184,4 +185,9 @@ export type ChatResponse = {
     name: string
     mode: string
   }
+}
+
+export type ChatHistoryResponse = {
+  conversation_id: string | null
+  recent_messages: ChatMessageResponse[]
 }

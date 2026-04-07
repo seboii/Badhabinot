@@ -44,12 +44,14 @@ Access points after startup:
 - Frontend health: `http://localhost:3000/healthz`
 - Gateway readiness: `http://localhost:8080/actuator/health/readiness`
 
-Local Docker defaults use `AI_PROVIDER=mock` so the full stack starts without an external provider key. For real API-backed analysis, update `.env` with:
+The default path is external API-backed AI. Ensure `.env` contains:
 
 - `AI_PROVIDER=openai-compatible`
 - `AI_API_KEY=<your key>`
 - `AI_API_BASE_URL=https://api.openai.com/v1`
 - `AI_MODEL_NAME=<model name>`
+
+Optional local fallback (not production): set `AI_PROVIDER=mock`.
 
 ## Smoke test
 

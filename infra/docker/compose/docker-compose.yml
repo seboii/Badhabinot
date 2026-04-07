@@ -125,10 +125,10 @@ services:
         APP_PORT: 8092
     environment:
       INTERNAL_API_KEY: ${INTERNAL_API_KEY:-change-me-in-real-environments}
-      AI_PROVIDER: ${AI_PROVIDER:-mock}
+      AI_PROVIDER: ${AI_PROVIDER:-openai-compatible}
       AI_API_BASE_URL: ${AI_API_BASE_URL:-https://api.openai.com/v1}
       AI_API_KEY: ${AI_API_KEY:-}
-      AI_MODEL_NAME: ${AI_MODEL_NAME:-mock-behavior-analyzer}
+      AI_MODEL_NAME: ${AI_MODEL_NAME:-gpt-4.1-mini}
       AI_TIMEOUT_SECONDS: ${AI_TIMEOUT_SECONDS:-30}
       AI_READINESS_TIMEOUT_SECONDS: ${AI_READINESS_TIMEOUT_SECONDS:-10}
       AI_MAX_RETRIES: ${AI_MAX_RETRIES:-2}
