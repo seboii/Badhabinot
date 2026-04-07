@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Switch } from '@/components/ui/switch'
+import { useLanguage } from '@/i18n/language-provider'
 import type { SettingsResponse } from '@/types/user'
 
 const settingsSchema = z.object({
@@ -31,6 +32,7 @@ export function SettingsForm({
   isSaving: boolean
   onSubmit: (values: SettingsFormValues) => void
 }) {
+  const { isTurkish } = useLanguage()
   const {
     register,
     handleSubmit,
@@ -50,8 +52,12 @@ export function SettingsForm({
     <Card>
       <CardHeader>
         <div>
-          <CardTitle>Monitoring preferences</CardTitle>
-          <CardDescription className="mt-2">Tune reminder cadence, sensitivity, quiet hours, notifications, and the API-based analysis workflow.</CardDescription>
+          <CardTitle>{isTurkish ? 'Izleme tercihleri' : 'Monitoring preferences'}</CardTitle>
+          <CardDescription className="mt-2">
+            {isTurkish
+              ? 'Hatirlatici araligi, hassasiyet, sessiz saatler, bildirimler ve API tabanli analiz akisini ayarla.'
+              : 'Tune reminder cadence, sensitivity, quiet hours, notifications, and the API-based analysis workflow.'}
+          </CardDescription>
         </div>
       </CardHeader>
       <CardContent>
@@ -59,34 +65,58 @@ export function SettingsForm({
           <input type="hidden" {...register('model_mode')} value="API" />
 
           <label className="flex flex-col gap-2">
-            <span className="text-sm font-medium text-white">Sensitivity</span>
+            <span className="text-sm font-medium text-white">{isTurkish ? 'Hassasiyet' : 'Sensitivity'}</span>
             <select
               className="h-12 rounded-2xl border border-[var(--line-soft)] bg-[rgba(255,255,255,0.03)] px-4 text-sm text-white outline-none focus:border-[var(--primary)]"
               {...register('sensitivity')}
             >
-              <option value="LOW">Low</option>
-              <option value="MEDIUM">Medium</option>
-              <option value="HIGH">High</option>
+              <option value="LOW">{isTurkish ? 'Dusuk' : 'Low'}</option>
+              <option value="MEDIUM">{isTurkish ? 'Orta' : 'Medium'}</option>
+              <option value="HIGH">{isTurkish ? 'Yuksek' : 'High'}</option>
             </select>
           </label>
 
           <div className="rounded-[24px] border border-[var(--line-soft)] bg-[rgba(255,255,255,0.03)] p-4">
-            <p className="text-sm font-semibold text-white">Analysis mode</p>
-            <p className="mt-2 text-sm text-[var(--text-muted)]">Higher-level analysis now runs through the external AI adapter service.</p>
+            <p className="text-sm font-semibold text-white">{isTurkish ? 'Analiz modu' : 'Analysis mode'}</p>
+            <p className="mt-2 text-sm text-[var(--text-muted)]">
+              {isTurkish
+                ? 'Ust seviye analiz artik harici AI bagdastirici servisinden calisir.'
+                : 'Higher-level analysis now runs through the external AI adapter service.'}
+            </p>
             <p className="mt-4 text-lg font-semibold text-white">API</p>
           </div>
 
-          <Input label="Daily water goal (ml)" type="number" min={250} max={6000} {...register('water_goal_ml', { valueAsNumber: true })} />
-          <Input label="Water reminder interval (min)" type="number" min={15} max={240} {...register('water_interval_min', { valueAsNumber: true })} />
-          <Input label="Break reminder interval (min)" type="number" min={15} max={240} {...register('exercise_interval_min', { valueAsNumber: true })} />
-          <Input label="Quiet hours start" type="time" {...register('quiet_hours_start')} />
-          <Input label="Quiet hours end" type="time" {...register('quiet_hours_end')} />
+          <Input
+            label={isTurkish ? 'Gunluk su hedefi (ml)' : 'Daily water goal (ml)'}
+            type="number"
+            min={250}
+            max={6000}
+            {...register('water_goal_ml', { valueAsNumber: true })}
+          />
+          <Input
+            label={isTurkish ? 'Su hatirlatici araligi (dk)' : 'Water reminder interval (min)'}
+            type="number"
+            min={15}
+            max={240}
+            {...register('water_interval_min', { valueAsNumber: true })}
+          />
+          <Input
+            label={isTurkish ? 'Mola hatirlatici araligi (dk)' : 'Break reminder interval (min)'}
+            type="number"
+            min={15}
+            max={240}
+            {...register('exercise_interval_min', { valueAsNumber: true })}
+          />
+          <Input label={isTurkish ? 'Sessiz saat baslangici' : 'Quiet hours start'} type="time" {...register('quiet_hours_start')} />
+          <Input label={isTurkish ? 'Sessiz saat bitisi' : 'Quiet hours end'} type="time" {...register('quiet_hours_end')} />
 
           <div className="rounded-[24px] border border-[var(--line-soft)] bg-[rgba(255,255,255,0.03)] p-4">
             <div className="flex items-center justify-between gap-4">
               <div>
-                <p className="text-sm font-semibold text-white">Quiet hours</p>
-                <p className="mt-1 text-sm text-[var(--text-muted)]">Pause reminders during the configured silent period.</p>
+                <p className="text-sm font-semibold text-white">{isTurkish ? 'Sessiz saatler' : 'Quiet hours'}</p>
+                <p className="mt-1 text-sm text-[var(--text-muted)]">
+                  {isTurkish ? 'Ayarli sessiz donemde hatirlaticilari duraklat.' : 'Pause reminders during the configured silent period.'}
+                </p>
               </div>
               <Controller
                 control={control}
@@ -99,8 +129,12 @@ export function SettingsForm({
           <div className="rounded-[24px] border border-[var(--line-soft)] bg-[rgba(255,255,255,0.03)] p-4">
             <div className="flex items-center justify-between gap-4">
               <div>
-                <p className="text-sm font-semibold text-white">Notifications</p>
-                <p className="mt-1 text-sm text-[var(--text-muted)]">Keep desktop and in-app reminders active during monitoring.</p>
+                <p className="text-sm font-semibold text-white">{isTurkish ? 'Bildirimler' : 'Notifications'}</p>
+                <p className="mt-1 text-sm text-[var(--text-muted)]">
+                  {isTurkish
+                    ? 'Izleme sirasinda masaustu ve uygulama ici hatirlaticilari acik tut.'
+                    : 'Keep desktop and in-app reminders active during monitoring.'}
+                </p>
               </div>
               <Controller
                 control={control}
@@ -111,15 +145,17 @@ export function SettingsForm({
           </div>
 
           <div className="rounded-[24px] border border-[var(--line-soft)] bg-[rgba(255,255,255,0.03)] p-4 md:col-span-2">
-            <p className="text-sm font-semibold text-white">Execution mode notes</p>
+            <p className="text-sm font-semibold text-white">{isTurkish ? 'Calisma notlari' : 'Execution mode notes'}</p>
             <p className="mt-2 text-sm leading-6 text-[var(--text-muted)]">
-              API-backed analysis requires remote inference consent in the privacy section below. Vision preprocessing still happens locally inside the vision-service.
+              {isTurkish
+                ? 'API tabanli analiz icin gizlilik bolumunde uzak cikarim onayi gerekir. Goruntu on isleme hala vision-service icinde yerelde yapilir.'
+                : 'API-backed analysis requires remote inference consent in the privacy section below. Vision preprocessing still happens locally inside the vision-service.'}
             </p>
           </div>
 
           <div className="flex justify-end md:col-span-2">
             <Button type="submit" loading={isSaving} disabled={!isDirty}>
-              Save preferences
+              {isTurkish ? 'Tercihleri kaydet' : 'Save preferences'}
             </Button>
           </div>
         </form>

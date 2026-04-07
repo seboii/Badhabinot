@@ -11,15 +11,15 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { AuthShell } from '@/features/auth/components/AuthShell'
 import { useAuth } from '@/hooks/use-auth'
+import { useLanguage } from '@/i18n/language-provider'
 
-const loginSchema = z.object({
-  email: z.email('Enter a valid email address.'),
-  password: z.string().min(8, 'Password must be at least 8 characters.'),
-})
-
-type LoginFormValues = z.infer<typeof loginSchema>
+type LoginFormValues = {
+  email: string
+  password: string
+}
 
 export function LoginPage() {
+  const { isTurkish } = useLanguage()
   const navigate = useNavigate()
   const location = useLocation()
   const { setSession } = useAuth()
@@ -27,6 +27,11 @@ export function LoginPage() {
     const state = location.state as { from?: string } | null
     return state?.from || '/'
   }, [location.state])
+
+  const loginSchema = z.object({
+    email: z.email(isTurkish ? 'Gecerli bir e-posta adresi gir.' : 'Enter a valid email address.'),
+    password: z.string().min(8, isTurkish ? 'Sifre en az 8 karakter olmali.' : 'Password must be at least 8 characters.'),
+  })
 
   const {
     register,
@@ -40,39 +45,48 @@ export function LoginPage() {
     mutationFn: authApi.login,
     onSuccess(session) {
       setSession(session)
-      toast.success('Welcome back to BADHABINOT.')
+      toast.success(isTurkish ? 'BADHABINOT hos geldin.' : 'Welcome back to BADHABINOT.')
       navigate(from, { replace: true })
     },
     onError(error) {
-      toast.error(toErrorMessage(error, 'Login failed.'))
+      toast.error(toErrorMessage(error, isTurkish ? 'Giris basarisiz.' : 'Login failed.'))
     },
   })
 
   return (
     <AuthShell
-      title="Sign in to continue"
-      subtitle="Resume monitoring sessions, review your history, and manage privacy-focused behavior tracking."
+      title={isTurkish ? 'Devam etmek icin giris yap' : 'Sign in to continue'}
+      subtitle={
+        isTurkish
+          ? 'Izleme oturumlarini surdur, gecmisi incele ve gizlilik odakli davranis takibini yonet.'
+          : 'Resume monitoring sessions, review your history, and manage privacy-focused behavior tracking.'
+      }
     >
       <form className="space-y-5" onSubmit={handleSubmit((values) => loginMutation.mutate(values))}>
-        <Input label="Email" type="email" autoComplete="email" error={errors.email?.message} {...register('email')} />
         <Input
-          label="Password"
+          label={isTurkish ? 'E-posta' : 'Email'}
+          type="email"
+          autoComplete="email"
+          error={errors.email?.message}
+          {...register('email')}
+        />
+        <Input
+          label={isTurkish ? 'Sifre' : 'Password'}
           type="password"
           autoComplete="current-password"
           error={errors.password?.message}
           {...register('password')}
         />
         <Button className="w-full" size="lg" loading={loginMutation.isPending} type="submit">
-          Sign in
+          {isTurkish ? 'Giris yap' : 'Sign in'}
         </Button>
       </form>
       <p className="mt-6 text-sm text-[var(--text-muted)]">
-        Need an account?{' '}
+        {isTurkish ? 'Hesabin yok mu?' : 'Need an account?'}{' '}
         <Link className="font-semibold text-white" to="/register">
-          Create one
+          {isTurkish ? 'Hesap olustur' : 'Create one'}
         </Link>
       </p>
     </AuthShell>
   )
 }
-

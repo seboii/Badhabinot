@@ -9,6 +9,7 @@ import { WeeklyTrendChart } from '@/features/history/components/WeeklyTrendChart
 import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { LoadingCard } from '@/components/ui/loading-state'
+import { useLanguage } from '@/i18n/language-provider'
 
 function SummaryCard({
   icon: Icon,
@@ -40,6 +41,7 @@ function SummaryCard({
 }
 
 export function HistoryPage() {
+  const { isTurkish } = useLanguage()
   const [from, setFrom] = useState(format(subDays(new Date(), 6), 'yyyy-MM-dd'))
 
   const weeklyTrendQuery = useQuery({
@@ -74,41 +76,76 @@ export function HistoryPage() {
       <Card>
         <CardContent className="flex flex-col gap-4 p-5 md:flex-row md:items-center md:justify-between">
           <div>
-            <p className="text-sm font-medium text-[var(--text-muted)]">Selected period</p>
-            <p className="mt-2 text-xl font-bold text-white">Seven-day performance window</p>
-            <p className="mt-2 text-sm text-[var(--text-muted)]">Choose the first day of the reporting window used for the trend chart and summary metrics.</p>
+            <p className="text-sm font-medium text-[var(--text-muted)]">{isTurkish ? 'Secilen donem' : 'Selected period'}</p>
+            <p className="mt-2 text-xl font-bold text-white">{isTurkish ? 'Yedi gunluk performans penceresi' : 'Seven-day performance window'}</p>
+            <p className="mt-2 text-sm text-[var(--text-muted)]">
+              {isTurkish
+                ? 'Trend grafigi ve ozet metrikleri icin rapor penceresinin ilk gununu sec.'
+                : 'Choose the first day of the reporting window used for the trend chart and summary metrics.'}
+            </p>
           </div>
           <div className="w-full max-w-xs">
-            <Input label="Start date" type="date" value={from} onChange={(event) => setFrom(event.target.value)} />
+            <Input label={isTurkish ? 'Baslangic tarihi' : 'Start date'} type="date" value={from} onChange={(event) => setFrom(event.target.value)} />
           </div>
         </CardContent>
       </Card>
 
       <div className="grid gap-4 md:grid-cols-3">
-        <SummaryCard icon={BellRing} label="Alerts" value={totals.alerts} detail="Behavior and posture warnings in the selected week." />
-        <SummaryCard icon={BarChart3} label="Reminders" value={totals.reminders} detail="Reminder events, manual or scheduled, recorded this week." />
-        <SummaryCard icon={Droplets} label="Hydration logs" value={totals.hydration} detail="Water intake records captured for the same period." />
+        <SummaryCard
+          icon={BellRing}
+          label={isTurkish ? 'Uyarilar' : 'Alerts'}
+          value={totals.alerts}
+          detail={isTurkish ? 'Secilen haftadaki davranis ve durus uyarilari.' : 'Behavior and posture warnings in the selected week.'}
+        />
+        <SummaryCard
+          icon={BarChart3}
+          label={isTurkish ? 'Hatirlaticilar' : 'Reminders'}
+          value={totals.reminders}
+          detail={
+            isTurkish
+              ? 'Bu haftada kaydedilen manuel veya zamanli hatirlatici olaylari.'
+              : 'Reminder events, manual or scheduled, recorded this week.'
+          }
+        />
+        <SummaryCard
+          icon={Droplets}
+          label={isTurkish ? 'Su kayitlari' : 'Hydration logs'}
+          value={totals.hydration}
+          detail={isTurkish ? 'Ayni donem icin yakalanan su tuketim kayitlari.' : 'Water intake records captured for the same period.'}
+        />
       </div>
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1.15fr)_minmax(360px,0.85fr)]">
-        {weeklyTrendQuery.isLoading ? <LoadingCard message="Loading weekly trend" /> : <WeeklyTrendChart points={weeklyTrendQuery.data?.points ?? []} />}
+        {weeklyTrendQuery.isLoading ? (
+          <LoadingCard message={isTurkish ? 'Haftalik trend yukleniyor' : 'Loading weekly trend'} />
+        ) : (
+          <WeeklyTrendChart points={weeklyTrendQuery.data?.points ?? []} />
+        )}
         {eventsQuery.isLoading ? (
-          <LoadingCard message="Loading behavior events" />
+          <LoadingCard message={isTurkish ? 'Davranis olaylari yukleniyor' : 'Loading behavior events'} />
         ) : (
           <BehaviorEventListCard
-            title="Behavior event stream"
-            description="Normalized posture, hand-movement, and smoking-like detections recorded by the monitoring service."
+            title={isTurkish ? 'Davranis olay akisi' : 'Behavior event stream'}
+            description={
+              isTurkish
+                ? 'Izleme servisi tarafinda kaydedilen normalize durus, el hareketi ve sigara benzeri tespitler.'
+                : 'Normalized posture, hand-movement, and smoking-like detections recorded by the monitoring service.'
+            }
             events={eventsQuery.data ?? []}
           />
         )}
       </div>
 
       {activitiesQuery.isLoading ? (
-        <LoadingCard message="Loading activity history" />
+        <LoadingCard message={isTurkish ? 'Aktivite gecmisi yukleniyor' : 'Loading activity history'} />
       ) : (
         <ActivityFeedCard
-          title="Detailed timeline"
-          description="Recent timeline entries across alerts, reminders, and manual actions."
+          title={isTurkish ? 'Ayrintili zaman cizelgesi' : 'Detailed timeline'}
+          description={
+            isTurkish
+              ? 'Uyari, hatirlatici ve manuel islemlerdeki son zaman cizelgesi kayitlari.'
+              : 'Recent timeline entries across alerts, reminders, and manual actions.'
+          }
           items={activitiesQuery.data ?? []}
         />
       )}

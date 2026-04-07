@@ -5,6 +5,7 @@ import { Sidebar } from '@/components/layout/Sidebar'
 import { TopBar } from '@/components/layout/TopBar'
 import { MobileNav } from '@/components/layout/MobileNav'
 import { LoadingScreen } from '@/components/ui/loading-state'
+import { useLanguage } from '@/i18n/language-provider'
 import { userApi } from '@/api/user'
 
 const routeMeta: Record<string, { title: string; subtitle: string }> = {
@@ -31,6 +32,7 @@ const routeMeta: Record<string, { title: string; subtitle: string }> = {
 }
 
 export function AppShell({ children }: PropsWithChildren) {
+  const { isTurkish } = useLanguage()
   const location = useLocation()
   const { data, isLoading } = useQuery({
     queryKey: ['user-context'],
@@ -38,7 +40,7 @@ export function AppShell({ children }: PropsWithChildren) {
   })
 
   if (isLoading || !data) {
-    return <LoadingScreen message="Loading your BADHABINOT workspace" />
+    return <LoadingScreen message={isTurkish ? 'BADHABINOT calisma alani yukleniyor' : 'Loading your BADHABINOT workspace'} />
   }
 
   const needsOnboarding =
@@ -48,16 +50,48 @@ export function AppShell({ children }: PropsWithChildren) {
     return <Navigate replace to="/onboarding" />
   }
 
-  const meta = routeMeta[location.pathname] ?? {
-    title: 'BADHABINOT',
-    subtitle: 'Behavior intelligence, hydration support, and session visibility.',
-  }
+  const meta =
+    routeMeta[location.pathname] ??
+    (isTurkish
+      ? {
+          title: 'BADHABINOT',
+          subtitle: 'Davranis zekasi, su destegi ve oturum gorunurlugu.',
+        }
+      : {
+          title: 'BADHABINOT',
+          subtitle: 'Behavior intelligence, hydration support, and session visibility.',
+        })
+
+  const translatedMeta = isTurkish
+    ? {
+        '/dashboard': {
+          title: 'Canli Izleme',
+          subtitle: 'Kamera destekli davranis analizi, aktivite akis ve hatirlatici kontrolleri.',
+        },
+        '/history': {
+          title: 'Gecmis',
+          subtitle: 'Izleme sonuclarina dayali haftalik trendler ve ayrintili olay zaman cizelgesi.',
+        },
+        '/reports': {
+          title: 'Raporlar',
+          subtitle: 'Gunluk ozetler, oneriler, hatirlatici gecmisi ve gun sonu baglami.',
+        },
+        '/chat': {
+          title: 'Veriye Dayali Sohbet',
+          subtitle: 'Kendi davranis verilerin, su takibi, hatirlaticilar ve riskli ipuclari hakkinda sor.',
+        },
+        '/settings': {
+          title: 'Ayarlar',
+          subtitle: 'Profil, hassasiyet, hatirlatici araligi, gizlilik ve oturum kontrolleri.',
+        },
+      }[location.pathname] ?? meta
+    : meta
 
   return (
     <div className="app-shell-grid flex min-h-screen bg-transparent">
       <Sidebar user={data} />
       <div className="flex min-h-screen flex-1 flex-col">
-        <TopBar title={meta.title} subtitle={meta.subtitle} user={data} />
+        <TopBar title={translatedMeta.title} subtitle={translatedMeta.subtitle} user={data} />
         <main className="flex-1 px-5 py-6 pb-28 md:px-8 lg:pb-8">{children}</main>
       </div>
       <MobileNav />

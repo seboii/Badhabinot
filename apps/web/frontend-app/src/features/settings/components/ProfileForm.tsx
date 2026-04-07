@@ -5,15 +5,14 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
+import { useLanguage } from '@/i18n/language-provider'
 import type { UpdateProfileRequest, UserContextResponse } from '@/types/user'
 
-const profileSchema = z.object({
-  display_name: z.string().min(2, 'Display name is required.').max(100),
-  timezone: z.string().min(2, 'Timezone is required.').max(64),
-  locale: z.string().min(2, 'Locale is required.').max(16),
-})
-
-type ProfileFormValues = z.infer<typeof profileSchema>
+type ProfileFormValues = {
+  display_name: string
+  timezone: string
+  locale: string
+}
 
 export function ProfileForm({
   user,
@@ -24,6 +23,14 @@ export function ProfileForm({
   isSaving: boolean
   onSubmit: (values: UpdateProfileRequest) => void
 }) {
+  const { isTurkish } = useLanguage()
+
+  const profileSchema = z.object({
+    display_name: z.string().min(2, isTurkish ? 'Gorunen ad zorunlu.' : 'Display name is required.').max(100),
+    timezone: z.string().min(2, isTurkish ? 'Saat dilimi zorunlu.' : 'Timezone is required.').max(64),
+    locale: z.string().min(2, isTurkish ? 'Dil formati zorunlu.' : 'Locale is required.').max(16),
+  })
+
   const {
     register,
     handleSubmit,
@@ -50,18 +57,22 @@ export function ProfileForm({
     <Card>
       <CardHeader>
         <div>
-          <CardTitle>Profile</CardTitle>
-          <CardDescription className="mt-2">Keep the account metadata used by monitoring summaries and session records current.</CardDescription>
+          <CardTitle>{isTurkish ? 'Profil' : 'Profile'}</CardTitle>
+          <CardDescription className="mt-2">
+            {isTurkish
+              ? 'Izleme ozetleri ve oturum kayitlarinda kullanilan hesap metadatasini guncel tut.'
+              : 'Keep the account metadata used by monitoring summaries and session records current.'}
+          </CardDescription>
         </div>
       </CardHeader>
       <CardContent>
         <form className="grid gap-4 md:grid-cols-2" onSubmit={handleSubmit(onSubmit)}>
-          <Input label="Display name" error={errors.display_name?.message} {...register('display_name')} />
-          <Input label="Timezone" error={errors.timezone?.message} {...register('timezone')} />
-          <Input label="Locale" error={errors.locale?.message} {...register('locale')} />
+          <Input label={isTurkish ? 'Gorunen ad' : 'Display name'} error={errors.display_name?.message} {...register('display_name')} />
+          <Input label={isTurkish ? 'Saat dilimi' : 'Timezone'} error={errors.timezone?.message} {...register('timezone')} />
+          <Input label={isTurkish ? 'Dil formati' : 'Locale'} error={errors.locale?.message} {...register('locale')} />
           <div className="flex justify-end md:col-span-2">
             <Button type="submit" loading={isSaving} disabled={!isDirty}>
-              Save profile
+              {isTurkish ? 'Profili kaydet' : 'Save profile'}
             </Button>
           </div>
         </form>
@@ -69,4 +80,3 @@ export function ProfileForm({
     </Card>
   )
 }
-

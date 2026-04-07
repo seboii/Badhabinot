@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Switch } from '@/components/ui/switch'
 import type { CameraPermissionState } from '@/hooks/use-camera'
+import { useLanguage } from '@/i18n/language-provider'
 import type { AnalyzeFrameResponse } from '@/types/monitoring'
 
 type LiveMonitorPanelProps = {
@@ -48,6 +49,7 @@ export function LiveMonitorPanel({
   onAnalyzeNow,
   onToggleAutoScan,
 }: LiveMonitorPanelProps) {
+  const { isTurkish } = useLanguage()
   const canAnalyze = monitoringLive && streamReady && analysisEnabled
 
   return (
@@ -55,14 +57,16 @@ export function LiveMonitorPanel({
       <CardHeader>
         <div>
           <div className="flex flex-wrap items-center gap-3">
-            <CardTitle>Live monitor</CardTitle>
+            <CardTitle>{isTurkish ? 'Canli izleme' : 'Live monitor'}</CardTitle>
             <Badge variant={monitoringLive ? 'success' : sessionActive ? 'warning' : 'neutral'}>
-              {monitoringLive ? 'ACTIVE' : sessionActive ? 'SESSION ACTIVE' : 'IDLE'}
+              {monitoringLive ? (isTurkish ? 'AKTIF' : 'ACTIVE') : sessionActive ? (isTurkish ? 'OTURUM AKTIF' : 'SESSION ACTIVE') : isTurkish ? 'BOSTA' : 'IDLE'}
             </Badge>
             <Badge variant="primary">{permissionState.toUpperCase()}</Badge>
           </div>
           <CardDescription className="mt-2">
-            Browser camera preview, session controls, and frame analysis aligned with the uploaded desktop dashboard design.
+            {isTurkish
+              ? 'Tarayici kamera onizlemesi, oturum kontrolleri ve kare analizi yuklenen masaustu panel tasarimi ile uyumlu.'
+              : 'Browser camera preview, session controls, and frame analysis aligned with the uploaded desktop dashboard design.'}
           </CardDescription>
         </div>
       </CardHeader>
@@ -82,9 +86,11 @@ export function LiveMonitorPanel({
                 <VideoOff className="size-7 text-[var(--text-muted)]" />
               </div>
               <div className="space-y-2">
-                <p className="text-base font-semibold text-white">Camera preview is offline</p>
+                <p className="text-base font-semibold text-white">{isTurkish ? 'Kamera onizlemesi cevrimdisi' : 'Camera preview is offline'}</p>
                 <p className="max-w-md text-sm leading-6 text-[var(--text-muted)]">
-                  Grant browser camera permission to unlock live analysis and session-backed monitoring.
+                  {isTurkish
+                    ? 'Canli analiz ve oturum destekli izleme icin tarayici kamera izni ver.'
+                    : 'Grant browser camera permission to unlock live analysis and session-backed monitoring.'}
                 </p>
               </div>
             </div>
@@ -95,13 +101,15 @@ export function LiveMonitorPanel({
 
         {sessionActive && !monitoringLive ? (
           <p className="text-sm text-[var(--warning)]">
-            Backend session is active but camera stream is offline. Reconnect camera or stop the session to recover.
+            {isTurkish
+              ? 'Arka uc oturumu aktif ama kamera akisi cevrimdisi. Kurtarmak icin kamerayi bagla veya oturumu durdur.'
+              : 'Backend session is active but camera stream is offline. Reconnect camera or stop the session to recover.'}
           </p>
         ) : null}
 
         <div className="flex flex-col gap-3 md:flex-row md:flex-wrap">
           <Button variant="secondary" iconLeft={<Camera className="size-4" />} onClick={onRequestCamera}>
-            {streamReady ? 'Refresh camera' : 'Grant camera access'}
+            {streamReady ? (isTurkish ? 'Kamerayi yenile' : 'Refresh camera') : isTurkish ? 'Kamera erisimi ver' : 'Grant camera access'}
           </Button>
 
           {sessionActive ? (
@@ -111,7 +119,7 @@ export function LiveMonitorPanel({
               loading={isStopping}
               onClick={onStopMonitoring}
             >
-              {monitoringLive ? 'Stop monitoring' : 'Stop session'}
+              {monitoringLive ? (isTurkish ? 'Izlemeyi durdur' : 'Stop monitoring') : isTurkish ? 'Oturumu durdur' : 'Stop session'}
             </Button>
           ) : (
             <Button
@@ -120,7 +128,7 @@ export function LiveMonitorPanel({
               loading={isStarting}
               onClick={onStartMonitoring}
             >
-              Start monitoring
+              {isTurkish ? 'Izlemeyi baslat' : 'Start monitoring'}
             </Button>
           )}
 
@@ -131,21 +139,25 @@ export function LiveMonitorPanel({
             onClick={onAnalyzeNow}
             disabled={!canAnalyze}
           >
-            Analyze now
+            {isTurkish ? 'Simdi analiz et' : 'Analyze now'}
           </Button>
         </div>
 
         {!analysisEnabled ? (
           <p className="text-sm text-[var(--warning)]">
-            Analysis is disabled until camera monitoring and remote inference consent are both enabled.
+            {isTurkish
+              ? 'Kamera izleme ve uzak cikarim onayi birlikte etkin olana kadar analiz kapali.'
+              : 'Analysis is disabled until camera monitoring and remote inference consent are both enabled.'}
           </p>
         ) : null}
 
         <div className="grid gap-3 rounded-[28px] border border-[var(--line-soft)] bg-[rgba(255,255,255,0.03)] p-4 md:grid-cols-[1fr_auto] md:items-center">
           <div>
-            <p className="text-sm font-semibold text-white">Continuous scan</p>
+            <p className="text-sm font-semibold text-white">{isTurkish ? 'Surekli tarama' : 'Continuous scan'}</p>
             <p className="mt-1 text-sm leading-6 text-[var(--text-muted)]">
-              Poll the live feed every 12 seconds while the session is active.
+              {isTurkish
+                ? 'Oturum aktifken canli akis her 12 saniyede bir taranir.'
+                : 'Poll the live feed every 12 seconds while the session is active.'}
             </p>
           </div>
           <Switch checked={autoScan} onCheckedChange={onToggleAutoScan} />
@@ -153,18 +165,32 @@ export function LiveMonitorPanel({
 
         <div className="grid gap-3 md:grid-cols-3">
           <div className="rounded-[24px] border border-[var(--line-soft)] bg-[rgba(255,255,255,0.03)] p-4">
-            <p className="text-xs uppercase tracking-[0.16em] text-[var(--text-soft)]">Session ID</p>
-            <p className="mt-3 break-all text-sm font-semibold text-white">{activeSessionId ?? 'No active session'}</p>
-          </div>
-          <div className="rounded-[24px] border border-[var(--line-soft)] bg-[rgba(255,255,255,0.03)] p-4">
-            <p className="text-xs uppercase tracking-[0.16em] text-[var(--text-soft)]">Presence</p>
-            <p className="mt-3 text-sm font-semibold text-white">
-              {latestAnalysis ? (latestAnalysis.subject_present ? 'Detected in frame' : 'Not detected') : 'Awaiting analysis'}
+            <p className="text-xs uppercase tracking-[0.16em] text-[var(--text-soft)]">{isTurkish ? 'Oturum Kimligi' : 'Session ID'}</p>
+            <p className="mt-3 break-all text-sm font-semibold text-white">
+              {activeSessionId ?? (isTurkish ? 'Aktif oturum yok' : 'No active session')}
             </p>
           </div>
           <div className="rounded-[24px] border border-[var(--line-soft)] bg-[rgba(255,255,255,0.03)] p-4">
-            <p className="text-xs uppercase tracking-[0.16em] text-[var(--text-soft)]">Frame status</p>
-            <p className="mt-3 text-sm font-semibold text-white">{streamReady ? 'Live preview available' : 'Camera unavailable'}</p>
+            <p className="text-xs uppercase tracking-[0.16em] text-[var(--text-soft)]">{isTurkish ? 'Varlik' : 'Presence'}</p>
+            <p className="mt-3 text-sm font-semibold text-white">
+              {latestAnalysis
+                ? latestAnalysis.subject_present
+                  ? isTurkish
+                    ? 'Karede tespit edildi'
+                    : 'Detected in frame'
+                  : isTurkish
+                    ? 'Tespit edilmedi'
+                    : 'Not detected'
+                : isTurkish
+                  ? 'Analiz bekleniyor'
+                  : 'Awaiting analysis'}
+            </p>
+          </div>
+          <div className="rounded-[24px] border border-[var(--line-soft)] bg-[rgba(255,255,255,0.03)] p-4">
+            <p className="text-xs uppercase tracking-[0.16em] text-[var(--text-soft)]">{isTurkish ? 'Kare durumu' : 'Frame status'}</p>
+            <p className="mt-3 text-sm font-semibold text-white">
+              {streamReady ? (isTurkish ? 'Canli onizleme hazir' : 'Live preview available') : isTurkish ? 'Kamera kullanilamiyor' : 'Camera unavailable'}
+            </p>
           </div>
         </div>
       </CardContent>

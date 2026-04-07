@@ -1,21 +1,27 @@
 import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { useLanguage } from '@/i18n/language-provider'
 import type { WeeklyTrendPointResponse } from '@/types/monitoring'
 
 export function WeeklyTrendChart({ points }: { points: WeeklyTrendPointResponse[] }) {
+  const { isTurkish } = useLanguage()
   const chartData = points.map((point) => ({
     day: point.day.slice(5),
-    Alerts: point.alert_count,
-    Reminders: point.reminder_count,
-    Hydration: point.hydration_count,
+    alerts: point.alert_count,
+    reminders: point.reminder_count,
+    hydration: point.hydration_count,
   }))
 
   return (
     <Card className="h-full">
       <CardHeader>
         <div>
-          <CardTitle>Weekly trend</CardTitle>
-          <CardDescription className="mt-2">Aggregated alerts, reminders, and hydration logs for the selected seven-day window.</CardDescription>
+          <CardTitle>{isTurkish ? 'Haftalik trend' : 'Weekly trend'}</CardTitle>
+          <CardDescription className="mt-2">
+            {isTurkish
+              ? 'Secilen yedi gunluk pencere icin toplu uyari, hatirlatici ve su kayitlari.'
+              : 'Aggregated alerts, reminders, and hydration logs for the selected seven-day window.'}
+          </CardDescription>
         </div>
       </CardHeader>
       <CardContent className="h-[320px]">
@@ -33,9 +39,9 @@ export function WeeklyTrendChart({ points }: { points: WeeklyTrendPointResponse[
               }}
             />
             <Legend />
-            <Bar dataKey="Alerts" fill="var(--danger)" radius={[8, 8, 0, 0]} />
-            <Bar dataKey="Reminders" fill="var(--primary)" radius={[8, 8, 0, 0]} />
-            <Bar dataKey="Hydration" fill="var(--info)" radius={[8, 8, 0, 0]} />
+            <Bar dataKey="alerts" name={isTurkish ? 'Uyarilar' : 'Alerts'} fill="var(--danger)" radius={[8, 8, 0, 0]} />
+            <Bar dataKey="reminders" name={isTurkish ? 'Hatirlaticilar' : 'Reminders'} fill="var(--primary)" radius={[8, 8, 0, 0]} />
+            <Bar dataKey="hydration" name={isTurkish ? 'Su kayitlari' : 'Hydration'} fill="var(--info)" radius={[8, 8, 0, 0]} />
           </BarChart>
         </ResponsiveContainer>
       </CardContent>

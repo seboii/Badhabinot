@@ -1,6 +1,8 @@
 import type { PropsWithChildren } from 'react'
 import { Activity, ShieldCheck, Waves } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
+import { LanguageToggle } from '@/i18n/language-toggle'
+import { useLanguage } from '@/i18n/language-provider'
 import { ThemeToggle } from '@/theme/theme-toggle'
 
 export function AuthShell({
@@ -8,6 +10,8 @@ export function AuthShell({
   subtitle,
   children,
 }: PropsWithChildren<{ title: string; subtitle: string }>) {
+  const { isTurkish } = useLanguage()
+
   return (
     <div className="min-h-screen bg-transparent px-5 py-8 md:px-8">
       <div className="mx-auto grid min-h-[calc(100vh-4rem)] max-w-7xl gap-8 lg:grid-cols-[1.1fr_0.9fr]">
@@ -18,34 +22,50 @@ export function AuthShell({
               <div className="flex items-center justify-between gap-4">
                 <Badge variant="primary" className="mb-4 gap-2 px-3 py-1.5">
                   <ShieldCheck className="size-4" />
-                  Privacy-first monitoring
+                  {isTurkish ? 'Gizlilik-oncelikli izleme' : 'Privacy-first monitoring'}
                 </Badge>
-                <ThemeToggle />
+                <div className="flex items-center gap-2">
+                  <LanguageToggle />
+                  <ThemeToggle />
+                </div>
               </div>
               <h1 className="max-w-xl text-4xl font-extrabold tracking-[-0.05em] text-[var(--text-strong)] md:text-6xl">
                 BADHABINOT
               </h1>
               <p className="mt-4 max-w-xl text-base leading-7 text-[var(--text-muted)] md:text-lg">
-                Behavior awareness, posture feedback, hydration nudges, and activity visibility in one local-first
-                control surface.
+                {isTurkish
+                  ? 'Davranis farkindaligi, durus geri bildirimi, su hatirlaticilari ve aktivite gorunurlugu tek bir yerel-oncelikli yuzde.'
+                  : 'Behavior awareness, posture feedback, hydration nudges, and activity visibility in one local-first control surface.'}
               </p>
             </div>
 
             <div className="grid gap-4 md:grid-cols-3">
               <div className="rounded-[28px] border border-[var(--line-soft)] bg-[var(--surface-soft)] p-5">
                 <Activity className="size-6 text-[var(--primary)]" />
-                <p className="mt-5 text-lg font-bold text-[var(--text-strong)]">Live detection</p>
-                <p className="mt-2 text-sm text-[var(--text-muted)]">Use your webcam to analyze posture and risky habits.</p>
+                <p className="mt-5 text-lg font-bold text-[var(--text-strong)]">{isTurkish ? 'Canli tespit' : 'Live detection'}</p>
+                <p className="mt-2 text-sm text-[var(--text-muted)]">
+                  {isTurkish
+                    ? 'Web kameran ile durus ve riskli aliskanliklari analiz et.'
+                    : 'Use your webcam to analyze posture and risky habits.'}
+                </p>
               </div>
               <div className="rounded-[28px] border border-[var(--line-soft)] bg-[var(--surface-soft)] p-5">
                 <Waves className="size-6 text-[var(--info)]" />
-                <p className="mt-5 text-lg font-bold text-[var(--text-strong)]">Hydration flow</p>
-                <p className="mt-2 text-sm text-[var(--text-muted)]">Track water intake, reminders, and daily streaks.</p>
+                <p className="mt-5 text-lg font-bold text-[var(--text-strong)]">{isTurkish ? 'Su takibi' : 'Hydration flow'}</p>
+                <p className="mt-2 text-sm text-[var(--text-muted)]">
+                  {isTurkish
+                    ? 'Su tuketimi, hatirlaticilar ve gunluk serileri takip et.'
+                    : 'Track water intake, reminders, and daily streaks.'}
+                </p>
               </div>
               <div className="rounded-[28px] border border-[var(--line-soft)] bg-[var(--surface-soft)] p-5">
                 <ShieldCheck className="size-6 text-[var(--success)]" />
-                <p className="mt-5 text-lg font-bold text-[var(--text-strong)]">Local mode</p>
-                <p className="mt-2 text-sm text-[var(--text-muted)]">Default workflows keep frames on-device and avoid raw image storage.</p>
+                <p className="mt-5 text-lg font-bold text-[var(--text-strong)]">{isTurkish ? 'Yerel mod' : 'Local mode'}</p>
+                <p className="mt-2 text-sm text-[var(--text-muted)]">
+                  {isTurkish
+                    ? 'Varsayilan akislar kareleri cihazda tutar ve ham gorsel saklamaz.'
+                    : 'Default workflows keep frames on-device and avoid raw image storage.'}
+                </p>
               </div>
             </div>
           </div>
@@ -54,7 +74,9 @@ export function AuthShell({
         <section className="flex items-center justify-center">
           <div className="w-full max-w-xl rounded-[32px] border border-[var(--line-soft)] bg-[var(--hero-panel)] p-8 shadow-[var(--shadow-panel)] md:p-10">
             <div className="mb-8">
-              <p className="text-sm font-semibold uppercase tracking-[0.2em] text-[var(--text-soft)]">Secure access</p>
+              <p className="text-sm font-semibold uppercase tracking-[0.2em] text-[var(--text-soft)]">
+                {isTurkish ? 'Guvenli erisim' : 'Secure access'}
+              </p>
               <h2 className="mt-4 text-3xl font-bold tracking-tight text-[var(--text-strong)]">{title}</h2>
               <p className="mt-3 text-sm leading-6 text-[var(--text-muted)]">{subtitle}</p>
             </div>

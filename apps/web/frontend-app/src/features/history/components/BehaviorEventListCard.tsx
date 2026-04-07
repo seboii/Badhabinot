@@ -2,6 +2,7 @@ import { Activity, Cigarette, Hand, ShieldAlert } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { EmptyState } from '@/components/ui/empty-state'
+import { useLanguage } from '@/i18n/language-provider'
 import { behaviorLabel, formatClock, formatRelativeTime, severityLabel } from '@/lib/format'
 import type { BehaviorEventResponse } from '@/types/monitoring'
 
@@ -38,12 +39,18 @@ export function BehaviorEventListCard({
   description: string
   events: BehaviorEventResponse[]
 }) {
+  const { language, isTurkish } = useLanguage()
+
   if (events.length === 0) {
     return (
       <EmptyState
         icon={Activity}
-        title="No behavior events yet"
-        description="Start live monitoring and analyze a few frames to populate the normalized event stream."
+        title={isTurkish ? 'Henuz davranis olayi yok' : 'No behavior events yet'}
+        description={
+          isTurkish
+            ? 'Normalize olay akisinin dolmasi icin canli izleme baslat ve birkac kare analiz et.'
+            : 'Start live monitoring and analyze a few frames to populate the normalized event stream.'
+        }
       />
     )
   }
@@ -69,15 +76,15 @@ export function BehaviorEventListCard({
               </div>
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-2">
-                  <p className="text-sm font-semibold text-white">{behaviorLabel(event.event_type)}</p>
-                  <Badge variant={severityVariant(event.severity)}>{severityLabel(event.severity)}</Badge>
+                  <p className="text-sm font-semibold text-white">{behaviorLabel(event.event_type, language)}</p>
+                  <Badge variant={severityVariant(event.severity)}>{severityLabel(event.severity, language)}</Badge>
                 </div>
                 <p className="mt-1 text-sm leading-6 text-[var(--text-muted)]">{event.interpretation}</p>
                 <p className="mt-2 text-sm text-white">{event.recommendation_hint}</p>
                 <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-[var(--text-soft)]">
-                  <span>{formatClock(event.occurred_at)}</span>
-                  <span>{formatRelativeTime(event.occurred_at)}</span>
-                  <span>Confidence {Math.round(event.confidence * 100)}%</span>
+                  <span>{formatClock(event.occurred_at, language)}</span>
+                  <span>{formatRelativeTime(event.occurred_at, language)}</span>
+                  <span>{isTurkish ? 'Guven' : 'Confidence'} {Math.round(event.confidence * 100)}%</span>
                   <span>{event.detector}</span>
                 </div>
               </div>

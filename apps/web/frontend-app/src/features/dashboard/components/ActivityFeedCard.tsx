@@ -2,6 +2,7 @@ import { BellRing, GlassWater, ShieldAlert, TimerReset, Waves } from 'lucide-rea
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { EmptyState } from '@/components/ui/empty-state'
 import { Badge } from '@/components/ui/badge'
+import { useLanguage } from '@/i18n/language-provider'
 import { behaviorLabel, formatClock, formatRelativeTime } from '@/lib/format'
 import type { ActivityItemResponse } from '@/types/monitoring'
 
@@ -47,12 +48,18 @@ export function ActivityFeedCard({
   description: string
   items: ActivityItemResponse[]
 }) {
+  const { language, isTurkish } = useLanguage()
+
   if (items.length === 0) {
     return (
       <EmptyState
         icon={BellRing}
-        title="No activity yet"
-        description="Start a monitoring session or log a reminder to populate the activity feed."
+        title={isTurkish ? 'Henuz aktivite yok' : 'No activity yet'}
+        description={
+          isTurkish
+            ? 'Aktivite akisinin dolmasi icin izleme oturumu baslat veya bir hatirlatici kaydet.'
+            : 'Start a monitoring session or log a reminder to populate the activity feed.'
+        }
       />
     )
   }
@@ -78,14 +85,16 @@ export function ActivityFeedCard({
               </div>
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-2">
-                  <p className="text-sm font-semibold text-white">{item.title || behaviorLabel(item.activity_type)}</p>
+                  <p className="text-sm font-semibold text-white">{item.title || behaviorLabel(item.activity_type, language)}</p>
                   <Badge variant={categoryVariant(item.category)}>{item.category}</Badge>
                 </div>
                 <p className="mt-1 text-sm leading-6 text-[var(--text-muted)]">{item.message}</p>
                 <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-[var(--text-soft)]">
-                  <span>{formatClock(item.occurred_at)}</span>
-                  <span>{formatRelativeTime(item.occurred_at)}</span>
-                  {item.confidence != null ? <span>Confidence {Math.round(item.confidence * 100)}%</span> : null}
+                  <span>{formatClock(item.occurred_at, language)}</span>
+                  <span>{formatRelativeTime(item.occurred_at, language)}</span>
+                  {item.confidence != null ? (
+                    <span>{isTurkish ? 'Guven' : 'Confidence'} {Math.round(item.confidence * 100)}%</span>
+                  ) : null}
                 </div>
               </div>
             </div>
@@ -95,4 +104,3 @@ export function ActivityFeedCard({
     </Card>
   )
 }
-

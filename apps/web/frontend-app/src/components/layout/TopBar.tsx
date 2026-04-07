@@ -1,5 +1,7 @@
 import { ShieldCheck } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
+import { LanguageToggle } from '@/i18n/language-toggle'
+import { useLanguage } from '@/i18n/language-provider'
 import { ThemeToggle } from '@/theme/theme-toggle'
 import type { UserContextResponse } from '@/types/user'
 
@@ -10,6 +12,8 @@ type TopBarProps = {
 }
 
 export function TopBar({ title, subtitle, user }: TopBarProps) {
+  const { isTurkish } = useLanguage()
+
   return (
     <header className="flex flex-col gap-5 border-b border-[var(--line-soft)] bg-[var(--topbar-surface)] px-5 py-5 backdrop-blur-xl md:px-8 lg:flex-row lg:items-center lg:justify-between">
       <div>
@@ -18,10 +22,11 @@ export function TopBar({ title, subtitle, user }: TopBarProps) {
       </div>
 
       <div className="flex items-center gap-3">
+        <LanguageToggle />
         <ThemeToggle />
         <Badge variant="success" className="gap-2 px-3 py-1.5">
           <ShieldCheck className="size-4" />
-          Local-first privacy
+          {isTurkish ? 'Yerel-oncelikli gizlilik' : 'Local-first privacy'}
         </Badge>
         <div className="rounded-2xl border border-[var(--line-soft)] bg-[var(--surface)] px-4 py-3">
           <p className="text-sm font-semibold text-[var(--text-strong)]">{user.display_name}</p>

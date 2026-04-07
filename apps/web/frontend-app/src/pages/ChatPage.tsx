@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react'
+import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { MessageSquare, Send } from 'lucide-react'
 import { toast } from 'sonner'
@@ -8,21 +8,31 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { EmptyState } from '@/components/ui/empty-state'
 import { Button } from '@/components/ui/button'
 import { LoadingCard } from '@/components/ui/loading-state'
+import { useLanguage } from '@/i18n/language-provider'
 import { formatRelativeTime } from '@/lib/format'
 import type { ChatMessageResponse } from '@/types/monitoring'
 
-const starters = [
-  'Did I sit with bad posture a lot today?',
-  'Did I drink enough water today?',
-  'When did the system detect risky behavior?',
-]
-
 export function ChatPage() {
+  const { language, isTurkish } = useLanguage()
+  const starters = useMemo(
+    () => [
+      isTurkish ? 'Bugun cok kotu durusla mi oturdum?' : 'Did I sit with bad posture a lot today?',
+      isTurkish ? 'Bugun yeterince su ictim mi?' : 'Did I drink enough water today?',
+      isTurkish ? 'Sistem riskli davranisi ne zaman algiladi?' : 'When did the system detect risky behavior?',
+    ],
+    [isTurkish],
+  )
   const [conversationId, setConversationId] = useState<string | null>(null)
   const [draft, setDraft] = useState('')
   const [messages, setMessages] = useState<ChatMessageResponse[]>([])
   const [groundedFacts, setGroundedFacts] = useState<string[]>([])
   const [followUps, setFollowUps] = useState<string[]>(starters)
+
+  useEffect(() => {
+    if (messages.length === 0) {
+      setFollowUps(starters)
+    }
+  }, [messages.length, starters])
 
   const reportQuery = useQuery({
     queryKey: ['daily-report-chat-preview'],
@@ -43,7 +53,7 @@ export function ChatPage() {
       setDraft('')
     },
     onError(error) {
-      toast.error(toErrorMessage(error, 'Unable to send the grounded chat request.'))
+      toast.error(toErrorMessage(error, isTurkish ? 'Veriye dayali sohbet istegi gonderilemedi.' : 'Unable to send the grounded chat request.'))
     },
   })
 
@@ -57,7 +67,7 @@ export function ChatPage() {
   }
 
   if (reportQuery.isLoading || !reportQuery.data) {
-    return <LoadingCard message="Loading grounded behavior context" />
+    return <LoadingCard message={isTurkish ? 'Veriye dayali baglam yukleniyor' : 'Loading grounded behavior context'} />
   }
 
   return (
@@ -65,9 +75,11 @@ export function ChatPage() {
       <Card className="min-h-[620px]">
         <CardHeader>
           <div>
-            <CardTitle>Behavior chat</CardTitle>
+            <CardTitle>{isTurkish ? 'Davranis sohbeti' : 'Behavior chat'}</CardTitle>
             <CardDescription className="mt-2">
-              Ask about tracked posture, hydration, reminders, and smoking-like cues. The answer is grounded in your stored monitoring data.
+              {isTurkish
+                ? 'Takip edilen durus, su, hatirlaticilar ve sigara benzeri ipuclari hakkinda sor. Yanitlar kayitli verine dayalidir.'
+                : 'Ask about tracked posture, hydration, reminders, and smoking-like cues. The answer is grounded in your stored monitoring data.'}
             </CardDescription>
           </div>
         </CardHeader>
@@ -76,8 +88,12 @@ export function ChatPage() {
             {messages.length === 0 ? (
               <EmptyState
                 icon={MessageSquare}
-                title="No conversation yet"
-                description="Start with one of the suggested questions or type a new one about your tracked behavior."
+                title={isTurkish ? 'Henuz konusma yok' : 'No conversation yet'}
+                description={
+                  isTurkish
+                    ? 'Onerilen sorulardan biriyle basla veya takip edilen davranislarinla ilgili yeni bir soru yaz.'
+                    : 'Start with one of the suggested questions or type a new one about your tracked behavior.'
+                }
               />
             ) : (
               messages.map((message) => (
@@ -90,7 +106,7 @@ export function ChatPage() {
                   }`}
                 >
                   <p className="text-sm leading-6">{message.content}</p>
-                  <p className="mt-2 text-xs opacity-70">{formatRelativeTime(message.created_at)}</p>
+                  <p className="mt-2 text-xs opacity-70">{formatRelativeTime(message.created_at, language)}</p>
                 </div>
               ))
             )}
@@ -99,13 +115,17 @@ export function ChatPage() {
           <form className="space-y-3" onSubmit={handleSubmit}>
             <textarea
               className="min-h-[112px] w-full rounded-[24px] border border-[var(--line-soft)] bg-[rgba(255,255,255,0.03)] px-4 py-3 text-sm text-white outline-none focus:border-[var(--primary)]"
-              placeholder="Ask about posture trends, hydration, reminders, or risky behavior timings."
+              placeholder={
+                isTurkish
+                  ? 'Durus trendleri, su, hatirlaticilar veya riskli davranis zamanlari hakkinda sor.'
+                  : 'Ask about posture trends, hydration, reminders, or risky behavior timings.'
+              }
               value={draft}
               onChange={(event) => setDraft(event.target.value)}
             />
             <div className="flex justify-end">
               <Button type="submit" loading={chatMutation.isPending} iconLeft={<Send className="size-4" />}>
-                Send question
+                {isTurkish ? 'Soruyu gonder' : 'Send question'}
               </Button>
             </div>
           </form>
@@ -116,8 +136,12 @@ export function ChatPage() {
         <Card>
           <CardHeader>
             <div>
-              <CardTitle>Grounded facts</CardTitle>
-              <CardDescription className="mt-2">Facts pulled directly from the current report context used for the latest answer.</CardDescription>
+              <CardTitle>{isTurkish ? 'Veriye dayali bilgiler' : 'Grounded facts'}</CardTitle>
+              <CardDescription className="mt-2">
+                {isTurkish
+                  ? 'Son yanit icin mevcut rapor baglamindan dogrudan cekilen bilgiler.'
+                  : 'Facts pulled directly from the current report context used for the latest answer.'}
+              </CardDescription>
             </div>
           </CardHeader>
           <CardContent className="space-y-3">
@@ -139,8 +163,12 @@ export function ChatPage() {
         <Card>
           <CardHeader>
             <div>
-              <CardTitle>Suggested questions</CardTitle>
-              <CardDescription className="mt-2">These stay grounded to the same report and event history used by the backend chat endpoint.</CardDescription>
+              <CardTitle>{isTurkish ? 'Onerilen sorular' : 'Suggested questions'}</CardTitle>
+              <CardDescription className="mt-2">
+                {isTurkish
+                  ? 'Arka uc sohbet uc noktasinin kullandigi ayni rapor ve olay gecmisi ile sinirli kalir.'
+                  : 'These stay grounded to the same report and event history used by the backend chat endpoint.'}
+              </CardDescription>
             </div>
           </CardHeader>
           <CardContent className="space-y-3">

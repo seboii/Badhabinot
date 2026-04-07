@@ -1,22 +1,26 @@
 import { History, LayoutDashboard, MessageSquare, ScrollText, Settings } from 'lucide-react'
 import { NavLink } from 'react-router-dom'
 import { cn } from '@/lib/cn'
+import { useLanguage } from '@/i18n/language-provider'
 import type { UserContextResponse } from '@/types/user'
 
-const navigationItems = [
-  { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { to: '/history', label: 'History', icon: History },
-  { to: '/reports', label: 'Reports', icon: ScrollText },
-  { to: '/chat', label: 'Chat', icon: MessageSquare },
-  { to: '/settings', label: 'Settings', icon: Settings },
-]
-
 export function Sidebar({ user }: { user: UserContextResponse }) {
+  const { isTurkish } = useLanguage()
+  const navigationItems = [
+    { to: '/dashboard', label: isTurkish ? 'Panel' : 'Dashboard', icon: LayoutDashboard },
+    { to: '/history', label: isTurkish ? 'Gecmis' : 'History', icon: History },
+    { to: '/reports', label: isTurkish ? 'Raporlar' : 'Reports', icon: ScrollText },
+    { to: '/chat', label: isTurkish ? 'Sohbet' : 'Chat', icon: MessageSquare },
+    { to: '/settings', label: isTurkish ? 'Ayarlar' : 'Settings', icon: Settings },
+  ]
+
   return (
     <aside className="hidden w-[272px] shrink-0 border-r border-[var(--line-soft)] bg-[var(--nav-surface)] px-6 py-7 lg:flex lg:flex-col">
       <div className="mb-10">
         <p className="text-2xl font-extrabold tracking-[-0.04em] text-[var(--text-strong)]">BADHABINOT</p>
-        <p className="mt-2 text-sm text-[var(--text-muted)]">Privacy-first monitoring</p>
+        <p className="mt-2 text-sm text-[var(--text-muted)]">
+          {isTurkish ? 'Gizlilik-oncelikli izleme' : 'Privacy-first monitoring'}
+        </p>
       </div>
 
       <nav className="flex flex-1 flex-col gap-2">

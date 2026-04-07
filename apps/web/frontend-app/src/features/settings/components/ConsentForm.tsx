@@ -5,6 +5,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Switch } from '@/components/ui/switch'
+import { useLanguage } from '@/i18n/language-provider'
 import type { ConsentResponse, UpdateConsentsRequest } from '@/types/user'
 
 const consentSchema = z.object({
@@ -15,24 +16,6 @@ const consentSchema = z.object({
 
 type ConsentFormValues = z.infer<typeof consentSchema>
 
-const consentLabels = [
-  {
-    key: 'privacy_policy_accepted' as const,
-    title: 'Privacy policy acceptance',
-    description: 'Required to keep using monitoring, dashboard, and history workflows.',
-  },
-  {
-    key: 'camera_monitoring_accepted' as const,
-    title: 'Camera monitoring consent',
-    description: 'Required for live webcam analysis and session-backed monitoring.',
-  },
-  {
-    key: 'remote_inference_accepted' as const,
-    title: 'Remote inference consent',
-    description: 'Required for the external AI analysis pipeline that interprets the vision-service output.',
-  },
-]
-
 export function ConsentForm({
   consents,
   isSaving,
@@ -42,6 +25,31 @@ export function ConsentForm({
   isSaving: boolean
   onSubmit: (values: UpdateConsentsRequest) => void
 }) {
+  const { isTurkish } = useLanguage()
+  const consentLabels = [
+    {
+      key: 'privacy_policy_accepted' as const,
+      title: isTurkish ? 'Gizlilik politikasi onayi' : 'Privacy policy acceptance',
+      description: isTurkish
+        ? 'Izleme, panel ve gecmis akislarini kullanmaya devam etmek icin zorunlu.'
+        : 'Required to keep using monitoring, dashboard, and history workflows.',
+    },
+    {
+      key: 'camera_monitoring_accepted' as const,
+      title: isTurkish ? 'Kamera izleme onayi' : 'Camera monitoring consent',
+      description: isTurkish
+        ? 'Canli web kamera analizi ve oturum destekli izleme icin zorunlu.'
+        : 'Required for live webcam analysis and session-backed monitoring.',
+    },
+    {
+      key: 'remote_inference_accepted' as const,
+      title: isTurkish ? 'Uzak cikarim onayi' : 'Remote inference consent',
+      description: isTurkish
+        ? 'Vision-service cikisini yorumlayan harici AI analiz hatti icin zorunlu.'
+        : 'Required for the external AI analysis pipeline that interprets the vision-service output.',
+    },
+  ]
+
   const {
     control,
     handleSubmit,
@@ -63,8 +71,12 @@ export function ConsentForm({
     <Card>
       <CardHeader>
         <div>
-          <CardTitle>Privacy and consent</CardTitle>
-          <CardDescription className="mt-2">These switches directly update the persisted consent model used by the backend and monitoring orchestration.</CardDescription>
+          <CardTitle>{isTurkish ? 'Gizlilik ve onay' : 'Privacy and consent'}</CardTitle>
+          <CardDescription className="mt-2">
+            {isTurkish
+              ? 'Bu anahtarlar arka uc ve izleme orkestrasyonunun kullandigi kalici onay modelini dogrudan gunceller.'
+              : 'These switches directly update the persisted consent model used by the backend and monitoring orchestration.'}
+          </CardDescription>
         </div>
       </CardHeader>
       <CardContent>
@@ -85,13 +97,15 @@ export function ConsentForm({
 
           {!remoteInferenceAccepted ? (
             <div className="rounded-[24px] border border-[rgba(245,158,11,0.35)] bg-[rgba(245,158,11,0.08)] p-4 text-sm leading-6 text-[#ffd999]">
-              Frame analysis is disabled until remote inference consent is enabled. Camera preview and session controls can stay available, but the backend will reject image analysis requests.
+              {isTurkish
+                ? 'Uzak cikarim onayi acilana kadar kare analizi kapali. Kamera onizlemesi ve oturum kontrolleri acik kalabilir, fakat arka uc gorsel analiz isteklerini reddeder.'
+                : 'Frame analysis is disabled until remote inference consent is enabled. Camera preview and session controls can stay available, but the backend will reject image analysis requests.'}
             </div>
           ) : null}
 
           <div className="flex justify-end">
             <Button type="submit" loading={isSaving} disabled={!isDirty}>
-              Save consents
+              {isTurkish ? 'Onaylari kaydet' : 'Save consents'}
             </Button>
           </div>
         </form>

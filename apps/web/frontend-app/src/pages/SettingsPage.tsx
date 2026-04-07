@@ -11,8 +11,10 @@ import { ConsentForm } from '@/features/settings/components/ConsentForm'
 import { ProfileForm } from '@/features/settings/components/ProfileForm'
 import { SettingsForm } from '@/features/settings/components/SettingsForm'
 import { useAuth } from '@/hooks/use-auth'
+import { useLanguage } from '@/i18n/language-provider'
 
 export function SettingsPage() {
+  const { isTurkish } = useLanguage()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const { session, clearSession } = useAuth()
@@ -25,10 +27,10 @@ export function SettingsPage() {
     mutationFn: userApi.updateProfile,
     onSuccess() {
       void queryClient.invalidateQueries({ queryKey: ['user-context'] })
-      toast.success('Profile updated.')
+      toast.success(isTurkish ? 'Profil guncellendi.' : 'Profile updated.')
     },
     onError(error) {
-      toast.error(toErrorMessage(error, 'Unable to update profile.'))
+      toast.error(toErrorMessage(error, isTurkish ? 'Profil guncellenemedi.' : 'Unable to update profile.'))
     },
   })
 
@@ -37,10 +39,10 @@ export function SettingsPage() {
     onSuccess() {
       void queryClient.invalidateQueries({ queryKey: ['user-context'] })
       void queryClient.invalidateQueries({ queryKey: ['dashboard'] })
-      toast.success('Monitoring preferences updated.')
+      toast.success(isTurkish ? 'Izleme tercihleri guncellendi.' : 'Monitoring preferences updated.')
     },
     onError(error) {
-      toast.error(toErrorMessage(error, 'Unable to update monitoring preferences.'))
+      toast.error(toErrorMessage(error, isTurkish ? 'Izleme tercihleri guncellenemedi.' : 'Unable to update monitoring preferences.'))
     },
   })
 
@@ -49,10 +51,10 @@ export function SettingsPage() {
     onSuccess() {
       void queryClient.invalidateQueries({ queryKey: ['user-context'] })
       void queryClient.invalidateQueries({ queryKey: ['dashboard'] })
-      toast.success('Consent preferences updated.')
+      toast.success(isTurkish ? 'Onay tercihleri guncellendi.' : 'Consent preferences updated.')
     },
     onError(error) {
-      toast.error(toErrorMessage(error, 'Unable to update consent settings.'))
+      toast.error(toErrorMessage(error, isTurkish ? 'Onay ayarlari guncellenemedi.' : 'Unable to update consent settings.'))
     },
   })
 
@@ -65,13 +67,13 @@ export function SettingsPage() {
     onSettled() {
       clearSession()
       queryClient.clear()
-      toast.success('Signed out.')
+      toast.success(isTurkish ? 'Cikis yapildi.' : 'Signed out.')
       navigate('/login', { replace: true })
     },
   })
 
   if (userContextQuery.isLoading || !userContextQuery.data) {
-    return <LoadingCard message="Loading account settings" />
+    return <LoadingCard message={isTurkish ? 'Hesap ayarlari yukleniyor' : 'Loading account settings'} />
   }
 
   const user = userContextQuery.data
@@ -93,17 +95,25 @@ export function SettingsPage() {
       <Card>
         <CardHeader>
           <div>
-            <CardTitle>Session security</CardTitle>
-            <CardDescription className="mt-2">Use the auth-service logout endpoint to revoke the current refresh token and clear the local session.</CardDescription>
+            <CardTitle>{isTurkish ? 'Oturum guvenligi' : 'Session security'}</CardTitle>
+            <CardDescription className="mt-2">
+              {isTurkish
+                ? 'Mevcut yenileme belirtecini iptal edip yerel oturumu temizlemek icin auth-service cikis uc noktasini kullan.'
+                : 'Use the auth-service logout endpoint to revoke the current refresh token and clear the local session.'}
+            </CardDescription>
           </div>
         </CardHeader>
         <CardContent className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div>
-            <p className="text-sm font-semibold text-white">Logout</p>
-            <p className="mt-2 text-sm leading-6 text-[var(--text-muted)]">This will terminate the persisted frontend session and require a fresh sign-in.</p>
+            <p className="text-sm font-semibold text-white">{isTurkish ? 'Cikis' : 'Logout'}</p>
+            <p className="mt-2 text-sm leading-6 text-[var(--text-muted)]">
+              {isTurkish
+                ? 'Bu islem kalici on yuz oturumunu sonlandirir ve yeniden giris ister.'
+                : 'This will terminate the persisted frontend session and require a fresh sign-in.'}
+            </p>
           </div>
           <Button variant="danger" loading={logoutMutation.isPending} onClick={() => logoutMutation.mutate()}>
-            Sign out
+            {isTurkish ? 'Cikis yap' : 'Sign out'}
           </Button>
         </CardContent>
       </Card>

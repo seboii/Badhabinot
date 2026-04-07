@@ -1,9 +1,11 @@
 import { MoonStar, SunMedium } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { useLanguage } from '@/i18n/language-provider'
 import { useTheme } from '@/theme/theme-provider'
 
 export function ThemeToggle() {
   const { theme, toggleTheme } = useTheme()
+  const { isTurkish } = useLanguage()
   const isDark = theme === 'dark'
 
   return (
@@ -15,7 +17,7 @@ export function ThemeToggle() {
       onClick={toggleTheme}
       type="button"
     >
-      {isDark ? 'Light mode' : 'Dark mode'}
+      {isDark ? (isTurkish ? 'Acik tema' : 'Light mode') : isTurkish ? 'Koyu tema' : 'Dark mode'}
     </Button>
   )
 }

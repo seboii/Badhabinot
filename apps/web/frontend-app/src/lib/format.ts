@@ -1,4 +1,5 @@
-import { format, formatDistanceToNow, parseISO } from 'date-fns'
+import { parseISO } from 'date-fns'
+import type { AppLanguage } from '@/i18n/language-provider'
 
 function toDate(value: Date | string | null | undefined) {
   if (!value) {
@@ -9,89 +10,143 @@ function toDate(value: Date | string | null | undefined) {
   return Number.isNaN(date.getTime()) ? null : date
 }
 
-export function formatDateTime(value: Date | string | null | undefined, pattern = 'dd MMM yyyy, HH:mm') {
+function localeCode(language: AppLanguage) {
+  return language === 'tr' ? 'tr-TR' : 'en-US'
+}
+
+export function formatDateTime(value: Date | string | null | undefined, language: AppLanguage = 'en') {
   const date = toDate(value)
-  return date ? format(date, pattern) : 'Unknown'
-}
-
-export function formatClock(value: Date | string | null | undefined) {
-  return formatDateTime(value, 'HH:mm')
-}
-
-export function formatRelativeTime(value: Date | string | null | undefined) {
-  const date = toDate(value)
-  return date ? formatDistanceToNow(date, { addSuffix: true }) : 'Unknown'
-}
-
-export function formatMilliliters(value: number | null | undefined) {
-  if (value == null) {
-    return '0 ml'
+  if (!date) {
+    return language === 'tr' ? 'Bilinmiyor' : 'Unknown'
   }
 
-  return `${new Intl.NumberFormat('en-US').format(value)} ml`
+  return new Intl.DateTimeFormat(localeCode(language), {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(date)
 }
 
-export function behaviorLabel(value: string | null | undefined) {
+export function formatClock(value: Date | string | null | undefined, language: AppLanguage = 'en') {
+  const date = toDate(value)
+  if (!date) {
+    return language === 'tr' ? 'Bilinmiyor' : 'Unknown'
+  }
+
+  return new Intl.DateTimeFormat(localeCode(language), {
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(date)
+}
+
+export function formatRelativeTime(value: Date | string | null | undefined, language: AppLanguage = 'en') {
+  const date = toDate(value)
+  if (!date) {
+    return language === 'tr' ? 'Bilinmiyor' : 'Unknown'
+  }
+
+  const now = Date.now()
+  const diffSeconds = Math.round((date.getTime() - now) / 1000)
+  const absSeconds = Math.abs(diffSeconds)
+  const formatter = new Intl.RelativeTimeFormat(localeCode(language), { numeric: 'auto' })
+
+  if (absSeconds < 60) {
+    return formatter.format(diffSeconds, 'second')
+  }
+
+  const diffMinutes = Math.round(diffSeconds / 60)
+  if (Math.abs(diffMinutes) < 60) {
+    return formatter.format(diffMinutes, 'minute')
+  }
+
+  const diffHours = Math.round(diffMinutes / 60)
+  if (Math.abs(diffHours) < 24) {
+    return formatter.format(diffHours, 'hour')
+  }
+
+  const diffDays = Math.round(diffHours / 24)
+  return formatter.format(diffDays, 'day')
+}
+
+export function formatMilliliters(value: number | null | undefined, language: AppLanguage = 'en') {
+  if (value == null) {
+    return language === 'tr' ? '0 ml' : '0 ml'
+  }
+
+  return `${new Intl.NumberFormat(localeCode(language)).format(value)} ml`
+}
+
+export function behaviorLabel(value: string | null | undefined, language: AppLanguage = 'en') {
+  const isTurkish = language === 'tr'
+
   switch ((value || '').toLowerCase()) {
     case 'nail_biting':
-      return 'Nail biting'
+      return isTurkish ? 'Tirnak yeme' : 'Nail biting'
     case 'smoking':
-      return 'Smoking gesture'
+      return isTurkish ? 'Sigara jesti' : 'Smoking gesture'
     case 'smoking_like_gesture':
-      return 'Smoking-like cue'
+      return isTurkish ? 'Sigara benzeri isaret' : 'Smoking-like cue'
     case 'hand_movement_pattern':
-      return 'Hand movement pattern'
+      return isTurkish ? 'El hareketi paterni' : 'Hand movement pattern'
     case 'poor_posture':
-      return 'Poor posture'
+      return isTurkish ? 'Kotu durus' : 'Poor posture'
     case 'posture_reminder':
-      return 'Posture reminder'
+      return isTurkish ? 'Durus hatirlaticisi' : 'Posture reminder'
     case 'mindful_break_reminder':
-      return 'Mindful break reminder'
+      return isTurkish ? 'Farkindalik molasi hatirlaticisi' : 'Mindful break reminder'
     case 'monitoring_started':
-      return 'Monitoring started'
+      return isTurkish ? 'Izleme basladi' : 'Monitoring started'
     case 'monitoring_stopped':
-      return 'Monitoring stopped'
+      return isTurkish ? 'Izleme durdu' : 'Monitoring stopped'
     case 'water_reminder':
     case 'water':
-      return 'Water reminder'
+      return isTurkish ? 'Su hatirlaticisi' : 'Water reminder'
     case 'break':
     case 'break_reminder':
     case 'exercise':
-      return 'Break reminder'
+      return isTurkish ? 'Mola hatirlaticisi' : 'Break reminder'
     case 'water_logged':
-      return 'Hydration log'
+      return isTurkish ? 'Su kaydi' : 'Hydration log'
     case 'none':
-      return 'No risky behavior'
+      return isTurkish ? 'Riskli davranis yok' : 'No risky behavior'
     default:
       return value
         ? value
             .replace(/_/g, ' ')
             .replace(/\b\w/g, (character) => character.toUpperCase())
-        : 'Unknown'
+        : isTurkish
+          ? 'Bilinmiyor'
+          : 'Unknown'
   }
 }
 
-export function postureLabel(value: string | null | undefined) {
+export function postureLabel(value: string | null | undefined, language: AppLanguage = 'en') {
+  const isTurkish = language === 'tr'
+
   switch ((value || '').toLowerCase()) {
     case 'poor':
-      return 'Needs adjustment'
+      return isTurkish ? 'Duzeltme gerekli' : 'Needs adjustment'
     case 'good':
-      return 'Aligned posture'
+      return isTurkish ? 'Durus hizali' : 'Aligned posture'
     default:
-      return 'Unavailable'
+      return isTurkish ? 'Kullanilamiyor' : 'Unavailable'
   }
 }
 
-export function severityLabel(value: string | null | undefined) {
+export function severityLabel(value: string | null | undefined, language: AppLanguage = 'en') {
+  const isTurkish = language === 'tr'
+
   switch ((value || '').toLowerCase()) {
     case 'high':
-      return 'High'
+      return isTurkish ? 'Yuksek' : 'High'
     case 'medium':
-      return 'Medium'
+      return isTurkish ? 'Orta' : 'Medium'
     case 'low':
-      return 'Low'
+      return isTurkish ? 'Dusuk' : 'Low'
     default:
-      return 'Unknown'
+      return isTurkish ? 'Bilinmiyor' : 'Unknown'
   }
 }
 

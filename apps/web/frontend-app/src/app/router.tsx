@@ -5,6 +5,7 @@ import { PublicOnlyRoute } from '@/components/layout/PublicOnlyRoute'
 import { ProtectedRoute } from '@/components/layout/ProtectedRoute'
 import { AppShell } from '@/components/layout/AppShell'
 import { LoadingScreen } from '@/components/ui/loading-state'
+import { useLanguage } from '@/i18n/language-provider'
 import { userApi } from '@/api/user'
 
 const DashboardPage = lazy(async () => {
@@ -52,18 +53,19 @@ const SettingsPage = lazy(async () => {
   return { default: module.SettingsPage }
 })
 
-function LazyRoute({ children }: { children: ReactNode }) {
-  return <Suspense fallback={<LoadingScreen message="Loading page" />}>{children}</Suspense>
+function LazyRoute({ children, message }: { children: ReactNode; message: string }) {
+  return <Suspense fallback={<LoadingScreen message={message} />}>{children}</Suspense>
 }
 
 function HomeRedirect() {
+  const { isTurkish } = useLanguage()
   const { data, isLoading } = useQuery({
     queryKey: ['user-context'],
     queryFn: userApi.getMe,
   })
 
   if (isLoading) {
-    return <LoadingScreen message="Preparing your workspace" />
+    return <LoadingScreen message={isTurkish ? 'Calisma alani hazirlaniyor' : 'Preparing your workspace'} />
   }
 
   const needsOnboarding =
@@ -81,27 +83,30 @@ function ShellOutlet() {
 }
 
 export function AppRouter() {
+  const { isTurkish } = useLanguage()
+  const loadingMessage = isTurkish ? 'Sayfa yukleniyor' : 'Loading page'
+
   return (
     <BrowserRouter>
       <Routes>
         <Route element={<PublicOnlyRoute />}>
-          <Route path="/login" element={<LazyRoute><LoginPage /></LazyRoute>} />
-          <Route path="/register" element={<LazyRoute><RegisterPage /></LazyRoute>} />
+          <Route path="/login" element={<LazyRoute message={loadingMessage}><LoginPage /></LazyRoute>} />
+          <Route path="/register" element={<LazyRoute message={loadingMessage}><RegisterPage /></LazyRoute>} />
         </Route>
 
         <Route element={<ProtectedRoute />}>
-          <Route path="/onboarding" element={<LazyRoute><OnboardingPage /></LazyRoute>} />
+          <Route path="/onboarding" element={<LazyRoute message={loadingMessage}><OnboardingPage /></LazyRoute>} />
           <Route element={<ShellOutlet />}>
             <Route index element={<HomeRedirect />} />
-            <Route path="/dashboard" element={<LazyRoute><DashboardPage /></LazyRoute>} />
-            <Route path="/history" element={<LazyRoute><HistoryPage /></LazyRoute>} />
-            <Route path="/reports" element={<LazyRoute><ReportsPage /></LazyRoute>} />
-            <Route path="/chat" element={<LazyRoute><ChatPage /></LazyRoute>} />
-            <Route path="/settings" element={<LazyRoute><SettingsPage /></LazyRoute>} />
+            <Route path="/dashboard" element={<LazyRoute message={loadingMessage}><DashboardPage /></LazyRoute>} />
+            <Route path="/history" element={<LazyRoute message={loadingMessage}><HistoryPage /></LazyRoute>} />
+            <Route path="/reports" element={<LazyRoute message={loadingMessage}><ReportsPage /></LazyRoute>} />
+            <Route path="/chat" element={<LazyRoute message={loadingMessage}><ChatPage /></LazyRoute>} />
+            <Route path="/settings" element={<LazyRoute message={loadingMessage}><SettingsPage /></LazyRoute>} />
           </Route>
         </Route>
 
-        <Route path="*" element={<LazyRoute><NotFoundPage /></LazyRoute>} />
+        <Route path="*" element={<LazyRoute message={loadingMessage}><NotFoundPage /></LazyRoute>} />
       </Routes>
     </BrowserRouter>
   )

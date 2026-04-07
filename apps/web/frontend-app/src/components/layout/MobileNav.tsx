@@ -1,16 +1,18 @@
 import { History, LayoutDashboard, MessageSquare, ScrollText, Settings } from 'lucide-react'
 import { NavLink } from 'react-router-dom'
 import { cn } from '@/lib/cn'
-
-const items = [
-  { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { to: '/history', label: 'History', icon: History },
-  { to: '/reports', label: 'Reports', icon: ScrollText },
-  { to: '/chat', label: 'Chat', icon: MessageSquare },
-  { to: '/settings', label: 'Settings', icon: Settings },
-]
+import { useLanguage } from '@/i18n/language-provider'
 
 export function MobileNav() {
+  const { isTurkish } = useLanguage()
+  const items = [
+    { to: '/dashboard', label: isTurkish ? 'Panel' : 'Dashboard', icon: LayoutDashboard },
+    { to: '/history', label: isTurkish ? 'Gecmis' : 'History', icon: History },
+    { to: '/reports', label: isTurkish ? 'Raporlar' : 'Reports', icon: ScrollText },
+    { to: '/chat', label: isTurkish ? 'Sohbet' : 'Chat', icon: MessageSquare },
+    { to: '/settings', label: isTurkish ? 'Ayarlar' : 'Settings', icon: Settings },
+  ]
+
   return (
     <nav className="fixed inset-x-4 bottom-4 z-30 flex items-center justify-between rounded-[28px] border border-[var(--line-soft)] bg-[var(--nav-surface)] px-4 py-3 shadow-[var(--shadow-panel)] backdrop-blur-xl lg:hidden">
       {items.map(({ to, label, icon: Icon }) => (

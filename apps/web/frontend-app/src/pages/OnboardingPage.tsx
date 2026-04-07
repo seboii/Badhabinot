@@ -14,23 +14,18 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { LoadingScreen } from '@/components/ui/loading-state'
 import { Switch } from '@/components/ui/switch'
 import { useCamera } from '@/hooks/use-camera'
+import { LanguageToggle } from '@/i18n/language-toggle'
+import { useLanguage } from '@/i18n/language-provider'
 import { ThemeToggle } from '@/theme/theme-toggle'
 
-const onboardingSchema = z.object({
-  privacy_policy_accepted: z.boolean().refine((value) => value, {
-    message: 'You must accept the privacy policy to continue.',
-  }),
-  camera_monitoring_accepted: z.boolean().refine((value) => value, {
-    message: 'Camera monitoring consent is required to start live analysis.',
-  }),
-  remote_inference_accepted: z.boolean().refine((value) => value, {
-    message: 'Remote inference consent is required because higher-level analysis is API-based.',
-  }),
-})
-
-type OnboardingValues = z.infer<typeof onboardingSchema>
+type OnboardingValues = {
+  privacy_policy_accepted: boolean
+  camera_monitoring_accepted: boolean
+  remote_inference_accepted: boolean
+}
 
 export function OnboardingPage() {
+  const { isTurkish } = useLanguage()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const { data, isLoading } = useQuery({
@@ -38,6 +33,24 @@ export function OnboardingPage() {
     queryFn: userApi.getMe,
   })
   const { videoRef, permissionState, streamReady, errorMessage, requestCamera } = useCamera()
+
+  const onboardingSchema = z.object({
+    privacy_policy_accepted: z.boolean().refine((value) => value, {
+      message: isTurkish
+        ? 'Devam etmek icin gizlilik politikasini kabul etmelisin.'
+        : 'You must accept the privacy policy to continue.',
+    }),
+    camera_monitoring_accepted: z.boolean().refine((value) => value, {
+      message: isTurkish
+        ? 'Canli analizi baslatmak icin kamera izleme onayi zorunlu.'
+        : 'Camera monitoring consent is required to start live analysis.',
+    }),
+    remote_inference_accepted: z.boolean().refine((value) => value, {
+      message: isTurkish
+        ? 'Ust seviye analiz API tabanli oldugu icin uzak cikarim onayi zorunlu.'
+        : 'Remote inference consent is required because higher-level analysis is API-based.',
+    }),
+  })
 
   const {
     handleSubmit,
@@ -61,18 +74,22 @@ export function OnboardingPage() {
       void queryClient.invalidateQueries({ queryKey: ['user-context'] })
       void queryClient.invalidateQueries({ queryKey: ['dashboard'] })
       void queryClient.invalidateQueries({ queryKey: ['activities'] })
-      toast.success('Onboarding completed. You can now start monitoring from the dashboard.')
+      toast.success(
+        isTurkish
+          ? 'Baslangic tamamlandi. Artik panelden izlemeyi baslatabilirsin.'
+          : 'Onboarding completed. You can now start monitoring from the dashboard.',
+      )
       navigate('/dashboard', { replace: true })
     },
     onError(error) {
-      toast.error(toErrorMessage(error, 'Unable to complete onboarding.'))
+      toast.error(toErrorMessage(error, isTurkish ? 'Baslangic tamamlanamadi.' : 'Unable to complete onboarding.'))
     },
   })
 
   const readyToStart = useMemo(() => permissionState === 'granted' && streamReady, [permissionState, streamReady])
 
   if (isLoading || !data) {
-    return <LoadingScreen message="Preparing secure onboarding" />
+    return <LoadingScreen message={isTurkish ? 'Guvenli baslangic hazirlaniyor' : 'Preparing secure onboarding'} />
   }
 
   return (
@@ -82,39 +99,54 @@ export function OnboardingPage() {
           <div className="flex items-start justify-between gap-4">
             <Badge variant="primary" className="mb-5 gap-2 px-3 py-1.5">
               <ShieldCheck className="size-4" />
-              Welcome, {data.display_name}
+              {isTurkish ? 'Hos geldin,' : 'Welcome,'} {data.display_name}
             </Badge>
-            <ThemeToggle />
+            <div className="flex items-center gap-2">
+              <LanguageToggle />
+              <ThemeToggle />
+            </div>
           </div>
           <h1 className="max-w-2xl text-4xl font-extrabold tracking-[-0.05em] text-[var(--text-strong)] md:text-5xl">
-            Activate API-backed live monitoring
+            {isTurkish ? 'API destekli canli izlemeyi etkinlestir' : 'Activate API-backed live monitoring'}
           </h1>
           <p className="mt-4 max-w-2xl text-base leading-7 text-[var(--text-muted)]">
-            The repaired BADHABINOT flow still asks for explicit camera permission and consent, but higher-level analysis is now routed through the external AI adapter service instead of a local model runtime.
+            {isTurkish
+              ? 'Duzenlenen BADHABINOT akisinda acik kamera izni ve onay hala gerekir, fakat ust seviye analiz artik yerel model yerine harici AI bagdastirici servisinden geciyor.'
+              : 'The repaired BADHABINOT flow still asks for explicit camera permission and consent, but higher-level analysis is now routed through the external AI adapter service instead of a local model runtime.'}
           </p>
 
           <div className="mt-8 grid gap-4 md:grid-cols-3">
             <Card className="bg-[rgba(255,255,255,0.03)]">
               <CardContent className="p-5">
-                <p className="text-sm font-semibold text-white">Current mode</p>
+                <p className="text-sm font-semibold text-white">{isTurkish ? 'Mevcut mod' : 'Current mode'}</p>
                 <p className="mt-3 text-2xl font-bold text-white">{data.settings.model_mode}</p>
-                <p className="mt-2 text-sm text-[var(--text-muted)]">Persisted analysis mode used by the backend orchestration.</p>
-              </CardContent>
-            </Card>
-            <Card className="bg-[rgba(255,255,255,0.03)]">
-              <CardContent className="p-5">
-                <p className="text-sm font-semibold text-white">Water interval</p>
-                <p className="mt-3 text-2xl font-bold text-white">{data.settings.water_interval_min} min</p>
-                <p className="mt-2 text-sm text-[var(--text-muted)]">Reminder cadence already configured for hydration.</p>
-              </CardContent>
-            </Card>
-            <Card className="bg-[rgba(255,255,255,0.03)]">
-              <CardContent className="p-5">
-                <p className="text-sm font-semibold text-white">Quiet hours</p>
-                <p className="mt-3 text-2xl font-bold text-white">
-                  {data.settings.quiet_hours_enabled ? 'Enabled' : 'Off'}
+                <p className="mt-2 text-sm text-[var(--text-muted)]">
+                  {isTurkish
+                    ? 'Arka uc orkestrasyonunda kullanilan kayitli analiz modu.'
+                    : 'Persisted analysis mode used by the backend orchestration.'}
                 </p>
-                <p className="mt-2 text-sm text-[var(--text-muted)]">Silence reminder delivery outside your preferred hours.</p>
+              </CardContent>
+            </Card>
+            <Card className="bg-[rgba(255,255,255,0.03)]">
+              <CardContent className="p-5">
+                <p className="text-sm font-semibold text-white">{isTurkish ? 'Su araligi' : 'Water interval'}</p>
+                <p className="mt-3 text-2xl font-bold text-white">{data.settings.water_interval_min} min</p>
+                <p className="mt-2 text-sm text-[var(--text-muted)]">
+                  {isTurkish ? 'Su hatirlatici araligi zaten ayarli.' : 'Reminder cadence already configured for hydration.'}
+                </p>
+              </CardContent>
+            </Card>
+            <Card className="bg-[rgba(255,255,255,0.03)]">
+              <CardContent className="p-5">
+                <p className="text-sm font-semibold text-white">{isTurkish ? 'Sessiz saatler' : 'Quiet hours'}</p>
+                <p className="mt-3 text-2xl font-bold text-white">
+                  {data.settings.quiet_hours_enabled ? (isTurkish ? 'Acik' : 'Enabled') : isTurkish ? 'Kapali' : 'Off'}
+                </p>
+                <p className="mt-2 text-sm text-[var(--text-muted)]">
+                  {isTurkish
+                    ? 'Tercih ettigin saatler disinda hatirlatici gonderimini sustur.'
+                    : 'Silence reminder delivery outside your preferred hours.'}
+                </p>
               </CardContent>
             </Card>
           </div>
@@ -124,8 +156,12 @@ export function OnboardingPage() {
           <Card>
             <CardHeader>
               <div>
-                <CardTitle>Camera permission</CardTitle>
-                <CardDescription className="mt-2">Grant access to your webcam to mirror the onboarding flow in the uploaded wireframes.</CardDescription>
+                <CardTitle>{isTurkish ? 'Kamera izni' : 'Camera permission'}</CardTitle>
+                <CardDescription className="mt-2">
+                  {isTurkish
+                    ? 'Yuklenen akisa benzer baslangic adimi icin web kamerasina erisim izni ver.'
+                    : 'Grant access to your webcam to mirror the onboarding flow in the uploaded wireframes.'}
+                </CardDescription>
               </div>
             </CardHeader>
             <CardContent className="space-y-5">
@@ -144,7 +180,9 @@ export function OnboardingPage() {
                         <Camera className="size-6 text-[var(--text-muted)]" />
                       </div>
                       <p className="max-w-sm text-sm leading-6 text-[var(--text-muted)]">
-                        No preview yet. Camera access is required before BADHABINOT can start a live session.
+                        {isTurkish
+                          ? 'Henuz onizleme yok. BADHABINOT canli oturum baslatmadan once kamera erisimi gerekir.'
+                          : 'No preview yet. Camera access is required before BADHABINOT can start a live session.'}
                       </p>
                     </div>
                   ) : null}
@@ -152,10 +190,16 @@ export function OnboardingPage() {
               </div>
               <div className="flex flex-wrap items-center gap-3">
                 <Button variant="secondary" iconLeft={<Camera className="size-4" />} onClick={requestCamera}>
-                  {streamReady ? 'Refresh camera permission' : 'Grant camera access'}
+                  {streamReady
+                    ? isTurkish
+                      ? 'Kamera iznini yenile'
+                      : 'Refresh camera permission'
+                    : isTurkish
+                      ? 'Kamera erisimi ver'
+                      : 'Grant camera access'}
                 </Button>
                 <Badge variant={readyToStart ? 'success' : 'warning'}>
-                  {readyToStart ? 'Camera ready' : permissionState.toUpperCase()}
+                  {readyToStart ? (isTurkish ? 'Kamera hazir' : 'Camera ready') : permissionState.toUpperCase()}
                 </Badge>
               </div>
               {errorMessage ? <p className="text-sm text-[var(--danger)]">{errorMessage}</p> : null}
@@ -165,8 +209,12 @@ export function OnboardingPage() {
           <Card>
             <CardHeader>
               <div>
-                <CardTitle>Consent checklist</CardTitle>
-                <CardDescription className="mt-2">These fields map directly to `PUT /api/v1/users/me/consents` and are required for the monitoring workflow.</CardDescription>
+                <CardTitle>{isTurkish ? 'Onay kontrol listesi' : 'Consent checklist'}</CardTitle>
+                <CardDescription className="mt-2">
+                  {isTurkish
+                    ? 'Bu alanlar dogrudan `PUT /api/v1/users/me/consents` ile eslesir ve izleme akisi icin zorunludur.'
+                    : 'These fields map directly to `PUT /api/v1/users/me/consents` and are required for the monitoring workflow.'}
+                </CardDescription>
               </div>
             </CardHeader>
             <CardContent>
@@ -174,7 +222,9 @@ export function OnboardingPage() {
                 className="space-y-4"
                 onSubmit={handleSubmit((values) => {
                   if (!readyToStart) {
-                    toast.error('Grant camera access before starting monitoring.')
+                    toast.error(
+                      isTurkish ? 'Izlemeyi baslatmadan once kamera erisimi ver.' : 'Grant camera access before starting monitoring.',
+                    )
                     return
                   }
                   completeMutation.mutate(values)
@@ -182,8 +232,12 @@ export function OnboardingPage() {
               >
                 <div className="flex items-center justify-between gap-4 rounded-[24px] border border-[var(--line-soft)] bg-[rgba(255,255,255,0.03)] p-4">
                   <div>
-                    <p className="text-sm font-semibold text-white">Privacy policy accepted</p>
-                    <p className="mt-1 text-sm leading-6 text-[var(--text-muted)]">Required to continue using the product.</p>
+                    <p className="text-sm font-semibold text-white">
+                      {isTurkish ? 'Gizlilik politikasi kabul edildi' : 'Privacy policy accepted'}
+                    </p>
+                    <p className="mt-1 text-sm leading-6 text-[var(--text-muted)]">
+                      {isTurkish ? 'Urunu kullanmaya devam etmek icin zorunlu.' : 'Required to continue using the product.'}
+                    </p>
                   </div>
                   <Switch
                     checked={watch('privacy_policy_accepted')}
@@ -194,8 +248,14 @@ export function OnboardingPage() {
 
                 <div className="flex items-center justify-between gap-4 rounded-[24px] border border-[var(--line-soft)] bg-[rgba(255,255,255,0.03)] p-4">
                   <div>
-                    <p className="text-sm font-semibold text-white">Camera monitoring accepted</p>
-                    <p className="mt-1 text-sm leading-6 text-[var(--text-muted)]">Allows the live camera pipeline to process frames for immediate inference.</p>
+                    <p className="text-sm font-semibold text-white">
+                      {isTurkish ? 'Kamera izleme kabul edildi' : 'Camera monitoring accepted'}
+                    </p>
+                    <p className="mt-1 text-sm leading-6 text-[var(--text-muted)]">
+                      {isTurkish
+                        ? 'Canli kamera hattinin kareleri anlik cikarim icin islemesine izin verir.'
+                        : 'Allows the live camera pipeline to process frames for immediate inference.'}
+                    </p>
                   </div>
                   <Switch
                     checked={watch('camera_monitoring_accepted')}
@@ -207,11 +267,15 @@ export function OnboardingPage() {
                 <div className="flex items-center justify-between gap-4 rounded-[24px] border border-[var(--line-soft)] bg-[rgba(255,255,255,0.03)] p-4">
                   <div>
                     <div className="flex items-center gap-2">
-                      <p className="text-sm font-semibold text-white">Remote inference accepted</p>
+                      <p className="text-sm font-semibold text-white">
+                        {isTurkish ? 'Uzak cikarim kabul edildi' : 'Remote inference accepted'}
+                      </p>
                       <Lock className="size-4 text-[var(--text-muted)]" />
                     </div>
                     <p className="mt-1 text-sm leading-6 text-[var(--text-muted)]">
-                      Required. Higher-level analysis is performed through the external AI adapter service.
+                      {isTurkish
+                        ? 'Zorunlu. Ust seviye analiz harici AI bagdastirici servisinde yapilir.'
+                        : 'Required. Higher-level analysis is performed through the external AI adapter service.'}
                     </p>
                   </div>
                   <Switch
@@ -222,11 +286,13 @@ export function OnboardingPage() {
                 {errors.remote_inference_accepted ? <p className="text-sm text-[var(--danger)]">{errors.remote_inference_accepted.message}</p> : null}
 
                 <div className="rounded-[24px] border border-[var(--line-soft)] bg-[rgba(255,255,255,0.03)] p-4 text-sm leading-6 text-[var(--text-muted)]">
-                  Vision preprocessing stays local in the `vision-service`, but behavior interpretation is now external-API driven. Consent is required before the dashboard can analyze frames.
+                  {isTurkish
+                    ? 'Goruntu on isleme vision-service icinde yerelde kalir, fakat davranis yorumlama artik harici API tabanlidir. Panelin kare analiz etmesi icin onay gerekir.'
+                    : 'Vision preprocessing stays local in the `vision-service`, but behavior interpretation is now external-API driven. Consent is required before the dashboard can analyze frames.'}
                 </div>
 
                 <Button className="w-full" size="lg" loading={completeMutation.isPending} iconLeft={<ChevronRight className="size-4" />} type="submit">
-                  Accept and start secure monitoring
+                  {isTurkish ? 'Kabul et ve guvenli izlemeyi baslat' : 'Accept and start secure monitoring'}
                 </Button>
               </form>
             </CardContent>

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { useLanguage } from '@/i18n/language-provider'
 
 export type CameraPermissionState = 'idle' | 'requesting' | 'granted' | 'denied' | 'unsupported' | 'error'
 
@@ -10,6 +11,7 @@ type CapturedFrame = {
 const LOCALHOST_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]'])
 
 export function useCamera() {
+  const { isTurkish } = useLanguage()
   const videoRef = useRef<HTMLVideoElement | null>(null)
   const streamRef = useRef<MediaStream | null>(null)
   const [permissionState, setPermissionState] = useState<CameraPermissionState>('idle')
@@ -20,7 +22,11 @@ export function useCamera() {
     const video = videoRef.current
     if (!video) {
       setPermissionState('error')
-      setErrorMessage('Camera preview element is not ready. Please retry.')
+      setErrorMessage(
+        isTurkish
+          ? 'Kamera onizleme ogesi hazir degil. Lutfen tekrar dene.'
+          : 'Camera preview element is not ready. Please retry.',
+      )
       return false
     }
 
@@ -36,7 +42,7 @@ export function useCamera() {
     } catch (error) {
       setStreamReady(false)
       setPermissionState('error')
-      setErrorMessage(error instanceof Error ? error.message : 'Unable to play camera preview.')
+      setErrorMessage(error instanceof Error ? error.message : isTurkish ? 'Kamera onizlemesi oynatilamadi.' : 'Unable to play camera preview.')
       return false
     }
   }
@@ -58,13 +64,13 @@ export function useCamera() {
   const requestCamera = async () => {
     if (!window.isSecureContext && !LOCALHOST_HOSTS.has(window.location.hostname)) {
       setPermissionState('unsupported')
-      setErrorMessage('Camera access requires HTTPS or localhost.')
+      setErrorMessage(isTurkish ? 'Kamera erisimi HTTPS veya localhost gerektirir.' : 'Camera access requires HTTPS or localhost.')
       return false
     }
 
     if (!navigator.mediaDevices?.getUserMedia) {
       setPermissionState('unsupported')
-      setErrorMessage('This browser does not support camera access.')
+      setErrorMessage(isTurkish ? 'Bu tarayici kamera erisimini desteklemiyor.' : 'This browser does not support camera access.')
       return false
     }
 
@@ -85,7 +91,11 @@ export function useCamera() {
       stream.getTracks().forEach((track) => {
         track.onended = () => {
           setStreamReady(false)
-          setErrorMessage('Camera stream ended. Grant camera access to continue monitoring.')
+          setErrorMessage(
+            isTurkish
+              ? 'Kamera akisi sonlandi. Izlemeye devam etmek icin kamera erisimi ver.'
+              : 'Camera stream ended. Grant camera access to continue monitoring.',
+          )
         }
       })
 
@@ -103,18 +113,18 @@ export function useCamera() {
 
       if (error instanceof DOMException && (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError')) {
         setPermissionState('denied')
-        setErrorMessage('Camera permission was denied.')
+        setErrorMessage(isTurkish ? 'Kamera izni reddedildi.' : 'Camera permission was denied.')
         return false
       }
 
       if (error instanceof DOMException && error.name === 'NotFoundError') {
         setPermissionState('error')
-        setErrorMessage('No camera device was found.')
+        setErrorMessage(isTurkish ? 'Kamera cihazi bulunamadi.' : 'No camera device was found.')
         return false
       }
 
       setPermissionState('error')
-      setErrorMessage(error instanceof Error ? error.message : 'Unable to access camera.')
+      setErrorMessage(error instanceof Error ? error.message : isTurkish ? 'Kameraya erisim saglanamadi.' : 'Unable to access camera.')
       return false
     }
   }

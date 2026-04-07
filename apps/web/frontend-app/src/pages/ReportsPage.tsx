@@ -9,6 +9,7 @@ import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { LoadingCard } from '@/components/ui/loading-state'
+import { useLanguage } from '@/i18n/language-provider'
 import { formatMilliliters, toPercent } from '@/lib/format'
 
 function ReportMetric({
@@ -41,6 +42,7 @@ function ReportMetric({
 }
 
 export function ReportsPage() {
+  const { language, isTurkish } = useLanguage()
   const [selectedDate, setSelectedDate] = useState(format(new Date(), 'yyyy-MM-dd'))
 
   const reportQuery = useQuery({
@@ -49,7 +51,7 @@ export function ReportsPage() {
   })
 
   if (reportQuery.isLoading || !reportQuery.data) {
-    return <LoadingCard message="Generating daily report" />
+    return <LoadingCard message={isTurkish ? 'Gunluk rapor olusturuluyor' : 'Generating daily report'} />
   }
 
   const report = reportQuery.data
@@ -59,41 +61,52 @@ export function ReportsPage() {
       <Card>
         <CardContent className="flex flex-col gap-4 p-5 md:flex-row md:items-center md:justify-between">
           <div>
-            <p className="text-sm font-medium text-[var(--text-muted)]">Daily report</p>
-            <p className="mt-2 text-xl font-bold text-white">End-of-day behavior summary</p>
+            <p className="text-sm font-medium text-[var(--text-muted)]">{isTurkish ? 'Gunluk rapor' : 'Daily report'}</p>
+            <p className="mt-2 text-xl font-bold text-white">{isTurkish ? 'Gun sonu davranis ozeti' : 'End-of-day behavior summary'}</p>
             <p className="mt-2 text-sm text-[var(--text-muted)]">
-              This report is generated from stored behavior events, reminders, hydration logs, and analysis sessions.
+              {isTurkish
+                ? 'Bu rapor kayitli davranis olaylari, hatirlaticilar, su kayitlari ve analiz oturumlarindan uretilir.'
+                : 'This report is generated from stored behavior events, reminders, hydration logs, and analysis sessions.'}
             </p>
           </div>
           <div className="w-full max-w-xs">
-            <Input label="Report date" type="date" value={selectedDate} onChange={(event) => setSelectedDate(event.target.value)} />
+            <Input
+              label={isTurkish ? 'Rapor tarihi' : 'Report date'}
+              type="date"
+              value={selectedDate}
+              onChange={(event) => setSelectedDate(event.target.value)}
+            />
           </div>
         </CardContent>
       </Card>
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <ReportMetric
-          label="Analyses"
+          label={isTurkish ? 'Analizler' : 'Analyses'}
           value={`${report.analyses_completed}`}
-          detail="Processed frame analyses for the selected day."
+          detail={isTurkish ? 'Secilen gun icin islenen kare analizleri.' : 'Processed frame analyses for the selected day.'}
           icon={ClipboardList}
         />
         <ReportMetric
-          label="Posture alerts"
+          label={isTurkish ? 'Durus uyarilari' : 'Posture alerts'}
           value={`${report.posture_alert_count}`}
-          detail={`Poor-posture share ${toPercent(report.poor_posture_ratio)}.`}
+          detail={
+            isTurkish
+              ? `Kotu durus orani ${toPercent(report.poor_posture_ratio)}.`
+              : `Poor-posture share ${toPercent(report.poor_posture_ratio)}.`
+          }
           icon={ShieldAlert}
         />
         <ReportMetric
-          label="Reminders"
+          label={isTurkish ? 'Hatirlaticilar' : 'Reminders'}
           value={`${report.reminder_count}`}
-          detail="Automatic and manual reminders recorded in the backend."
+          detail={isTurkish ? 'Arka ucta kayitli otomatik ve manuel hatirlaticilar.' : 'Automatic and manual reminders recorded in the backend.'}
           icon={BellRing}
         />
         <ReportMetric
-          label="Hydration"
-          value={formatMilliliters(report.hydration_progress_ml)}
-          detail={`Target ${formatMilliliters(report.water_goal_ml)}.`}
+          label={isTurkish ? 'Su takibi' : 'Hydration'}
+          value={formatMilliliters(report.hydration_progress_ml, language)}
+          detail={`${isTurkish ? 'Hedef' : 'Target'} ${formatMilliliters(report.water_goal_ml, language)}.`}
           icon={Droplets}
         />
       </div>
@@ -103,10 +116,12 @@ export function ReportsPage() {
           <CardHeader>
             <div>
               <div className="flex items-center gap-3">
-                <CardTitle>Summary</CardTitle>
+                <CardTitle>{isTurkish ? 'Ozet' : 'Summary'}</CardTitle>
                 <Badge variant="primary">{report.report_date}</Badge>
               </div>
-              <CardDescription className="mt-2">Generated at {new Date(report.generated_at).toLocaleTimeString()}</CardDescription>
+              <CardDescription className="mt-2">
+                {isTurkish ? 'Olusturulma' : 'Generated at'} {new Date(report.generated_at).toLocaleTimeString(language === 'tr' ? 'tr-TR' : 'en-US')}
+              </CardDescription>
             </div>
           </CardHeader>
           <CardContent className="space-y-5">
@@ -114,7 +129,7 @@ export function ReportsPage() {
               <p className="text-sm leading-7 text-white">{report.summary}</p>
             </div>
             <div className="space-y-3">
-              <p className="text-sm font-semibold text-white">Recommendations</p>
+              <p className="text-sm font-semibold text-white">{isTurkish ? 'Oneriler' : 'Recommendations'}</p>
               {report.recommendations.map((recommendation) => (
                 <div
                   key={recommendation}
@@ -127,28 +142,42 @@ export function ReportsPage() {
           </CardContent>
         </Card>
         <BehaviorEventListCard
-          title="Key behavior events"
-          description="Highest-signal behavior detections for the selected report date."
+          title={isTurkish ? 'Ana davranis olaylari' : 'Key behavior events'}
+          description={
+            isTurkish
+              ? 'Secilen rapor tarihi icin en guclu sinyalli davranis tespitleri.'
+              : 'Highest-signal behavior detections for the selected report date.'
+          }
           events={report.key_behavior_events}
         />
       </div>
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1.05fr)_minmax(360px,0.95fr)]">
         <ActivityFeedCard
-          title="Timeline"
-          description="Combined reminders, alerts, and manual actions from the selected day."
+          title={isTurkish ? 'Zaman cizelgesi' : 'Timeline'}
+          description={
+            isTurkish
+              ? 'Secilen gunden birlestirilmis hatirlatici, uyari ve manuel islemler.'
+              : 'Combined reminders, alerts, and manual actions from the selected day.'
+          }
           items={report.timeline}
         />
         <Card>
           <CardHeader>
             <div>
-              <CardTitle>Reminder history</CardTitle>
-              <CardDescription className="mt-2">Backend-generated reminder records used for coaching and reporting.</CardDescription>
+              <CardTitle>{isTurkish ? 'Hatirlatici gecmisi' : 'Reminder history'}</CardTitle>
+              <CardDescription className="mt-2">
+                {isTurkish
+                  ? 'Kocluk ve raporlama icin kullanilan arka uc kaynakli hatirlatici kayitlari.'
+                  : 'Backend-generated reminder records used for coaching and reporting.'}
+              </CardDescription>
             </div>
           </CardHeader>
           <CardContent className="space-y-3">
             {report.reminders.length === 0 ? (
-              <p className="text-sm text-[var(--text-muted)]">No reminders were generated for the selected date.</p>
+              <p className="text-sm text-[var(--text-muted)]">
+                {isTurkish ? 'Secilen tarih icin hatirlatici uretilmedi.' : 'No reminders were generated for the selected date.'}
+              </p>
             ) : (
               report.reminders.map((reminder) => (
                 <div
