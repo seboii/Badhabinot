@@ -1,0 +1,74 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - master
+      - develop
+      - "ozellik/**"
+      - "duzeltme/**"
+      - "duzenleme/**"
+      - "dokumantasyon/**"
+      - "refaktor/**"
+      - "sicakduzeltme/**"
+  pull_request:
+    branches:
+      - master
+      - develop
+
+jobs:
+  backend-build:
+    name: Backend Maven Build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Kaynagi cek
+        uses: actions/checkout@v4
+      - name: Java kur
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+      - name: Maven package
+        run: mvn -B -ntp -DskipTests package
+
+  frontend-build:
+    name: Frontend Build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/web/frontend-app
+    steps:
+      - name: Kaynagi cek
+        uses: actions/checkout@v4
+      - name: Node kur
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: apps/web/frontend-app/package-lock.json
+      - name: Bagimliliklari kur
+        run: npm ci
+      - name: Build
+        run: npm run build
+
+  python-service-check:
+    name: Python Service Compile Check
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        service:
+          - ai-service
+          - vision-service
+    steps:
+      - name: Kaynagi cek
+        uses: actions/checkout@v4
+      - name: Python kur
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Bagimliliklari kur
+        run: pip install -r apps/python-services/${{ matrix.service }}/requirements.txt
+      - name: Derleme kontrolu
+        run: python -m compileall apps/python-services/${{ matrix.service }}/app

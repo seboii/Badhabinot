@@ -1,14 +1,113 @@
-/target/
-/.idea/
-/.vscode/
-/.env
+# =========================
+# Monorepo genel
+# =========================
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*.tmp
+*.temp
+*.bak
+
+# =========================
+# Gizli/yerel ortam dosyalari
+# =========================
+.env
+.env.local
+.env.*.local
+*.secrets
+*.pem
+*.key
+*.crt
+
+# =========================
+# IDE/editor
+# =========================
+.idea/
+.vscode/
+*.iml
+
+# =========================
+# Loglar
+# =========================
+*.log
+logs/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# =========================
+# Node / frontend
+# =========================
 node_modules/
+**/node_modules/
 apps/web/frontend-app/dist/
+apps/web/frontend-app/.vite/
+apps/web/frontend-app/coverage/
+**/.eslintcache
+**/.stylelintcache
+**/.turbo/
+**/.cache/
+
+# =========================
+# Java / Maven / Spring
+# =========================
+target/
+**/target/
+out/
+*.class
+.mvn/wrapper/maven-wrapper.jar
+
+# =========================
+# Python
+# =========================
+__pycache__/
+**/__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.pytest_cache/
+**/.pytest_cache/
+.mypy_cache/
+**/.mypy_cache/
+.ruff_cache/
+**/.ruff_cache/
+.tox/
+**/.tox/
+.nox/
+**/.nox/
+.venv/
+**/.venv/
+venv/
+**/venv/
+env/
+**/env/
+pip-wheel-metadata/
+*.egg-info/
+
+# =========================
+# Test/coverage raporlari
+# =========================
 coverage/
 .coverage
-__pycache__/
-*.pyc
-.pytest_cache/
-.venv/
-*.iml
-*.log
+.coverage.*
+htmlcov/
+**/junit.xml
+**/test-results/
+
+# =========================
+# Docker/Container uretimleri
+# =========================
+*.tar
+*.tar.gz
+*.docker.env
+
+# =========================
+# Altyapi ve gecici artefaktlar
+# =========================
+infra/**/.terraform/
+infra/**/.terragrunt-cache/
+infra/**/generated/
+tmp/
+temp/
