@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query'
 import { BarChart3, BellRing, Droplets } from 'lucide-react'
 import { monitoringApi } from '@/api/monitoring'
 import { ActivityFeedCard } from '@/features/dashboard/components/ActivityFeedCard'
+import { BehaviorEventListCard } from '@/features/history/components/BehaviorEventListCard'
 import { WeeklyTrendChart } from '@/features/history/components/WeeklyTrendChart'
 import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -51,6 +52,11 @@ export function HistoryPage() {
     queryFn: () => monitoringApi.getActivities(25),
   })
 
+  const eventsQuery = useQuery({
+    queryKey: ['behavior-events', 20],
+    queryFn: () => monitoringApi.getEvents(20),
+  })
+
   const totals = useMemo(() => {
     const points = weeklyTrendQuery.data?.points ?? []
     return points.reduce(
@@ -86,17 +92,26 @@ export function HistoryPage() {
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1.15fr)_minmax(360px,0.85fr)]">
         {weeklyTrendQuery.isLoading ? <LoadingCard message="Loading weekly trend" /> : <WeeklyTrendChart points={weeklyTrendQuery.data?.points ?? []} />}
-        {activitiesQuery.isLoading ? (
-          <LoadingCard message="Loading activity history" />
+        {eventsQuery.isLoading ? (
+          <LoadingCard message="Loading behavior events" />
         ) : (
-          <ActivityFeedCard
-            title="Detailed timeline"
-            description="Recent timeline entries are rendered from the same activity feed used in the dashboard."
-            items={activitiesQuery.data ?? []}
+          <BehaviorEventListCard
+            title="Behavior event stream"
+            description="Normalized posture, hand-movement, and smoking-like detections recorded by the monitoring service."
+            events={eventsQuery.data ?? []}
           />
         )}
       </div>
+
+      {activitiesQuery.isLoading ? (
+        <LoadingCard message="Loading activity history" />
+      ) : (
+        <ActivityFeedCard
+          title="Detailed timeline"
+          description="Recent timeline entries across alerts, reminders, and manual actions."
+          items={activitiesQuery.data ?? []}
+        />
+      )}
     </div>
   )
 }
-

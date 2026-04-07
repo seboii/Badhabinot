@@ -6,7 +6,6 @@ import { z } from 'zod'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
-import { monitoringApi } from '@/api/monitoring'
 import { toErrorMessage } from '@/api/client'
 import { userApi } from '@/api/user'
 import { Badge } from '@/components/ui/badge'
@@ -24,7 +23,9 @@ const onboardingSchema = z.object({
   camera_monitoring_accepted: z.boolean().refine((value) => value, {
     message: 'Camera monitoring consent is required to start live analysis.',
   }),
-  remote_inference_accepted: z.boolean(),
+  remote_inference_accepted: z.boolean().refine((value) => value, {
+    message: 'Remote inference consent is required because higher-level analysis is API-based.',
+  }),
 })
 
 type OnboardingValues = z.infer<typeof onboardingSchema>
@@ -55,16 +56,12 @@ export function OnboardingPage() {
   const completeMutation = useMutation({
     mutationFn: async (values: OnboardingValues) => {
       await userApi.updateConsents(values)
-      await monitoringApi.startSession({
-        client_surface: 'web',
-        device_type: /mobile/i.test(navigator.userAgent) ? 'mobile' : 'desktop',
-      })
     },
     onSuccess() {
       void queryClient.invalidateQueries({ queryKey: ['user-context'] })
       void queryClient.invalidateQueries({ queryKey: ['dashboard'] })
       void queryClient.invalidateQueries({ queryKey: ['activities'] })
-      toast.success('Onboarding completed. Monitoring session started.')
+      toast.success('Onboarding completed. You can now start monitoring from the dashboard.')
       navigate('/dashboard', { replace: true })
     },
     onError(error) {
@@ -72,8 +69,7 @@ export function OnboardingPage() {
     },
   })
 
-  const remoteEnabled = watch('remote_inference_accepted')
-  const readyToStart = useMemo(() => permissionState === 'granted', [permissionState])
+  const readyToStart = useMemo(() => permissionState === 'granted' && streamReady, [permissionState, streamReady])
 
   if (isLoading || !data) {
     return <LoadingScreen message="Preparing secure onboarding" />
@@ -91,10 +87,10 @@ export function OnboardingPage() {
             <ThemeToggle />
           </div>
           <h1 className="max-w-2xl text-4xl font-extrabold tracking-[-0.05em] text-[var(--text-strong)] md:text-5xl">
-            Activate privacy-first live monitoring
+            Activate API-backed live monitoring
           </h1>
           <p className="mt-4 max-w-2xl text-base leading-7 text-[var(--text-muted)]">
-            The original BADHABINOT designs emphasize camera permission, local processing, and clear consent before any live session starts. This screen completes that workflow against the real backend services.
+            The repaired BADHABINOT flow still asks for explicit camera permission and consent, but higher-level analysis is now routed through the external AI adapter service instead of a local model runtime.
           </p>
 
           <div className="mt-8 grid gap-4 md:grid-cols-3">
@@ -102,7 +98,7 @@ export function OnboardingPage() {
               <CardContent className="p-5">
                 <p className="text-sm font-semibold text-white">Current mode</p>
                 <p className="mt-3 text-2xl font-bold text-white">{data.settings.model_mode}</p>
-                <p className="mt-2 text-sm text-[var(--text-muted)]">Default execution mode from your persisted settings.</p>
+                <p className="mt-2 text-sm text-[var(--text-muted)]">Persisted analysis mode used by the backend orchestration.</p>
               </CardContent>
             </Card>
             <Card className="bg-[rgba(255,255,255,0.03)]">
@@ -134,18 +130,25 @@ export function OnboardingPage() {
             </CardHeader>
             <CardContent className="space-y-5">
               <div className="overflow-hidden rounded-[28px] border border-[var(--line-soft)] bg-black">
-                {streamReady ? (
-                  <video ref={videoRef} className="aspect-video w-full object-cover" muted playsInline />
-                ) : (
-                  <div className="flex aspect-video flex-col items-center justify-center gap-4 text-center">
-                  <div className="flex size-14 items-center justify-center rounded-3xl bg-[var(--surface-muted)]">
-                    <Camera className="size-6 text-[var(--text-muted)]" />
-                  </div>
-                    <p className="max-w-sm text-sm leading-6 text-[var(--text-muted)]">
-                      No preview yet. Camera access is required before BADHABINOT can start a live session.
-                    </p>
-                  </div>
-                )}
+                <div className="relative">
+                  <video
+                    ref={videoRef}
+                    className={`aspect-video w-full object-cover transition-opacity ${streamReady ? 'opacity-100' : 'opacity-0'}`}
+                    autoPlay
+                    muted
+                    playsInline
+                  />
+                  {!streamReady ? (
+                    <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 text-center">
+                      <div className="flex size-14 items-center justify-center rounded-3xl bg-[var(--surface-muted)]">
+                        <Camera className="size-6 text-[var(--text-muted)]" />
+                      </div>
+                      <p className="max-w-sm text-sm leading-6 text-[var(--text-muted)]">
+                        No preview yet. Camera access is required before BADHABINOT can start a live session.
+                      </p>
+                    </div>
+                  ) : null}
+                </div>
               </div>
               <div className="flex flex-wrap items-center gap-3">
                 <Button variant="secondary" iconLeft={<Camera className="size-4" />} onClick={requestCamera}>
@@ -208,7 +211,7 @@ export function OnboardingPage() {
                       <Lock className="size-4 text-[var(--text-muted)]" />
                     </div>
                     <p className="mt-1 text-sm leading-6 text-[var(--text-muted)]">
-                      Optional. Only relevant when you switch from Local to API model mode.
+                      Required. Higher-level analysis is performed through the external AI adapter service.
                     </p>
                   </div>
                   <Switch
@@ -216,12 +219,11 @@ export function OnboardingPage() {
                     onCheckedChange={(checked) => setValue('remote_inference_accepted', checked)}
                   />
                 </div>
+                {errors.remote_inference_accepted ? <p className="text-sm text-[var(--danger)]">{errors.remote_inference_accepted.message}</p> : null}
 
-                {data.settings.model_mode === 'API' && !remoteEnabled ? (
-                  <div className="rounded-[24px] border border-[var(--warning)] bg-[var(--warning-soft)] p-4 text-sm leading-6 text-[var(--warning)]">
-                    API mode is configured in settings, but remote inference consent remains disabled. You can still continue and adjust this later in Settings.
-                  </div>
-                ) : null}
+                <div className="rounded-[24px] border border-[var(--line-soft)] bg-[rgba(255,255,255,0.03)] p-4 text-sm leading-6 text-[var(--text-muted)]">
+                  Vision preprocessing stays local in the `vision-service`, but behavior interpretation is now external-API driven. Consent is required before the dashboard can analyze frames.
+                </div>
 
                 <Button className="w-full" size="lg" loading={completeMutation.isPending} iconLeft={<ChevronRight className="size-4" />} type="submit">
                   Accept and start secure monitoring

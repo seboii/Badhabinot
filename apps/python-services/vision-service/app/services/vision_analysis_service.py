@@ -1,117 +1,109 @@
+from __future__ import annotations
+
 import base64
 import time
+from math import hypot
 
 import cv2
 import numpy as np
 from fastapi import HTTPException
 
-from app.clients.ai_client import AiClient
-from app.schemas.inference import InferenceRequest, InferenceSettings, VisionMetrics
 from app.schemas.vision import (
-    InferenceResult,
+    DetectionEvidence,
     ProcessingDetails,
     VisionAnalysisRequest,
     VisionAnalysisResponse,
+    VisionDetection,
+    VisionSignals,
 )
+from app.services.vision import SessionStateStore, VisionDetectors, VisionFeatureExtractor
+from app.services.vision.session_state import SessionObservation
 
 
 class VisionAnalysisService:
     def __init__(self) -> None:
-        self.ai_client = AiClient()
+        self.feature_extractor = VisionFeatureExtractor()
+        self.detectors = VisionDetectors()
+        self.session_state = SessionStateStore()
 
     async def analyze(self, request: VisionAnalysisRequest) -> VisionAnalysisResponse:
         started = time.perf_counter()
         image = self._decode_image(request.image_base64)
+        features, _, _ = self.feature_extractor.extract(image)
 
-        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-        height, width = gray.shape
-        edges = cv2.Canny(gray, 50, 150)
-
-        brightness_mean = float(gray.mean())
-        edge_density = float(edges.mean() / 255.0)
-
-        center_crop = edges[height // 4 : (3 * height) // 4, width // 4 : (3 * width) // 4]
-        center_edge_density = float(center_crop.mean() / 255.0) if center_crop.size else 0.0
-
-        upper = gray[: height // 2, :]
-        lower = gray[height // 2 :, :]
-        upper_std = float(upper.std()) if upper.size else 0.0
-        lower_std = float(lower.std()) if lower.size else 0.0
-
-        posture_risk_score = self._clamp(abs(upper_std - lower_std) / 128.0)
-        hand_face_proximity_score = self._clamp((center_edge_density * 0.7) + (brightness_mean / 255.0 * 0.3))
-        elongated_object_score = self._clamp((edge_density * 0.8) + (lower_std / 255.0 * 0.2))
-        subject_present = width >= 64 and height >= 64 and brightness_mean > 5.0
-
-        if not subject_present:
-            vision_latency_ms = int((time.perf_counter() - started) * 1000)
-            return VisionAnalysisResponse(
-                request_id=request.request_id,
-                subject_present=False,
-                posture_state="unknown",
-                inference=InferenceResult(
-                    behavior_type="none",
-                    confidence=0.0,
-                    scores={"nail_biting": 0.0, "smoking": 0.0},
-                ),
-                processing=ProcessingDetails(
-                    frame_width=width,
-                    frame_height=height,
-                    brightness_mean=round(brightness_mean, 4),
-                    edge_density=round(edge_density, 4),
-                    vision_latency_ms=vision_latency_ms,
-                    ai_latency_ms=0,
-                ),
-            )
-
-        inference_request = InferenceRequest(
-            request_id=request.request_id,
-            user_id=request.user_id,
-            session_id=request.session_id,
-            frame_id=request.frame_id,
-            captured_at=request.captured_at,
-            metrics=VisionMetrics(
-                brightness_mean=brightness_mean,
-                edge_density=edge_density,
-                center_edge_density=center_edge_density,
-                posture_risk_score=posture_risk_score,
-                hand_face_proximity_score=hand_face_proximity_score,
-                elongated_object_score=elongated_object_score,
-            ),
-            settings=InferenceSettings(
-                sensitivity=request.settings.sensitivity,
-                model_mode=request.settings.model_mode,
-                remote_inference_accepted=request.settings.remote_inference_accepted,
+        frame_diagonal = hypot(features.frame_width, features.frame_height)
+        dominant_hand = features.dominant_hand_region
+        temporal = self.session_state.update(
+            request.session_id,
+            SessionObservation(
+                captured_at=request.captured_at,
+                hand_centroid_x=None if dominant_hand is None else dominant_hand.center_x,
+                hand_centroid_y=None if dominant_hand is None else dominant_hand.center_y,
+                hand_face_proximity_score=features.hand_face_proximity_score,
+                elongated_object_score=features.elongated_object_score,
+                frame_diagonal=frame_diagonal,
             ),
         )
 
-        inference_response, ai_latency_ms = await self.ai_client.predict(inference_request)
+        posture_state, posture_confidence, detections, signals = self.detectors.detect(features, temporal)
         vision_latency_ms = int((time.perf_counter() - started) * 1000)
 
-        posture_state = "poor" if posture_risk_score >= 0.6 else "good"
+        response_detections = [
+            VisionDetection(
+                event_type=detection.event_type,
+                confidence=detection.confidence,
+                severity=detection.severity,
+                recommendation_hint=detection.recommendation_hint,
+                evidence=DetectionEvidence(
+                    face_detected=bool(detection.evidence.get("face_detected", False)),
+                    upper_body_detected=bool(detection.evidence.get("upper_body_detected", False)),
+                    hand_count=int(detection.evidence.get("hand_count", 0)),
+                    posture_alignment_score=self._optional_float(detection.evidence.get("posture_alignment_score")),
+                    hand_face_proximity_score=self._optional_float(detection.evidence.get("hand_face_proximity_score")),
+                    hand_motion_score=self._optional_float(detection.evidence.get("hand_motion_score")),
+                    repetitive_motion_score=self._optional_float(detection.evidence.get("repetitive_motion_score")),
+                    repeated_hand_to_face_score=self._optional_float(detection.evidence.get("repeated_hand_to_face_score")),
+                    elongated_object_score=self._optional_float(detection.evidence.get("elongated_object_score")),
+                ),
+            )
+            for detection in detections
+        ]
 
         return VisionAnalysisResponse(
             request_id=request.request_id,
-            subject_present=subject_present,
+            subject_present=features.subject_present,
             posture_state=posture_state,
-            inference=InferenceResult(
-                behavior_type=inference_response.behavior_type,
-                confidence=inference_response.confidence,
-                scores=inference_response.scores,
+            posture_confidence=posture_confidence,
+            detections=response_detections,
+            signals=VisionSignals(
+                brightness_mean=signals["brightness_mean"],
+                edge_density=signals["edge_density"],
+                center_edge_density=signals["center_edge_density"],
+                posture_risk_score=signals["posture_risk_score"],
+                hand_face_proximity_score=signals["hand_face_proximity_score"],
+                elongated_object_score=signals["elongated_object_score"],
+                focus_score=signals["focus_score"],
+                posture_confidence=signals["posture_confidence"],
+                posture_alignment_score=signals["posture_alignment_score"],
+                hand_motion_score=signals["hand_motion_score"],
+                repetitive_motion_score=signals["repetitive_motion_score"],
+                smoking_gesture_score=signals["smoking_gesture_score"],
+                face_size_ratio=signals["face_size_ratio"],
             ),
             processing=ProcessingDetails(
-                frame_width=width,
-                frame_height=height,
-                brightness_mean=round(brightness_mean, 4),
-                edge_density=round(edge_density, 4),
+                frame_width=features.frame_width,
+                frame_height=features.frame_height,
+                brightness_mean=features.brightness_mean,
+                edge_density=features.edge_density,
+                focus_score=features.focus_score,
                 vision_latency_ms=vision_latency_ms,
-                ai_latency_ms=ai_latency_ms,
             ),
         )
 
     def _decode_image(self, image_base64: str) -> np.ndarray:
         try:
-            raw = base64.b64decode(image_base64)
+            normalized = image_base64.split(",", maxsplit=1)[-1]
+            raw = base64.b64decode(normalized)
             array = np.frombuffer(raw, dtype=np.uint8)
             image = cv2.imdecode(array, cv2.IMREAD_COLOR)
         except Exception as exc:
@@ -121,5 +113,10 @@ class VisionAnalysisService:
             raise HTTPException(status_code=400, detail="image payload could not be decoded")
         return image
 
-    def _clamp(self, value: float) -> float:
-        return max(0.0, min(1.0, value))
+    def _optional_float(self, value: object) -> float | None:
+        if value is None:
+            return None
+        try:
+            return round(float(value), 4)
+        except (TypeError, ValueError):
+            return None

@@ -2,7 +2,7 @@ import logging
 
 from fastapi import FastAPI
 
-from app.api.routes import health, inference
+from app.api.routes import analysis, chat, health, inference
 from app.core.config import settings
 
 logging.basicConfig(
@@ -13,8 +13,10 @@ logging.basicConfig(
 app = FastAPI(
     title="BADHABINOT AI Service",
     version=settings.app_version,
-    description="Behavior inference microservice for BADHABINOT",
+    description="External AI provider adapter service for BADHABINOT",
 )
 
 app.include_router(health.router)
+app.include_router(analysis.router)
+app.include_router(chat.router)
 app.include_router(inference.router)

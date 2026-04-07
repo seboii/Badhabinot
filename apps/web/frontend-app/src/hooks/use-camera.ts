@@ -7,6 +7,8 @@ type CapturedFrame = {
   image_content_type: string
 }
 
+const LOCALHOST_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]'])
+
 export function useCamera() {
   const videoRef = useRef<HTMLVideoElement | null>(null)
   const streamRef = useRef<MediaStream | null>(null)
@@ -15,36 +17,55 @@ export function useCamera() {
   const [streamReady, setStreamReady] = useState(false)
 
   const attachStream = async (stream: MediaStream) => {
-    if (!videoRef.current) {
-      return
+    const video = videoRef.current
+    if (!video) {
+      setPermissionState('error')
+      setErrorMessage('Camera preview element is not ready. Please retry.')
+      return false
     }
 
-    videoRef.current.srcObject = stream
+    video.srcObject = stream
+    video.autoplay = true
+    video.muted = true
+    video.playsInline = true
 
     try {
-      await videoRef.current.play()
+      await video.play()
       setStreamReady(true)
+      return true
     } catch (error) {
+      setStreamReady(false)
       setPermissionState('error')
       setErrorMessage(error instanceof Error ? error.message : 'Unable to play camera preview.')
+      return false
     }
   }
 
   const stopCamera = () => {
-    streamRef.current?.getTracks().forEach((track) => track.stop())
+    streamRef.current?.getTracks().forEach((track) => {
+      track.onended = null
+      track.stop()
+    })
     streamRef.current = null
     setStreamReady(false)
 
     if (videoRef.current) {
+      videoRef.current.pause()
       videoRef.current.srcObject = null
     }
   }
 
   const requestCamera = async () => {
+    if (!window.isSecureContext && !LOCALHOST_HOSTS.has(window.location.hostname)) {
+      setPermissionState('unsupported')
+      setErrorMessage('Camera access requires HTTPS or localhost.')
+      return false
+    }
+
     if (!navigator.mediaDevices?.getUserMedia) {
       setPermissionState('unsupported')
       setErrorMessage('This browser does not support camera access.')
-      return
+      return false
     }
 
     stopCamera()
@@ -61,18 +82,48 @@ export function useCamera() {
         audio: false,
       })
 
+      stream.getTracks().forEach((track) => {
+        track.onended = () => {
+          setStreamReady(false)
+          setErrorMessage('Camera stream ended. Grant camera access to continue monitoring.')
+        }
+      })
+
       streamRef.current = stream
+      const attached = await attachStream(stream)
+      if (!attached) {
+        stopCamera()
+        return false
+      }
+
       setPermissionState('granted')
-      await attachStream(stream)
+      return true
     } catch (error) {
-      setPermissionState('denied')
-      setErrorMessage(error instanceof Error ? error.message : 'Camera permission was denied.')
+      setStreamReady(false)
+
+      if (error instanceof DOMException && (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError')) {
+        setPermissionState('denied')
+        setErrorMessage('Camera permission was denied.')
+        return false
+      }
+
+      if (error instanceof DOMException && error.name === 'NotFoundError') {
+        setPermissionState('error')
+        setErrorMessage('No camera device was found.')
+        return false
+      }
+
+      setPermissionState('error')
+      setErrorMessage(error instanceof Error ? error.message : 'Unable to access camera.')
+      return false
     }
   }
 
   const captureFrame = (): CapturedFrame | null => {
     const video = videoRef.current
-    if (!video || video.videoWidth === 0 || video.videoHeight === 0) {
+    const hasLiveTrack = streamRef.current?.getVideoTracks().some((track) => track.readyState === 'live')
+
+    if (!video || !streamReady || !hasLiveTrack || video.videoWidth === 0 || video.videoHeight === 0) {
       return null
     }
 
@@ -111,4 +162,3 @@ export function useCamera() {
     captureFrame,
   }
 }
-

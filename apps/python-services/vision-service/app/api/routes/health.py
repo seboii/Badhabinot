@@ -1,4 +1,5 @@
 from fastapi import APIRouter
+from fastapi.responses import JSONResponse
 
 from app.core.config import settings
 
@@ -11,5 +12,16 @@ async def health() -> dict:
         "status": "ok",
         "service": settings.app_name,
         "version": settings.app_version,
-        "ai_service_url": settings.ai_service_url,
     }
+
+
+@router.get("/ready", tags=["health"])
+async def ready() -> JSONResponse:
+    return JSONResponse(
+        status_code=200,
+        content={
+            "status": "ready",
+            "service": settings.app_name,
+            "version": settings.app_version,
+        },
+    )

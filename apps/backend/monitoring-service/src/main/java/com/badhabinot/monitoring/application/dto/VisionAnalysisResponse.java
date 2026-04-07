@@ -1,18 +1,52 @@
 package com.badhabinot.monitoring.application.dto;
 
-import java.util.Map;
+import java.util.List;
 
 public record VisionAnalysisResponse(
         String requestId,
         boolean subjectPresent,
         String postureState,
-        Inference inference,
+        double postureConfidence,
+        List<Detection> detections,
+        Signals signals,
         Processing processing
 ) {
-    public record Inference(
-            String behaviorType,
+    public record Detection(
+            String eventType,
             double confidence,
-            Map<String, Double> scores
+            String severity,
+            String recommendationHint,
+            Evidence evidence
+    ) {
+    }
+
+    public record Evidence(
+            boolean faceDetected,
+            boolean upperBodyDetected,
+            int handCount,
+            Double postureAlignmentScore,
+            Double handFaceProximityScore,
+            Double handMotionScore,
+            Double repetitiveMotionScore,
+            Double repeatedHandToFaceScore,
+            Double elongatedObjectScore
+    ) {
+    }
+
+    public record Signals(
+            double brightnessMean,
+            double edgeDensity,
+            double centerEdgeDensity,
+            double postureRiskScore,
+            double handFaceProximityScore,
+            double elongatedObjectScore,
+            double focusScore,
+            double postureConfidence,
+            double postureAlignmentScore,
+            double handMotionScore,
+            double repetitiveMotionScore,
+            double smokingGestureScore,
+            double faceSizeRatio
     ) {
     }
 
@@ -21,9 +55,8 @@ public record VisionAnalysisResponse(
             int frameHeight,
             double brightnessMean,
             double edgeDensity,
-            long visionLatencyMs,
-            long aiLatencyMs
+            double focusScore,
+            long visionLatencyMs
     ) {
     }
 }
-

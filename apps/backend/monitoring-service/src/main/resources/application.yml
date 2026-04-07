@@ -71,11 +71,11 @@ integration:
   vision-service:
     base-url: ${VISION_SERVICE_BASE_URL:http://localhost:8091}
     connect-timeout: PT2S
-    read-timeout: PT8S
+    read-timeout: ${VISION_SERVICE_READ_TIMEOUT:PT10S}
   ai-service:
     base-url: ${AI_SERVICE_BASE_URL:http://localhost:8092}
     connect-timeout: PT2S
-    read-timeout: PT5S
+    read-timeout: ${AI_SERVICE_READ_TIMEOUT:PT25S}
 
 monitoring:
   redis:

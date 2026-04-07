@@ -17,4 +17,17 @@ The app runs at `http://localhost:5173` and proxies API traffic to `http://local
 
 ## Production-like local container
 
-The root Docker Compose file can also build and serve this client through Nginx.
+From the repository root:
+
+```powershell
+Copy-Item .env.example .env
+docker compose up --build
+```
+
+Then open `http://localhost:3000`.
+
+Container flow:
+
+- `frontend-app` builds the Vite app into static assets.
+- Nginx serves the SPA on port `80` inside the container and publishes it to `FRONTEND_PORT` on the host.
+- `/api/*` and `/actuator/*` are proxied by Nginx to `api-gateway:8080`, so the browser uses the same `localhost:3000` origin for UI and API traffic.

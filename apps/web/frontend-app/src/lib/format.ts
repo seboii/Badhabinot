@@ -37,8 +37,16 @@ export function behaviorLabel(value: string | null | undefined) {
       return 'Nail biting'
     case 'smoking':
       return 'Smoking gesture'
+    case 'smoking_like_gesture':
+      return 'Smoking-like cue'
+    case 'hand_movement_pattern':
+      return 'Hand movement pattern'
     case 'poor_posture':
       return 'Poor posture'
+    case 'posture_reminder':
+      return 'Posture reminder'
+    case 'mindful_break_reminder':
+      return 'Mindful break reminder'
     case 'monitoring_started':
       return 'Monitoring started'
     case 'monitoring_stopped':
@@ -74,6 +82,19 @@ export function postureLabel(value: string | null | undefined) {
   }
 }
 
+export function severityLabel(value: string | null | undefined) {
+  switch ((value || '').toLowerCase()) {
+    case 'high':
+      return 'High'
+    case 'medium':
+      return 'Medium'
+    case 'low':
+      return 'Low'
+    default:
+      return 'Unknown'
+  }
+}
+
 export function toPercent(value: number | null | undefined) {
   if (value == null || Number.isNaN(value)) {
     return '0%'
@@ -81,4 +102,3 @@ export function toPercent(value: number | null | undefined) {
 
   return `${Math.round(value * 100)}%`
 }
-

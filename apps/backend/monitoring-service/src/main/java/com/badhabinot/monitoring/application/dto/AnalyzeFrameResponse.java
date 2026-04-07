@@ -1,6 +1,7 @@
 package com.badhabinot.monitoring.application.dto;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -13,7 +14,30 @@ public record AnalyzeFrameResponse(
         String behaviorType,
         double confidence,
         Instant processedAt,
-        Map<String, Object> processing
+        String summary,
+        String recommendation,
+        List<BehaviorEventResponse> events,
+        List<ReminderEventResponse> generatedReminders,
+        ProcessingDetails processing,
+        ModelDetails model
 ) {
-}
+    public record ProcessingDetails(
+            int frameWidth,
+            int frameHeight,
+            double brightnessMean,
+            double edgeDensity,
+            double focusScore,
+            double postureRiskScore,
+            long visionLatencyMs,
+            long aiLatencyMs,
+            Map<String, Double> scores
+    ) {
+    }
 
+    public record ModelDetails(
+            String provider,
+            String name,
+            String mode
+    ) {
+    }
+}

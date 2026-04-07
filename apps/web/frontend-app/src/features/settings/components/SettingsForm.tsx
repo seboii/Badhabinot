@@ -16,7 +16,7 @@ const settingsSchema = z.object({
   quiet_hours_enabled: z.boolean(),
   quiet_hours_start: z.string().min(1),
   quiet_hours_end: z.string().min(1),
-  model_mode: z.enum(['LOCAL', 'API']),
+  model_mode: z.literal('API'),
   notifications_enabled: z.boolean(),
 })
 
@@ -36,7 +36,6 @@ export function SettingsForm({
     handleSubmit,
     control,
     reset,
-    watch,
     formState: { isDirty },
   } = useForm<SettingsFormValues>({
     resolver: zodResolver(settingsSchema),
@@ -47,18 +46,18 @@ export function SettingsForm({
     reset(settings)
   }, [reset, settings])
 
-  const modelMode = watch('model_mode')
-
   return (
     <Card>
       <CardHeader>
         <div>
           <CardTitle>Monitoring preferences</CardTitle>
-          <CardDescription className="mt-2">Tune reminder cadence, sensitivity, quiet hours, notifications, and local or API execution mode.</CardDescription>
+          <CardDescription className="mt-2">Tune reminder cadence, sensitivity, quiet hours, notifications, and the API-based analysis workflow.</CardDescription>
         </div>
       </CardHeader>
       <CardContent>
         <form className="grid gap-4 md:grid-cols-2" onSubmit={handleSubmit(onSubmit)}>
+          <input type="hidden" {...register('model_mode')} value="API" />
+
           <label className="flex flex-col gap-2">
             <span className="text-sm font-medium text-white">Sensitivity</span>
             <select
@@ -71,16 +70,11 @@ export function SettingsForm({
             </select>
           </label>
 
-          <label className="flex flex-col gap-2">
-            <span className="text-sm font-medium text-white">Model mode</span>
-            <select
-              className="h-12 rounded-2xl border border-[var(--line-soft)] bg-[rgba(255,255,255,0.03)] px-4 text-sm text-white outline-none focus:border-[var(--primary)]"
-              {...register('model_mode')}
-            >
-              <option value="LOCAL">Local</option>
-              <option value="API">API</option>
-            </select>
-          </label>
+          <div className="rounded-[24px] border border-[var(--line-soft)] bg-[rgba(255,255,255,0.03)] p-4">
+            <p className="text-sm font-semibold text-white">Analysis mode</p>
+            <p className="mt-2 text-sm text-[var(--text-muted)]">Higher-level analysis now runs through the external AI adapter service.</p>
+            <p className="mt-4 text-lg font-semibold text-white">API</p>
+          </div>
 
           <Input label="Daily water goal (ml)" type="number" min={250} max={6000} {...register('water_goal_ml', { valueAsNumber: true })} />
           <Input label="Water reminder interval (min)" type="number" min={15} max={240} {...register('water_interval_min', { valueAsNumber: true })} />
@@ -119,9 +113,7 @@ export function SettingsForm({
           <div className="rounded-[24px] border border-[var(--line-soft)] bg-[rgba(255,255,255,0.03)] p-4 md:col-span-2">
             <p className="text-sm font-semibold text-white">Execution mode notes</p>
             <p className="mt-2 text-sm leading-6 text-[var(--text-muted)]">
-              {modelMode === 'LOCAL'
-                ? 'Local mode keeps inference close to the device and aligns with the privacy-first default in the project documents.'
-                : 'API mode is available, but it should only be used when remote inference consent is enabled in the privacy section below.'}
+              API-backed analysis requires remote inference consent in the privacy section below. Vision preprocessing still happens locally inside the vision-service.
             </p>
           </div>
 

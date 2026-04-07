@@ -1,11 +1,13 @@
 # BADHABINOT AI Service
 
-FastAPI microservice responsible for behavior inference. This service is internal-only in the local stack and expects `X-Internal-Api-Key` on inference requests.
+FastAPI microservice responsible for higher-level analysis through configurable external AI providers. It expects `X-Internal-Api-Key` on internal analysis requests.
 
 ## Endpoints
 
 - `GET /health`
-- `POST /v1/inference/predict`
+- `GET /ready`
+- `POST /v1/analysis/interpret`
+- `POST /v1/inference/predict` (deprecated compatibility alias)
 
 ## Local run
 
@@ -14,6 +16,8 @@ pip install -r requirements.txt
 Copy-Item .env.example .env
 uvicorn app.main:app --reload --port 8092
 ```
+
+For local Docker, `.env.example` defaults to `AI_PROVIDER=mock` so the stack starts without external credentials. Switch to `openai-compatible` and provide `AI_API_KEY` for real API-backed analysis.
 
 ## Test
 

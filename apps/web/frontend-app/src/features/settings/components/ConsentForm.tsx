@@ -5,7 +5,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Switch } from '@/components/ui/switch'
-import type { ConsentResponse, ModelMode, UpdateConsentsRequest } from '@/types/user'
+import type { ConsentResponse, UpdateConsentsRequest } from '@/types/user'
 
 const consentSchema = z.object({
   privacy_policy_accepted: z.boolean(),
@@ -29,18 +29,16 @@ const consentLabels = [
   {
     key: 'remote_inference_accepted' as const,
     title: 'Remote inference consent',
-    description: 'Enable only if you intentionally switch to API-backed inference mode.',
+    description: 'Required for the external AI analysis pipeline that interprets the vision-service output.',
   },
 ]
 
 export function ConsentForm({
   consents,
-  modelMode,
   isSaving,
   onSubmit,
 }: {
   consents: ConsentResponse
-  modelMode: ModelMode
   isSaving: boolean
   onSubmit: (values: UpdateConsentsRequest) => void
 }) {
@@ -85,9 +83,9 @@ export function ConsentForm({
             </div>
           ))}
 
-          {modelMode === 'API' && !remoteInferenceAccepted ? (
+          {!remoteInferenceAccepted ? (
             <div className="rounded-[24px] border border-[rgba(245,158,11,0.35)] bg-[rgba(245,158,11,0.08)] p-4 text-sm leading-6 text-[#ffd999]">
-              API mode is selected in preferences, but remote inference consent is still disabled. The backend will keep signaling local-only privacy posture until this consent is enabled.
+              Frame analysis is disabled until remote inference consent is enabled. Camera preview and session controls can stay available, but the backend will reject image analysis requests.
             </div>
           ) : null}
 

@@ -16,11 +16,6 @@ def test_analyze_requires_internal_api_key() -> None:
             "captured_at": "2026-04-06T09:00:00Z",
             "image_base64": "aW52YWxpZA==",
             "image_content_type": "image/jpeg",
-            "settings": {
-                "sensitivity": "MEDIUM",
-                "model_mode": "LOCAL",
-                "remote_inference_accepted": False,
-            },
         },
     )
 

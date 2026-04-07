@@ -16,6 +16,14 @@ const routeMeta: Record<string, { title: string; subtitle: string }> = {
     title: 'History',
     subtitle: 'Weekly trends and detailed event timelines based on monitoring results.',
   },
+  '/reports': {
+    title: 'Reports',
+    subtitle: 'Daily summaries, recommendations, reminder history, and end-of-day context.',
+  },
+  '/chat': {
+    title: 'Grounded Chat',
+    subtitle: 'Ask about your own tracked behavior, hydration, reminders, and risky cues.',
+  },
   '/settings': {
     title: 'Settings',
     subtitle: 'Profile, sensitivity, reminder cadence, privacy, and session controls.',
@@ -56,4 +64,3 @@ export function AppShell({ children }: PropsWithChildren) {
     </div>
   )
 }
-

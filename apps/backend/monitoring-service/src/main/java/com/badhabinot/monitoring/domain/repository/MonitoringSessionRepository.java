@@ -11,5 +11,7 @@ public interface MonitoringSessionRepository extends JpaRepository<MonitoringSes
 
     Optional<MonitoringSession> findFirstByUserIdAndStatusOrderByStartedAtDesc(UUID userId, MonitoringSessionStatus status);
 
+    Optional<MonitoringSession> findByIdAndUserId(UUID id, UUID userId);
+
     List<MonitoringSession> findByUserIdOrderByStartedAtDesc(UUID userId);
 }

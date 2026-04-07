@@ -51,8 +51,8 @@ pom.xml
 
 ### Python microservices
 
-- `ai-service`: deterministic inference API for behavior classification.
-- `vision-service`: OpenCV preprocessing, feature extraction, downstream AI-service callout.
+- `ai-service`: external AI provider adapter that normalizes higher-level analysis into a stable JSON contract.
+- `vision-service`: OpenCV preprocessing and feature extraction that stays local and returns structured machine signals.
 
 ### Web
 
@@ -73,25 +73,28 @@ More detail: `docs/architecture/redis-architecture.md`
 
 ## Docker and local runtime
 
-The primary local workflow uses a base compose file for the internal service mesh and a dev override that publishes only the public entrypoints plus shared infrastructure:
+The repository now exposes a root-level `compose.yaml`, so the full platform including the web UI can be started from the repository root with a single Docker Compose command:
 
 ```powershell
 Copy-Item .env.example .env
-docker compose `
-  -f infra/docker/compose/docker-compose.yml `
-  -f infra/docker/compose/docker-compose.dev.yml `
-  --env-file .env `
-  up --build
+docker compose up --build
 ```
 
-Published host endpoints:
+Docker Desktop must be running before you start the stack.
 
-- Frontend: `http://localhost:3000`
+Published host endpoints after `docker compose up --build`:
+
+- Frontend UI: `http://localhost:3000`
 - API Gateway: `http://localhost:8080`
+- Auth service: `http://localhost:8081`
+- User service: `http://localhost:8082`
+- Monitoring service: `http://localhost:8083`
+- Vision service: `http://localhost:8091`
+- AI service: `http://localhost:8092`
 - PostgreSQL: `localhost:5432`
 - Redis: `localhost:6379`
 
-Internal services stay on the Docker network and communicate by service DNS name:
+Containers communicate internally by service DNS name:
 
 - `auth-service:8081`
 - `user-service:8082`
@@ -99,10 +102,28 @@ Internal services stay on the Docker network and communicate by service DNS name
 - `vision-service:8091`
 - `ai-service:8092`
 
+Local AI configuration defaults to `AI_PROVIDER=mock` so a first boot works without external credentials. To run real API-backed analysis, set:
+
+- `AI_PROVIDER=openai-compatible`
+- `AI_API_KEY=<your provider key>`
+- `AI_API_BASE_URL=https://api.openai.com/v1`
+- `AI_MODEL_NAME=<provider model>`
+
+Browser-facing routing:
+
+- Open `http://localhost:3000` for the web UI.
+- The frontend is served by Nginx and proxies `/api/*` plus `/actuator/*` to `api-gateway:8080` on the Docker network.
+- The browser never needs container hostnames; it talks to `localhost:3000`, and Nginx forwards backend traffic internally.
+
 Public health endpoints:
 
 - `http://localhost:8080/actuator/health/readiness`
 - `http://localhost:3000/healthz`
+- `http://localhost:8081/actuator/health/readiness`
+- `http://localhost:8082/actuator/health/readiness`
+- `http://localhost:8083/actuator/health/readiness`
+- `http://localhost:8091/ready`
+- `http://localhost:8092/ready`
 
 If those host ports are already in use, override `GATEWAY_PORT`, `FRONTEND_PORT`, `POSTGRES_PORT`, and `REDIS_PORT` in `.env` before starting the stack.
 

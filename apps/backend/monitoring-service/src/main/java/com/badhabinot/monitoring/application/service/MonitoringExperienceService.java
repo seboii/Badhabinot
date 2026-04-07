@@ -41,17 +41,20 @@ public class MonitoringExperienceService {
     private final ActivityFeedRepository activityFeedRepository;
     private final HydrationLogRepository hydrationLogRepository;
     private final UserContextClient userContextClient;
+    private final ReminderEngineService reminderEngineService;
 
     public MonitoringExperienceService(
             MonitoringSessionRepository monitoringSessionRepository,
             ActivityFeedRepository activityFeedRepository,
             HydrationLogRepository hydrationLogRepository,
-            UserContextClient userContextClient
+            UserContextClient userContextClient,
+            ReminderEngineService reminderEngineService
     ) {
         this.monitoringSessionRepository = monitoringSessionRepository;
         this.activityFeedRepository = activityFeedRepository;
         this.hydrationLogRepository = hydrationLogRepository;
         this.userContextClient = userContextClient;
+        this.reminderEngineService = reminderEngineService;
     }
 
     @Transactional
@@ -118,15 +121,15 @@ public class MonitoringExperienceService {
         int waterProgressMl = hydrationToday.stream().mapToInt(HydrationLog::getAmountMl).sum();
 
         ActivityItemResponse latest = recent.isEmpty() ? null : toActivityResponse(recent.getFirst());
-        String privacyMode = "LOCAL".equalsIgnoreCase(context.modelMode()) && !context.remoteInferenceAccepted()
-                ? "LOCAL_ONLY"
-                : "REMOTE_CAPABLE";
+        boolean analysisEnabled = context.cameraMonitoringAccepted() && context.remoteInferenceAccepted();
+        String privacyMode = analysisEnabled ? "API_CONSENTED" : "CONSENT_REQUIRED";
 
         return new DashboardResponse(
                 activeSession.isPresent(),
                 activeSession.map(session -> session.getId().toString()).orElse(null),
                 context.modelMode(),
                 privacyMode,
+                analysisEnabled,
                 computeStreakDays(userId, zoneId, today),
                 alertCount,
                 reminderCount,
@@ -202,59 +205,16 @@ public class MonitoringExperienceService {
         UUID userId = UUID.fromString(jwt.getSubject());
         UUID sessionId = nullableSessionId(request.sessionId());
         Instant occurredAt = request.occurredAt() == null ? Instant.now() : request.occurredAt();
-        String normalizedType = request.reminderType().trim().toLowerCase();
-
-        String title = switch (normalizedType) {
-            case "water", "water_reminder" -> "Su Hatirlatmasi";
-            case "break", "break_reminder", "exercise" -> "Mola Hatirlatmasi";
-            default -> "Hatirlatma";
-        };
-        String message = request.message() == null || request.message().isBlank()
-                ? title + " gosterildi."
-                : request.message();
-
-        ActivityFeedItem item = activityFeedRepository.save(ActivityFeedItem.create(
-                userId,
-                sessionId,
-                normalizedType,
-                ActivityCategory.REMINDER,
-                title,
-                message,
+        var reminder = reminderEngineService.recordManualReminder(userId, sessionId, request.reminderType(), request.message(), occurredAt);
+        return new ActivityItemResponse(
+                reminder.reminderId(),
+                reminder.reminderType(),
+                ActivityCategory.REMINDER.name(),
+                reminder.reminderType().replace('_', ' '),
+                reminder.message(),
                 null,
-                occurredAt
-        ));
-        return toActivityResponse(item);
-    }
-
-    @Transactional
-    public void recordAnalysisActivities(UUID userId, String sessionId, String postureState, String behaviorType, double confidence, Instant occurredAt) {
-        UUID parsedSessionId = nullableSessionId(sessionId);
-        if (behaviorType != null && !"none".equalsIgnoreCase(behaviorType)) {
-            String title = "nail_biting".equalsIgnoreCase(behaviorType) ? "Tirnak Yeme Tespit Edildi" : "Sigara Davranisi Tespit Edildi";
-            String message = "Davranis uyarisi uretildi.";
-            activityFeedRepository.save(ActivityFeedItem.create(
-                    userId,
-                    parsedSessionId,
-                    behaviorType,
-                    ActivityCategory.ALERT,
-                    title,
-                    message,
-                    confidence,
-                    occurredAt
-            ));
-        }
-        if ("poor".equalsIgnoreCase(postureState)) {
-            activityFeedRepository.save(ActivityFeedItem.create(
-                    userId,
-                    parsedSessionId,
-                    "poor_posture",
-                    ActivityCategory.ALERT,
-                    "Kotu Durus Tespit Edildi",
-                    "Durus bozuklugu icin uyari gosterildi.",
-                    confidence,
-                    occurredAt
-            ));
-        }
+                reminder.occurredAt()
+        );
     }
 
     private ActivityItemResponse toActivityResponse(ActivityFeedItem item) {

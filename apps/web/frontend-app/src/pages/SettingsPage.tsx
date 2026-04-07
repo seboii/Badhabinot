@@ -86,7 +86,6 @@ export function SettingsPage() {
       />
       <ConsentForm
         consents={user.consents}
-        modelMode={user.settings.model_mode}
         isSaving={consentMutation.isPending}
         onSubmit={(values) => consentMutation.mutate(values)}
       />
@@ -111,4 +110,3 @@ export function SettingsPage() {
     </div>
   )
 }
-

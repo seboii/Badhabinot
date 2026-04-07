@@ -24,6 +24,11 @@ public class ClientConfiguration {
         return build(builder, properties.visionService(), properties.internalApiKey());
     }
 
+    @Bean("aiServiceWebClient")
+    public WebClient aiServiceWebClient(WebClient.Builder builder, IntegrationProperties properties) {
+        return build(builder, properties.aiService(), properties.internalApiKey());
+    }
+
     @Bean("aiServiceHealthWebClient")
     public WebClient aiServiceHealthWebClient(WebClient.Builder builder, IntegrationProperties properties) {
         return build(builder, properties.aiService(), properties.internalApiKey());
@@ -44,4 +49,3 @@ public class ClientConfiguration {
                 .build();
     }
 }
-

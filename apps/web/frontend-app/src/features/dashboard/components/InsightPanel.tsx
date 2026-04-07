@@ -17,7 +17,7 @@ export function InsightPanel({ dashboard, latestAnalysis }: InsightPanelProps) {
       <CardHeader>
         <div>
           <CardTitle>Inference snapshot</CardTitle>
-          <CardDescription className="mt-2">Latest posture and behavior classification returned by the live analysis pipeline.</CardDescription>
+          <CardDescription className="mt-2">Latest posture and behavior result returned by the repaired vision-to-AI analysis pipeline.</CardDescription>
         </div>
       </CardHeader>
       <CardContent className="space-y-5">
@@ -55,12 +55,23 @@ export function InsightPanel({ dashboard, latestAnalysis }: InsightPanelProps) {
 
         <div className="grid gap-3 sm:grid-cols-2">
           <div className="rounded-[24px] border border-[var(--line-soft)] bg-[rgba(255,255,255,0.03)] p-4">
+            <p className="text-xs uppercase tracking-[0.16em] text-[var(--text-soft)]">Summary</p>
+            <p className="mt-3 text-sm leading-6 text-white">{latestAnalysis?.summary ?? 'Run an analysis to populate the latest summary.'}</p>
+          </div>
+          <div className="rounded-[24px] border border-[var(--line-soft)] bg-[rgba(255,255,255,0.03)] p-4">
+            <p className="text-xs uppercase tracking-[0.16em] text-[var(--text-soft)]">Recommendation</p>
+            <p className="mt-3 text-sm leading-6 text-white">{latestAnalysis?.recommendation ?? 'Action guidance will appear here after the next completed analysis.'}</p>
+          </div>
+        </div>
+
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="rounded-[24px] border border-[var(--line-soft)] bg-[rgba(255,255,255,0.03)] p-4">
             <div className="flex items-center gap-2 text-sm text-[var(--text-muted)]">
               <ShieldCheck className="size-4" />
               Privacy mode
             </div>
             <p className="mt-3 text-sm font-semibold text-white">{dashboard.privacy_mode.replace(/_/g, ' ')}</p>
-            <p className="mt-2 text-sm leading-6 text-[var(--text-muted)]">Frames are used only for immediate inference and not stored by the backend.</p>
+            <p className="mt-2 text-sm leading-6 text-[var(--text-muted)]">Frames are used only for immediate orchestration and are not persisted as image blobs by the backend.</p>
           </div>
           <div className="rounded-[24px] border border-[var(--line-soft)] bg-[rgba(255,255,255,0.03)] p-4">
             <div className="flex items-center gap-2 text-sm text-[var(--text-muted)]">
@@ -68,7 +79,11 @@ export function InsightPanel({ dashboard, latestAnalysis }: InsightPanelProps) {
               Model mode
             </div>
             <p className="mt-3 text-sm font-semibold text-white">{dashboard.model_mode}</p>
-            <p className="mt-2 text-sm leading-6 text-[var(--text-muted)]">Switch between local and API-backed execution in settings if consent allows it.</p>
+            <p className="mt-2 text-sm leading-6 text-[var(--text-muted)]">
+              {latestAnalysis?.model
+                ? `Provider ${latestAnalysis.model.provider} / ${latestAnalysis.model.name}`
+                : 'Higher-level analysis is routed through the external AI adapter service.'}
+            </p>
           </div>
         </div>
 
@@ -95,8 +110,46 @@ export function InsightPanel({ dashboard, latestAnalysis }: InsightPanelProps) {
             </div>
           )}
         </div>
+
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <p className="text-sm font-semibold text-white">Detected events</p>
+            <Badge variant="info">{latestAnalysis?.events.length ?? 0}</Badge>
+          </div>
+          {latestAnalysis?.events.length ? (
+            <div className="space-y-3">
+              {latestAnalysis.events.map((event) => (
+                <div key={event.event_id} className="rounded-[20px] border border-[var(--line-soft)] bg-[rgba(255,255,255,0.03)] p-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="text-sm font-semibold text-white">{behaviorLabel(event.event_type)}</p>
+                    <Badge variant={event.severity === 'high' ? 'danger' : event.severity === 'medium' ? 'warning' : 'info'}>
+                      {Math.round(event.confidence * 100)}%
+                    </Badge>
+                  </div>
+                  <p className="mt-2 text-sm leading-6 text-[var(--text-muted)]">{event.interpretation}</p>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm text-[var(--text-muted)]">No high-confidence behavior events were recorded in the latest analysis.</p>
+          )}
+        </div>
+
+        {latestAnalysis?.generated_reminders.length ? (
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-semibold text-white">Generated reminders</p>
+              <Badge variant="warning">{latestAnalysis.generated_reminders.length}</Badge>
+            </div>
+            {latestAnalysis.generated_reminders.map((reminder) => (
+              <div key={reminder.reminder_id} className="rounded-[20px] border border-[var(--line-soft)] bg-[rgba(255,255,255,0.03)] p-4">
+                <p className="text-sm font-semibold text-white">{behaviorLabel(reminder.reminder_type)}</p>
+                <p className="mt-2 text-sm leading-6 text-[var(--text-muted)]">{reminder.message}</p>
+              </div>
+            ))}
+          </div>
+        ) : null}
       </CardContent>
     </Card>
   )
 }
-

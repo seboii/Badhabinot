@@ -1,4 +1,4 @@
-import { History, LayoutDashboard, Settings } from 'lucide-react'
+import { History, LayoutDashboard, MessageSquare, ScrollText, Settings } from 'lucide-react'
 import { NavLink } from 'react-router-dom'
 import { cn } from '@/lib/cn'
 import type { UserContextResponse } from '@/types/user'
@@ -6,6 +6,8 @@ import type { UserContextResponse } from '@/types/user'
 const navigationItems = [
   { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { to: '/history', label: 'History', icon: History },
+  { to: '/reports', label: 'Reports', icon: ScrollText },
+  { to: '/chat', label: 'Chat', icon: MessageSquare },
   { to: '/settings', label: 'Settings', icon: Settings },
 ]
 

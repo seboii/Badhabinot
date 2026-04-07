@@ -9,14 +9,6 @@ public record VisionAnalysisRequest(
         String frameId,
         Instant capturedAt,
         String imageBase64,
-        String imageContentType,
-        VisionSettings settings
+        String imageContentType
 ) {
-    public record VisionSettings(
-            String sensitivity,
-            String modelMode,
-            boolean remoteInferenceAccepted
-    ) {
-    }
 }
-

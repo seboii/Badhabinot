@@ -70,7 +70,7 @@ public class AnalysisJobStateStore {
                 job.getCreatedAt(),
                 job.getUpdatedAt(),
                 expiresAt,
-                response.processing(),
+                objectMapper.convertValue(response.processing(), Map.class),
                 null,
                 null
         ));

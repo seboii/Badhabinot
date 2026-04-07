@@ -4,13 +4,16 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Switch } from '@/components/ui/switch'
+import type { CameraPermissionState } from '@/hooks/use-camera'
 import type { AnalyzeFrameResponse } from '@/types/monitoring'
 
 type LiveMonitorPanelProps = {
   videoRef: RefObject<HTMLVideoElement | null>
-  monitoringActive: boolean
+  monitoringLive: boolean
+  sessionActive: boolean
   activeSessionId: string | null
-  permissionState: string
+  analysisEnabled: boolean
+  permissionState: CameraPermissionState
   streamReady: boolean
   cameraError: string | null
   autoScan: boolean
@@ -27,8 +30,10 @@ type LiveMonitorPanelProps = {
 
 export function LiveMonitorPanel({
   videoRef,
-  monitoringActive,
+  monitoringLive,
+  sessionActive,
   activeSessionId,
+  analysisEnabled,
   permissionState,
   streamReady,
   cameraError,
@@ -43,13 +48,17 @@ export function LiveMonitorPanel({
   onAnalyzeNow,
   onToggleAutoScan,
 }: LiveMonitorPanelProps) {
+  const canAnalyze = monitoringLive && streamReady && analysisEnabled
+
   return (
     <Card className="overflow-hidden">
       <CardHeader>
         <div>
           <div className="flex flex-wrap items-center gap-3">
             <CardTitle>Live monitor</CardTitle>
-            <Badge variant={monitoringActive ? 'success' : 'neutral'}>{monitoringActive ? 'ACTIVE' : 'IDLE'}</Badge>
+            <Badge variant={monitoringLive ? 'success' : sessionActive ? 'warning' : 'neutral'}>
+              {monitoringLive ? 'ACTIVE' : sessionActive ? 'SESSION ACTIVE' : 'IDLE'}
+            </Badge>
             <Badge variant="primary">{permissionState.toUpperCase()}</Badge>
           </div>
           <CardDescription className="mt-2">
@@ -59,13 +68,16 @@ export function LiveMonitorPanel({
       </CardHeader>
       <CardContent className="space-y-5">
         <div className="relative overflow-hidden rounded-[28px] border border-[var(--line-soft)] bg-black">
-          {streamReady ? (
-            <>
-              <video ref={videoRef} className="aspect-video w-full object-cover" muted playsInline />
-              <div className="pointer-events-none absolute inset-x-0 top-0 h-0.5 bg-[var(--primary)] shadow-[0_0_24px_var(--primary)] animate-[pulse_2.6s_ease-in-out_infinite]" />
-            </>
-          ) : (
-            <div className="flex aspect-video flex-col items-center justify-center gap-4 text-center">
+          <video
+            ref={videoRef}
+            className={`aspect-video w-full object-cover transition-opacity ${streamReady ? 'opacity-100' : 'opacity-0'}`}
+            autoPlay
+            muted
+            playsInline
+          />
+          {streamReady ? <div className="pointer-events-none absolute inset-x-0 top-0 h-0.5 bg-[var(--primary)] shadow-[0_0_24px_var(--primary)] animate-[pulse_2.6s_ease-in-out_infinite]" /> : null}
+          {!streamReady ? (
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 text-center">
               <div className="flex size-16 items-center justify-center rounded-3xl bg-[rgba(255,255,255,0.06)]">
                 <VideoOff className="size-7 text-[var(--text-muted)]" />
               </div>
@@ -76,24 +88,30 @@ export function LiveMonitorPanel({
                 </p>
               </div>
             </div>
-          )}
+          ) : null}
         </div>
 
         {cameraError ? <p className="text-sm text-[var(--danger)]">{cameraError}</p> : null}
+
+        {sessionActive && !monitoringLive ? (
+          <p className="text-sm text-[var(--warning)]">
+            Backend session is active but camera stream is offline. Reconnect camera or stop the session to recover.
+          </p>
+        ) : null}
 
         <div className="flex flex-col gap-3 md:flex-row md:flex-wrap">
           <Button variant="secondary" iconLeft={<Camera className="size-4" />} onClick={onRequestCamera}>
             {streamReady ? 'Refresh camera' : 'Grant camera access'}
           </Button>
 
-          {monitoringActive ? (
+          {sessionActive ? (
             <Button
               variant="danger"
               iconLeft={<Square className="size-4" />}
               loading={isStopping}
               onClick={onStopMonitoring}
             >
-              Stop monitoring
+              {monitoringLive ? 'Stop monitoring' : 'Stop session'}
             </Button>
           ) : (
             <Button
@@ -111,11 +129,17 @@ export function LiveMonitorPanel({
             iconLeft={<ScanFace className="size-4" />}
             loading={isAnalyzing}
             onClick={onAnalyzeNow}
-            disabled={!monitoringActive || !streamReady}
+            disabled={!canAnalyze}
           >
             Analyze now
           </Button>
         </div>
+
+        {!analysisEnabled ? (
+          <p className="text-sm text-[var(--warning)]">
+            Analysis is disabled until camera monitoring and remote inference consent are both enabled.
+          </p>
+        ) : null}
 
         <div className="grid gap-3 rounded-[28px] border border-[var(--line-soft)] bg-[rgba(255,255,255,0.03)] p-4 md:grid-cols-[1fr_auto] md:items-center">
           <div>
@@ -147,4 +171,3 @@ export function LiveMonitorPanel({
     </Card>
   )
 }
-

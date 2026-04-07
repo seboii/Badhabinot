@@ -1,5 +1,5 @@
 export type Sensitivity = 'LOW' | 'MEDIUM' | 'HIGH'
-export type ModelMode = 'LOCAL' | 'API'
+export type ModelMode = 'API'
 
 export type ConsentResponse = {
   privacy_policy_accepted: boolean
@@ -64,4 +64,3 @@ export type UpdateConsentsRequest = {
   camera_monitoring_accepted: boolean
   remote_inference_accepted: boolean
 }
-

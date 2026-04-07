@@ -17,6 +17,16 @@ const HistoryPage = lazy(async () => {
   return { default: module.HistoryPage }
 })
 
+const ReportsPage = lazy(async () => {
+  const module = await import('@/pages/ReportsPage')
+  return { default: module.ReportsPage }
+})
+
+const ChatPage = lazy(async () => {
+  const module = await import('@/pages/ChatPage')
+  return { default: module.ChatPage }
+})
+
 const LoginPage = lazy(async () => {
   const module = await import('@/pages/LoginPage')
   return { default: module.LoginPage }
@@ -85,6 +95,8 @@ export function AppRouter() {
             <Route index element={<HomeRedirect />} />
             <Route path="/dashboard" element={<LazyRoute><DashboardPage /></LazyRoute>} />
             <Route path="/history" element={<LazyRoute><HistoryPage /></LazyRoute>} />
+            <Route path="/reports" element={<LazyRoute><ReportsPage /></LazyRoute>} />
+            <Route path="/chat" element={<LazyRoute><ChatPage /></LazyRoute>} />
             <Route path="/settings" element={<LazyRoute><SettingsPage /></LazyRoute>} />
           </Route>
         </Route>

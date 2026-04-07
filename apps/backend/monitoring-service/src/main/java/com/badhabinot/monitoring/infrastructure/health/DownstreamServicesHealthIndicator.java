@@ -26,14 +26,14 @@ public class DownstreamServicesHealthIndicator implements HealthIndicator {
     public Health health() {
         try {
             String vision = visionClient.get()
-                    .uri("/health")
+                    .uri("/ready")
                     .retrieve()
                     .onStatus(HttpStatusCode::isError, response -> response.createException())
                     .bodyToMono(String.class)
                     .block(Duration.ofSeconds(5));
 
             String ai = aiClient.get()
-                    .uri("/health")
+                    .uri("/ready")
                     .retrieve()
                     .onStatus(HttpStatusCode::isError, response -> response.createException())
                     .bodyToMono(String.class)
@@ -48,4 +48,3 @@ public class DownstreamServicesHealthIndicator implements HealthIndicator {
         }
     }
 }
-

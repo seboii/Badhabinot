@@ -34,6 +34,11 @@ public class ApiErrorHandler {
         return error(HttpStatus.BAD_REQUEST, "invalid_request", exception.getMessage());
     }
 
+    @ExceptionHandler(IllegalStateException.class)
+    public ResponseEntity<Map<String, Object>> handleIllegalState(IllegalStateException exception) {
+        return error(HttpStatus.CONFLICT, "workflow_conflict", exception.getMessage());
+    }
+
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<Map<String, Object>> handleValidation(MethodArgumentNotValidException exception) {
         Map<String, String> fieldErrors = new LinkedHashMap<>();

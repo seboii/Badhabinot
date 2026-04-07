@@ -8,6 +8,7 @@ import { ActivityFeedCard } from '@/features/dashboard/components/ActivityFeedCa
 import { InsightPanel } from '@/features/dashboard/components/InsightPanel'
 import { LiveMonitorPanel } from '@/features/dashboard/components/LiveMonitorPanel'
 import { QuickActionsCard } from '@/features/dashboard/components/QuickActionsCard'
+import { BehaviorEventListCard } from '@/features/history/components/BehaviorEventListCard'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
 import { LoadingCard } from '@/components/ui/loading-state'
@@ -48,7 +49,7 @@ function MetricCard({
 
 export function DashboardPage() {
   const queryClient = useQueryClient()
-  const { videoRef, permissionState, errorMessage, streamReady, requestCamera, captureFrame } = useCamera()
+  const { videoRef, permissionState, errorMessage, streamReady, requestCamera, stopCamera, captureFrame } = useCamera()
   const [latestAnalysis, setLatestAnalysis] = useState<AnalyzeFrameResponse | null>(null)
   const [autoScan, setAutoScan] = useState(true)
   const [pendingAction, setPendingAction] = useState<'water' | 'water_reminder' | 'break' | undefined>(undefined)
@@ -63,6 +64,11 @@ export function DashboardPage() {
   const activitiesQuery = useQuery({
     queryKey: ['activities', 12],
     queryFn: () => monitoringApi.getActivities(12),
+  })
+
+  const eventsQuery = useQuery({
+    queryKey: ['behavior-events', 8],
+    queryFn: () => monitoringApi.getEvents(8),
   })
 
   const startSessionMutation = useMutation({
@@ -84,6 +90,7 @@ export function DashboardPage() {
   const stopSessionMutation = useMutation({
     mutationFn: (sessionId: string) => monitoringApi.stopSession(sessionId),
     onSuccess() {
+      stopCamera()
       void queryClient.invalidateQueries({ queryKey: ['dashboard'] })
       void queryClient.invalidateQueries({ queryKey: ['activities'] })
       toast.success('Monitoring session stopped.')
@@ -112,16 +119,15 @@ export function DashboardPage() {
       setLatestAnalysis(result)
       void queryClient.invalidateQueries({ queryKey: ['dashboard'] })
       void queryClient.invalidateQueries({ queryKey: ['activities'] })
+      void queryClient.invalidateQueries({ queryKey: ['behavior-events'] })
 
       const detections = []
-      if (result.behavior_type && result.behavior_type !== 'none') {
-        detections.push(behaviorLabel(result.behavior_type))
-      }
+      result.events.forEach((event) => detections.push(behaviorLabel(event.event_type)))
       if (result.posture_state) {
         detections.push(postureLabel(result.posture_state))
       }
 
-      toast.success(detections.length > 0 ? `Analysis updated: ${detections.join(' · ')}` : 'Analysis completed.')
+      toast.success(detections.length > 0 ? `Analysis updated: ${detections.join(' / ')}` : 'Analysis completed.')
     },
     onError(error) {
       toast.error(toErrorMessage(error, 'Unable to analyze the current frame.'))
@@ -203,13 +209,18 @@ export function DashboardPage() {
   const handleAnalyze = () => {
     const sessionId = dashboardQuery.data?.active_session_id
 
-    if (!sessionId) {
+    if (!sessionId || !dashboardQuery.data?.monitoring_active) {
       toast.error('Start a monitoring session before running analysis.')
       return
     }
 
+    if (!dashboardQuery.data?.analysis_enabled) {
+      toast.error('Enable camera and remote inference consent before analyzing frames.')
+      return
+    }
+
     if (!streamReady) {
-      toast.error('Grant camera access before analyzing frames.')
+      toast.error('Camera stream is offline. Grant camera access and retry.')
       return
     }
 
@@ -218,20 +229,28 @@ export function DashboardPage() {
   }
 
   const handleStartMonitoring = async () => {
-    if (!streamReady) {
-      await requestCamera()
+    if (dashboardQuery.data?.monitoring_active && dashboardQuery.data.active_session_id) {
+      toast.info('A monitoring session is already active. Reconnect camera or stop the existing session.')
       return
+    }
+
+    if (!streamReady) {
+      const granted = await requestCamera()
+      if (!granted) {
+        return
+      }
     }
 
     startSessionMutation.mutate()
   }
 
   useEffect(() => {
-    if (!dashboardQuery.data?.monitoring_active || !autoScan || !streamReady || analyzeMutation.isPending) {
+    const sessionLive = Boolean(dashboardQuery.data?.monitoring_active && dashboardQuery.data?.active_session_id && streamReady)
+    if (!sessionLive || !autoScan || analyzeMutation.isPending) {
       return
     }
 
-    const sessionId = dashboardQuery.data.active_session_id
+    const sessionId = dashboardQuery.data?.active_session_id
     if (!sessionId) {
       return
     }
@@ -250,6 +269,8 @@ export function DashboardPage() {
 
   const dashboard = dashboardQuery.data
   const activities = activitiesQuery.data ?? dashboard?.recent_activities ?? []
+  const sessionActive = Boolean(dashboard?.monitoring_active && dashboard?.active_session_id)
+  const monitoringLive = sessionActive && streamReady
 
   const waterProgress = useMemo(() => {
     if (!dashboard || dashboard.water_goal_ml === 0) {
@@ -268,8 +289,10 @@ export function DashboardPage() {
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1.7fr)_minmax(360px,0.9fr)]">
         <LiveMonitorPanel
           videoRef={videoRef}
-          monitoringActive={dashboard.monitoring_active}
+          monitoringLive={monitoringLive}
+          sessionActive={sessionActive}
           activeSessionId={dashboard.active_session_id}
+          analysisEnabled={dashboard.analysis_enabled}
           permissionState={permissionState}
           streamReady={streamReady}
           cameraError={errorMessage}
@@ -350,6 +373,16 @@ export function DashboardPage() {
           pendingAction={pendingAction}
         />
       </div>
+
+      {eventsQuery.isLoading ? (
+        <LoadingCard message="Loading recent behavior events" />
+      ) : (
+        <BehaviorEventListCard
+          title="Behavior events"
+          description="Normalized detections persisted for reporting, reminders, and grounded chat."
+          events={eventsQuery.data ?? []}
+        />
+      )}
     </div>
   )
 }

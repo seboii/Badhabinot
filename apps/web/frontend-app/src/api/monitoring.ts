@@ -3,7 +3,11 @@ import type {
   ActivityItemResponse,
   AnalyzeFrameRequest,
   AnalyzeFrameResponse,
+  BehaviorEventResponse,
+  ChatRequest,
+  ChatResponse,
   DashboardResponse,
+  DailyReportResponse,
   HydrationLogRequest,
   HydrationLogResponse,
   ReminderTriggerRequest,
@@ -25,7 +29,9 @@ export const monitoringApi = {
   },
 
   async analyze(payload: AnalyzeFrameRequest) {
-    const response = await apiClient.post<AnalyzeFrameResponse>('/api/v1/monitoring/analyze', payload)
+    const response = await apiClient.post<AnalyzeFrameResponse>('/api/v1/monitoring/analyze', payload, {
+      timeout: 35_000,
+    })
     return response.data
   },
 
@@ -41,9 +47,23 @@ export const monitoringApi = {
     return response.data
   },
 
+  async getEvents(limit = 12) {
+    const response = await apiClient.get<BehaviorEventResponse[]>('/api/v1/monitoring/events', {
+      params: { limit },
+    })
+    return response.data
+  },
+
   async getWeeklyTrend(from?: string) {
     const response = await apiClient.get<WeeklyTrendResponse>('/api/v1/monitoring/history/weekly', {
       params: from ? { from } : undefined,
+    })
+    return response.data
+  },
+
+  async getDailyReport(date?: string) {
+    const response = await apiClient.get<DailyReportResponse>('/api/v1/monitoring/reports/daily', {
+      params: date ? { date } : undefined,
     })
     return response.data
   },
@@ -57,5 +77,9 @@ export const monitoringApi = {
     const response = await apiClient.post<ActivityItemResponse>('/api/v1/monitoring/reminders/trigger', payload)
     return response.data
   },
-}
 
+  async chat(payload: ChatRequest) {
+    const response = await apiClient.post<ChatResponse>('/api/v1/monitoring/chat', payload)
+    return response.data
+  },
+}

@@ -67,7 +67,7 @@ public class UserSettings {
         this.quietHoursEnabled = false;
         this.quietHoursStart = LocalTime.of(22, 0);
         this.quietHoursEnd = LocalTime.of(8, 0);
-        this.modelMode = ModelMode.LOCAL;
+        this.modelMode = ModelMode.API;
         this.notificationsEnabled = true;
     }
 

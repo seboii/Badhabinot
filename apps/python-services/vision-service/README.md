@@ -5,6 +5,7 @@ FastAPI microservice responsible for OpenCV preprocessing and feature extraction
 ## Endpoints
 
 - `GET /health`
+- `GET /ready`
 - `POST /v1/vision/analyze`
 
 ## Local run

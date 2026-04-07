@@ -8,6 +8,7 @@ public record DashboardResponse(
         String activeSessionId,
         String modelMode,
         String privacyMode,
+        boolean analysisEnabled,
         int streakDays,
         int alertCountToday,
         int reminderCountToday,
@@ -18,4 +19,3 @@ public record DashboardResponse(
         Instant generatedAt
 ) {
 }
-
