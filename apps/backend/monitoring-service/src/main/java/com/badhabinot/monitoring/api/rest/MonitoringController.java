@@ -14,6 +14,7 @@ import com.badhabinot.monitoring.application.dto.SessionStartResponse;
 import com.badhabinot.monitoring.application.dto.SessionStopResponse;
 import com.badhabinot.monitoring.application.dto.WeeklyTrendResponse;
 import com.badhabinot.monitoring.application.dto.BehaviorEventResponse;
+import com.badhabinot.monitoring.application.dto.ChatHistoryResponse;
 import com.badhabinot.monitoring.application.dto.ChatRequest;
 import com.badhabinot.monitoring.application.dto.ChatResponse;
 import com.badhabinot.monitoring.application.service.AnalysisOrchestratorService;
@@ -147,5 +148,15 @@ public class MonitoringController {
     @Operation(summary = "Respond to a grounded behavior-history chat message", security = @SecurityRequirement(name = "bearerAuth"))
     public ChatResponse chat(@AuthenticationPrincipal Jwt jwt, @Valid @RequestBody ChatRequest request) {
         return groundedChatService.chat(jwt, request);
+    }
+
+    @GetMapping("/chat/history")
+    @Operation(summary = "Return recent chat history for the latest or requested conversation", security = @SecurityRequirement(name = "bearerAuth"))
+    public ChatHistoryResponse chatHistory(
+            @AuthenticationPrincipal Jwt jwt,
+            @RequestParam(name = "conversation_id", required = false) String conversationId,
+            @RequestParam(name = "limit", defaultValue = "40") int limit
+    ) {
+        return groundedChatService.history(jwt, conversationId, limit);
     }
 }

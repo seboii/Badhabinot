@@ -5,6 +5,7 @@ import com.badhabinot.monitoring.domain.model.MonitoringSessionStatus;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface MonitoringSessionRepository extends JpaRepository<MonitoringSession, UUID> {
@@ -14,4 +15,6 @@ public interface MonitoringSessionRepository extends JpaRepository<MonitoringSes
     Optional<MonitoringSession> findByIdAndUserId(UUID id, UUID userId);
 
     List<MonitoringSession> findByUserIdOrderByStartedAtDesc(UUID userId);
+
+    List<MonitoringSession> findByUserIdOrderByStartedAtDesc(UUID userId, Pageable pageable);
 }

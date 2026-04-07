@@ -1,6 +1,7 @@
 package com.badhabinot.monitoring.application.dto;
 
 import java.time.Instant;
+import java.util.Map;
 import java.util.UUID;
 
 public record ChatMessageResponse(
@@ -8,6 +9,7 @@ public record ChatMessageResponse(
         String conversationId,
         String role,
         String content,
-        Instant createdAt
+        Instant createdAt,
+        Map<String, Object> metadata
 ) {
 }

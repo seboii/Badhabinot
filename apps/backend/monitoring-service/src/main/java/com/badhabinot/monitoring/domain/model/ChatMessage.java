@@ -27,22 +27,30 @@ public class ChatMessage {
     @Column(nullable = false, columnDefinition = "TEXT")
     private String content;
 
+    @Column(name = "metadata_json", columnDefinition = "TEXT")
+    private String metadataJson;
+
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
     protected ChatMessage() {
     }
 
-    private ChatMessage(UUID id, UUID conversationId, UUID userId, String role, String content) {
+    private ChatMessage(UUID id, UUID conversationId, UUID userId, String role, String content, String metadataJson) {
         this.id = id;
         this.conversationId = conversationId;
         this.userId = userId;
         this.role = role;
         this.content = content;
+        this.metadataJson = metadataJson;
     }
 
     public static ChatMessage create(UUID conversationId, UUID userId, String role, String content) {
-        return new ChatMessage(UUID.randomUUID(), conversationId, userId, role, content);
+        return create(conversationId, userId, role, content, null);
+    }
+
+    public static ChatMessage create(UUID conversationId, UUID userId, String role, String content, String metadataJson) {
+        return new ChatMessage(UUID.randomUUID(), conversationId, userId, role, content, metadataJson);
     }
 
     @PrePersist
@@ -64,6 +72,10 @@ public class ChatMessage {
 
     public String getContent() {
         return content;
+    }
+
+    public String getMetadataJson() {
+        return metadataJson;
     }
 
     public Instant getCreatedAt() {

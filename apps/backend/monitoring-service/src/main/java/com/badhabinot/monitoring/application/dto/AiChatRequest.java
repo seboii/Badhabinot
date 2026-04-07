@@ -34,7 +34,17 @@ public record AiChatRequest(
             List<String> recommendations,
             List<Fact> facts,
             List<Event> recentEvents,
-            List<Reminder> recentReminders
+            List<Reminder> recentReminders,
+            List<DailySnapshot> recentDailySnapshots,
+            Map<String, Integer> recentEventTypeCounts,
+            Map<String, Integer> recentReminderTypeCounts,
+            List<SessionSnapshot> recentSessions,
+            int totalSessionsLast7Days,
+            int totalSessionMinutesLast7Days,
+            int hydrationLast7DaysMl,
+            int analysesCompletedLast7Days,
+            String comparisonToPreviousDay,
+            List<String> dataGaps
     ) {
     }
 
@@ -59,6 +69,29 @@ public record AiChatRequest(
             String message,
             String triggerReason,
             Instant occurredAt
+    ) {
+    }
+
+    public record DailySnapshot(
+            LocalDate reportDate,
+            int analysesCompleted,
+            int postureAlertCount,
+            int handMovementCount,
+            int smokingLikeCount,
+            int reminderCount,
+            int hydrationProgressMl,
+            int waterGoalMl,
+            double poorPostureRatio,
+            String summary
+    ) {
+    }
+
+    public record SessionSnapshot(
+            String sessionId,
+            String status,
+            Instant startedAt,
+            Instant endedAt,
+            long durationMinutes
     ) {
     }
 }
