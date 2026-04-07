@@ -1,6 +1,8 @@
 import httpx
 import pytest
+from fastapi import HTTPException
 
+from app.core.config import settings
 from app.schemas.analysis import (
     AnalysisRequest,
     AnalysisSettings,
@@ -127,3 +129,42 @@ async def test_analysis_service_requires_remote_consent() -> None:
         await service.analyze(request)
 
     assert "remote inference consent" in str(exc.value)
+
+
+@pytest.mark.asyncio
+async def test_analysis_service_readiness_stays_up_when_provider_is_misconfigured(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(settings, "ai_provider", "openai-compatible")
+    monkeypatch.setattr(settings, "ai_api_key", "")
+
+    readiness = await AnalysisService().readiness()
+
+    assert readiness["ready"] is True
+    assert readiness["provider_ready"] is False
+    assert readiness["provider_status"] == "misconfigured"
+
+
+@pytest.mark.asyncio
+async def test_external_provider_auth_failure_maps_to_503() -> None:
+    def handler(_: httpx.Request) -> httpx.Response:
+        return httpx.Response(401, json={"error": "invalid_api_key"})
+
+    provider = OpenAiCompatibleProvider(
+        ProviderConfig(
+            provider_name="openai-compatible",
+            api_base_url="https://provider.example/v1",
+            api_key="bad-key",
+            model_name="test-model",
+            timeout_seconds=5,
+            readiness_timeout_seconds=5,
+            max_retries=0,
+            temperature=0.1,
+        ),
+        transport=httpx.MockTransport(handler),
+    )
+    service = AnalysisService(provider=provider)
+
+    with pytest.raises(HTTPException) as exc:
+        await service.analyze(build_request())
+
+    assert exc.value.status_code == 503
+    assert "authentication failed" in exc.value.detail

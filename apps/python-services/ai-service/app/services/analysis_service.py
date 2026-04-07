@@ -16,7 +16,7 @@ from app.services.providers import (
 
 class AnalysisService:
     def __init__(self, provider: AnalysisProvider | None = None) -> None:
-        self.provider = provider or _build_provider()
+        self.provider = provider
 
     async def analyze(self, request: AnalysisRequest) -> AnalysisResponse:
         if not request.settings.remote_inference_accepted:
@@ -35,7 +35,7 @@ class AnalysisService:
             )
 
         try:
-            result = await self.provider.analyze(request)
+            result = await self._provider().analyze(request)
         except ProviderConfigurationError as exc:
             raise HTTPException(status_code=503, detail=str(exc)) from exc
         except ProviderInvocationError as exc:
@@ -57,11 +57,29 @@ class AnalysisService:
         )
 
     async def readiness(self) -> dict:
-        readiness = await self.provider.readiness()
+        try:
+            readiness = await self._provider().readiness()
+        except ProviderConfigurationError as exc:
+            return {
+                "ready": True,
+                "provider_ready": False,
+                "provider": settings.ai_provider,
+                "model": settings.model_name,
+                "mode": "invalid_configuration",
+                "provider_status": "misconfigured",
+                "reason": str(exc),
+            }
+
         return {
-            "ready": readiness.ready,
+            "ready": True,
+            "provider_ready": readiness.ready,
             **readiness.details,
         }
+
+    def _provider(self) -> AnalysisProvider:
+        if self.provider is None:
+            self.provider = _build_provider()
+        return self.provider
 
 
 def _build_provider() -> AnalysisProvider:

@@ -2,6 +2,7 @@ import asyncio
 import json
 from dataclasses import dataclass
 from typing import Any, Protocol
+from urllib.parse import urlparse
 
 import httpx
 
@@ -92,25 +93,26 @@ class OpenAiCompatibleProvider:
         try:
             self._validate_configuration()
         except ProviderConfigurationError as exc:
-            return ProviderReadiness(False, {"provider": self.config.provider_name, "reason": str(exc)})
-
-        try:
-            async with self._client(timeout_seconds=self.config.readiness_timeout_seconds) as client:
-                response = await client.get("/models", headers=self._headers())
-                response.raise_for_status()
-            return ProviderReadiness(True, {"provider": self.config.provider_name, "model": self.config.model_name})
-        except httpx.TimeoutException:
-            return ProviderReadiness(False, {"provider": self.config.provider_name, "reason": "provider readiness timed out"})
-        except httpx.HTTPStatusError as exc:
             return ProviderReadiness(
                 False,
                 {
                     "provider": self.config.provider_name,
-                    "reason": f"provider readiness returned HTTP {exc.response.status_code}",
+                    "model": self.config.model_name,
+                    "mode": "invalid_configuration",
+                    "provider_status": "misconfigured",
+                    "reason": str(exc),
                 },
             )
-        except httpx.HTTPError as exc:
-            return ProviderReadiness(False, {"provider": self.config.provider_name, "reason": str(exc)})
+
+        return ProviderReadiness(
+            True,
+            {
+                "provider": self.config.provider_name,
+                "model": self.config.model_name,
+                "mode": "external_api",
+                "provider_status": "configured",
+            },
+        )
 
     async def _post_with_retry(self, path: str, payload: dict[str, Any]) -> dict[str, Any]:
         last_error: Exception | None = None
@@ -127,9 +129,10 @@ class OpenAiCompatibleProvider:
             except httpx.HTTPStatusError as exc:
                 last_error = exc
                 if not self._is_retryable_status(exc.response.status_code) or attempt >= self.config.max_retries:
+                    status_code, message = self._map_http_status(exc.response.status_code)
                     raise ProviderInvocationError(
-                        f"external AI provider returned HTTP {exc.response.status_code}",
-                        status_code=502,
+                        message,
+                        status_code=status_code,
                     ) from exc
             except httpx.HTTPError as exc:
                 last_error = exc
@@ -156,10 +159,20 @@ class OpenAiCompatibleProvider:
     def _validate_configuration(self) -> None:
         if not self.config.api_base_url:
             raise ProviderConfigurationError("AI_API_BASE_URL is required for the external provider")
+        parsed = urlparse(self.config.api_base_url)
+        if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+            raise ProviderConfigurationError("AI_API_BASE_URL must be a valid http or https URL")
         if not self.config.api_key:
             raise ProviderConfigurationError("AI_API_KEY is required for the external provider")
         if not self.config.model_name:
             raise ProviderConfigurationError("AI_MODEL_NAME is required for the external provider")
+
+    def _map_http_status(self, status_code: int) -> tuple[int, str]:
+        if status_code in {401, 403}:
+            return 503, f"external AI provider authentication failed with HTTP {status_code}"
+        if status_code == 429:
+            return 503, "external AI provider rate limit exceeded"
+        return 502, f"external AI provider returned HTTP {status_code}"
 
     def _build_analysis_payload(self, request: AnalysisRequest) -> dict[str, Any]:
         context = {

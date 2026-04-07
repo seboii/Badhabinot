@@ -1,21 +1,31 @@
 from functools import lru_cache
 
+from fastapi import HTTPException
+
+from app.core.config import settings
 from app.schemas.chat import ChatRequest, ChatResponse
 from app.services.providers import (
     ChatProviderResult,
     MockProvider,
     OpenAiCompatibleProvider,
     ProviderConfig,
+    ProviderConfigurationError,
+    ProviderInvocationError,
 )
-from app.core.config import settings
 
 
 class ChatService:
     def __init__(self, provider: MockProvider | OpenAiCompatibleProvider | None = None) -> None:
-        self.provider = provider or _build_provider()
+        self.provider = provider
 
     async def respond(self, request: ChatRequest) -> ChatResponse:
-        result: ChatProviderResult = await self.provider.respond_chat(request)
+        try:
+            result: ChatProviderResult = await self._provider().respond_chat(request)
+        except ProviderConfigurationError as exc:
+            raise HTTPException(status_code=503, detail=str(exc)) from exc
+        except ProviderInvocationError as exc:
+            raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
+
         return ChatResponse(
             conversation_id=request.conversation_id,
             answer=result.answer,
@@ -27,6 +37,11 @@ class ChatService:
                 "mode": result.model_mode,
             },
         )
+
+    def _provider(self) -> MockProvider | OpenAiCompatibleProvider:
+        if self.provider is None:
+            self.provider = _build_provider()
+        return self.provider
 
 
 def _build_provider() -> MockProvider | OpenAiCompatibleProvider:
@@ -42,7 +57,9 @@ def _build_provider() -> MockProvider | OpenAiCompatibleProvider:
     )
     if settings.ai_provider == "mock":
         return MockProvider(config)
-    return OpenAiCompatibleProvider(config)
+    if settings.ai_provider == "openai-compatible":
+        return OpenAiCompatibleProvider(config)
+    raise ProviderConfigurationError(f"Unsupported AI_PROVIDER value: {settings.ai_provider}")
 
 
 @lru_cache(maxsize=1)
