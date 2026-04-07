@@ -245,9 +245,14 @@ class OpenAiCompatibleProvider:
                 {
                     "role": "system",
                     "content": (
-                        "You answer only from the provided user behavior context. "
+                        "You are a behavior-insights assistant for one authenticated user. "
+                        "Use only the supplied structured monitoring context and chat history. "
+                        "Never invent counts, events, times, trends, or comparisons. "
+                        "If information is missing, say that clearly. "
+                        "Treat smoking signals as confidence-based cues, not certainty. "
+                        "When useful, separate your answer into: facts, interpretation, and practical next steps. "
                         "Return JSON only with keys answer, grounded_facts, follow_up_suggestions. "
-                        "If the context does not support a claim, say that explicitly."
+                        "grounded_facts must contain short, directly verifiable points from context values."
                     ),
                 },
                 *history_lines,
@@ -256,6 +261,8 @@ class OpenAiCompatibleProvider:
                     "content": (
                         f"User timezone: {request.timezone or 'UTC'}\n"
                         f"Report date: {request.report_date.isoformat()}\n"
+                        "Use the comparison and trend fields when the question asks about change over time.\n"
+                        "If `data_gaps` is non-empty and relevant, mention the limitation.\n"
                         f"Grounding context:\n{json.dumps(context, ensure_ascii=True)}\n"
                         f"Question: {request.message}"
                     ),
@@ -315,6 +322,18 @@ class OpenAiCompatibleProvider:
             for item in parsed.get("follow_up_suggestions", [])
             if str(item).strip()
         ][:3]
+        if not grounded_facts:
+            grounded_facts = [
+                f"Hydration: {request.context.hydration_progress_ml}/{request.context.water_goal_ml} ml.",
+                f"Posture alerts: {request.context.posture_alert_count}.",
+                f"Smoking-like cues: {request.context.smoking_like_count}.",
+            ]
+        if not follow_up_suggestions:
+            follow_up_suggestions = [
+                "Which trend should I prioritize tomorrow?",
+                "Show the main risk pattern for this report date.",
+                "Compare hydration and posture against the previous day.",
+            ]
 
         return ChatProviderResult(
             answer=answer,
@@ -441,47 +460,92 @@ class MockProvider:
         )
 
     async def respond_chat(self, request: ChatRequest) -> ChatProviderResult:
-        question = request.message.lower()
+        question = request.message.lower().strip()
         context = request.context
+        top_event = max(context.recent_event_type_counts.items(), key=lambda item: item[1], default=("none", 0))
+        hydration_ratio = 0.0 if context.water_goal_ml <= 0 else context.hydration_progress_ml / context.water_goal_ml
+        hydration_percent = round(hydration_ratio * 100)
+        event_summary = ", ".join(
+            f"{event_type}: {count}" for event_type, count in list(context.recent_event_type_counts.items())[:3]
+        ) or "no recent events"
+        data_gap_note = (
+            f" Data limitations: {context.data_gaps[0]}"
+            if context.data_gaps
+            else ""
+        )
+
+        asks_for_summary = any(term in question for term in ["summary", "summarize", "day", "gun", "ozet", "bugun"])
+        asks_for_comparison = any(term in question for term in ["compare", "comparison", "trend", "before", "kar", "gecmis", "onceki"])
+        asks_for_posture = any(term in question for term in ["posture", "slouch", "lean", "durus"])
+        asks_for_hydration = any(term in question for term in ["water", "drink", "hydration", "su"])
+        asks_for_smoking = any(term in question for term in ["smok", "risky", "sigara"])
+        asks_for_most_often = any(term in question for term in ["most often", "most", "en cok", "tekrar"])
+
+        if asks_for_hydration:
+            answer = (
+                f"On {request.report_date.isoformat()}, hydration reached {context.hydration_progress_ml} / "
+                f"{context.water_goal_ml} ml ({hydration_percent}%). "
+                f"In the last 7 days, hydration logs totaled {context.hydration_last_7_days_ml} ml.{data_gap_note}"
+            )
+        elif asks_for_posture:
+            answer = (
+                f"Poor posture alerts were {context.posture_alert_count} for {request.report_date.isoformat()}, "
+                f"and poor-posture frames were about {round(context.poor_posture_ratio * 100)}% of analyzed captures. "
+                f"{context.comparison_to_previous_day}{data_gap_note}"
+            )
+        elif asks_for_smoking:
+            answer = (
+                f"Smoking-like cues were recorded {context.smoking_like_count} times on {request.report_date.isoformat()}. "
+                "These are confidence-based cues and should not be treated as certain smoking confirmation. "
+                f"{context.comparison_to_previous_day}{data_gap_note}"
+            )
+        elif asks_for_most_often:
+            answer = (
+                f"The most frequent recent event type is '{top_event[0]}' with {top_event[1]} occurrences "
+                f"in the available recent event window. Event breakdown: {event_summary}.{data_gap_note}"
+            )
+        elif asks_for_comparison:
+            answer = (
+                f"Comparison for {request.report_date.isoformat()}: {context.comparison_to_previous_day} "
+                f"Across the last 7 days, analyses completed: {context.analyses_completed_last_7_days}, "
+                f"sessions: {context.total_sessions_last_7_days}, "
+                f"session time: {context.total_session_minutes_last_7_days} minutes.{data_gap_note}"
+            )
+        elif asks_for_summary or not question:
+            answer = (
+                f"Summary for {request.report_date.isoformat()}: {context.summary} "
+                f"Hydration is {context.hydration_progress_ml}/{context.water_goal_ml} ml, "
+                f"posture alerts: {context.posture_alert_count}, hand movement events: {context.hand_movement_count}, "
+                f"smoking-like cues: {context.smoking_like_count}. "
+                f"Recent event breakdown: {event_summary}.{data_gap_note}"
+            )
+        else:
+            answer = (
+                f"{context.summary} "
+                f"For direct grounding: hydration {context.hydration_progress_ml}/{context.water_goal_ml} ml, "
+                f"posture alerts {context.posture_alert_count}, smoking-like cues {context.smoking_like_count}. "
+                f"{context.comparison_to_previous_day}{data_gap_note}"
+            )
+
         facts = [
             f"Hydration reached {context.hydration_progress_ml} of {context.water_goal_ml} ml.",
             f"Posture alerts recorded: {context.posture_alert_count}.",
-            f"Smoking-like cues recorded: {context.smoking_like_count}.",
             f"Hand movement events recorded: {context.hand_movement_count}.",
+            f"Smoking-like cues recorded: {context.smoking_like_count}.",
+            context.comparison_to_previous_day,
         ]
-
-        if "water" in question or "drink" in question or "hydration" in question:
-            answer = (
-                f"You logged {context.hydration_progress_ml} ml out of the {context.water_goal_ml} ml goal "
-                f"for {request.report_date.isoformat()}."
-            )
-        elif "posture" in question or "lean" in question or "slouch" in question:
-            answer = (
-                f"Poor posture was flagged {context.posture_alert_count} times, and poor-posture frames made up "
-                f"about {round(context.poor_posture_ratio * 100)}% of analyzed captures."
-            )
-        elif "smok" in question or "risky" in question:
-            answer = (
-                f"The system recorded {context.smoking_like_count} smoking-like cues on {request.report_date.isoformat()}. "
-                "These are confidence-based cues rather than certain smoking confirmation."
-            )
-        elif "hand" in question:
-            answer = (
-                f"The monitoring data recorded {context.hand_movement_count} repetitive hand-movement events "
-                f"for {request.report_date.isoformat()}."
-            )
-        else:
-            answer = context.summary
 
         follow_up = [
-            "Ask whether posture or hydration needs the most attention.",
-            "Ask when the highest-confidence cues happened.",
-            "Ask which recommendation matters most tomorrow.",
+            "Compare today with the previous report in more detail.",
+            "Show which event type repeated most in the recent window.",
+            "List practical improvements for posture, hydration, and smoking-like cues.",
         ]
+        if context.data_gaps:
+            follow_up[2] = "Tell me what is missing in my data and how to improve coverage."
 
         return ChatProviderResult(
             answer=answer,
-            grounded_facts=facts[:4],
+            grounded_facts=[fact for fact in facts if fact][:5],
             follow_up_suggestions=follow_up,
             provider="mock",
             model_name=self.config.model_name,
