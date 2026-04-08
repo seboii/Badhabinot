@@ -47,73 +47,56 @@ services:
       retries: 10
       start_period: 5s
 
-  user-service:
+  backend:
     <<: *runtime-defaults
     build:
       context: ../../..
       dockerfile: infra/docker/dockerfiles/spring-service.Dockerfile
-      args:
-        SERVICE_MODULE: apps/backend/user-service
-        SERVICE_ARTIFACT: user-service
     environment:
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/badhabinot_user
-      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-badhabinot}
-      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-badhabinot}
+      AUTH_DATASOURCE_URL: jdbc:postgresql://postgres:5432/badhabinot_auth
+      AUTH_DATASOURCE_USERNAME: ${POSTGRES_USER:-badhabinot}
+      AUTH_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-badhabinot}
+      USER_DATASOURCE_URL: jdbc:postgresql://postgres:5432/badhabinot_user
+      USER_DATASOURCE_USERNAME: ${POSTGRES_USER:-badhabinot}
+      USER_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-badhabinot}
+      MONITORING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/badhabinot_monitoring
+      MONITORING_DATASOURCE_USERNAME: ${POSTGRES_USER:-badhabinot}
+      MONITORING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-badhabinot}
       SPRING_DATA_REDIS_HOST: redis
       SPRING_DATA_REDIS_PORT: 6379
       SECURITY_JWT_SECRET: ${SECURITY_JWT_SECRET:-YmFkaGFiaW5vdC1kZXZlbG9wbWVudC1zZWNyZXQta2V5LTIwMjYtYmFkaGFiaW5vdA==}
       INTERNAL_API_KEY: ${INTERNAL_API_KEY:-change-me-in-real-environments}
       USER_CONTEXT_CACHE_TTL: ${USER_CONTEXT_CACHE_TTL:-PT5M}
-      JAVA_OPTS: ${USER_SERVICE_JAVA_OPTS:-}
+      ANALYSIS_JOB_CACHE_TTL: ${ANALYSIS_JOB_CACHE_TTL:-PT15M}
+      ANALYSIS_JOB_KEY_PREFIX: ${ANALYSIS_JOB_KEY_PREFIX:-badhabinot:monitoring:analysis-job:}
+      AUTH_SERVICE_URL: ${AUTH_SERVICE_URL:-http://backend:8080}
+      USER_SERVICE_URL: ${USER_SERVICE_URL:-http://backend:8080}
+      MONITORING_SERVICE_URL: ${MONITORING_SERVICE_URL:-http://backend:8080}
+      VISION_SERVICE_URL: ${VISION_SERVICE_URL:-http://vision-service:8091}
+      AI_SERVICE_URL: ${AI_SERVICE_URL:-http://ai-service:8092}
+      VISION_SERVICE_READ_TIMEOUT: ${VISION_SERVICE_READ_TIMEOUT:-PT10S}
+      AI_SERVICE_READ_TIMEOUT: ${AI_SERVICE_READ_TIMEOUT:-PT25S}
+      JAVA_OPTS: ${BACKEND_JAVA_OPTS:-}
     expose:
-      - "8082"
+      - "8080"
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
-    networks:
-      - platform
-    stop_grace_period: 40s
-    healthcheck:
-      test: ["CMD-SHELL", "curl --fail --silent http://localhost:8082/actuator/health/readiness > /dev/null || exit 1"]
-      interval: 15s
-      timeout: 5s
-      retries: 10
-      start_period: 35s
-
-  auth-service:
-    <<: *runtime-defaults
-    build:
-      context: ../../..
-      dockerfile: infra/docker/dockerfiles/spring-service.Dockerfile
-      args:
-        SERVICE_MODULE: apps/backend/auth-service
-        SERVICE_ARTIFACT: auth-service
-    environment:
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/badhabinot_auth
-      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-badhabinot}
-      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-badhabinot}
-      SECURITY_JWT_SECRET: ${SECURITY_JWT_SECRET:-YmFkaGFiaW5vdC1kZXZlbG9wbWVudC1zZWNyZXQta2V5LTIwMjYtYmFkaGFiaW5vdA==}
-      INTERNAL_API_KEY: ${INTERNAL_API_KEY:-change-me-in-real-environments}
-      USER_SERVICE_URL: ${USER_SERVICE_URL:-http://user-service:8082}
-      JAVA_OPTS: ${AUTH_SERVICE_JAVA_OPTS:-}
-    expose:
-      - "8081"
-    depends_on:
-      postgres:
+      vision-service:
         condition: service_healthy
-      user-service:
+      ai-service:
         condition: service_healthy
     networks:
       - platform
     stop_grace_period: 40s
     healthcheck:
-      test: ["CMD-SHELL", "curl --fail --silent http://localhost:8081/actuator/health/readiness > /dev/null || exit 1"]
+      test: ["CMD-SHELL", "curl --fail --silent http://localhost:8080/actuator/health/readiness > /dev/null || exit 1"]
       interval: 15s
       timeout: 5s
-      retries: 10
-      start_period: 35s
+      retries: 12
+      start_period: 45s
 
   ai-service:
     <<: *runtime-defaults
@@ -121,7 +104,7 @@ services:
       context: ../../..
       dockerfile: infra/docker/dockerfiles/python-service.Dockerfile
       args:
-        SERVICE_PATH: apps/python-services/ai-service
+        SERVICE_PATH: python-services/ai-service
         APP_PORT: 8092
     environment:
       INTERNAL_API_KEY: ${INTERNAL_API_KEY:-change-me-in-real-environments}
@@ -153,7 +136,7 @@ services:
       context: ../../..
       dockerfile: infra/docker/dockerfiles/python-service.Dockerfile
       args:
-        SERVICE_PATH: apps/python-services/vision-service
+        SERVICE_PATH: python-services/vision-service
         APP_PORT: 8091
     environment:
       INTERNAL_API_KEY: ${INTERNAL_API_KEY:-change-me-in-real-environments}
@@ -171,86 +154,6 @@ services:
       retries: 10
       start_period: 10s
 
-  monitoring-service:
-    <<: *runtime-defaults
-    build:
-      context: ../../..
-      dockerfile: infra/docker/dockerfiles/spring-service.Dockerfile
-      args:
-        SERVICE_MODULE: apps/backend/monitoring-service
-        SERVICE_ARTIFACT: monitoring-service
-    environment:
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/badhabinot_monitoring
-      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-badhabinot}
-      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-badhabinot}
-      SPRING_DATA_REDIS_HOST: redis
-      SPRING_DATA_REDIS_PORT: 6379
-      SECURITY_JWT_SECRET: ${SECURITY_JWT_SECRET:-YmFkaGFiaW5vdC1kZXZlbG9wbWVudC1zZWNyZXQta2V5LTIwMjYtYmFkaGFiaW5vdA==}
-      INTERNAL_API_KEY: ${INTERNAL_API_KEY:-change-me-in-real-environments}
-      USER_SERVICE_URL: ${USER_SERVICE_URL:-http://user-service:8082}
-      VISION_SERVICE_URL: ${VISION_SERVICE_URL:-http://vision-service:8091}
-      AI_SERVICE_URL: ${AI_SERVICE_URL:-http://ai-service:8092}
-      VISION_SERVICE_READ_TIMEOUT: ${VISION_SERVICE_READ_TIMEOUT:-PT10S}
-      AI_SERVICE_READ_TIMEOUT: ${AI_SERVICE_READ_TIMEOUT:-PT25S}
-      ANALYSIS_JOB_CACHE_TTL: ${ANALYSIS_JOB_CACHE_TTL:-PT15M}
-      ANALYSIS_JOB_KEY_PREFIX: ${ANALYSIS_JOB_KEY_PREFIX:-badhabinot:monitoring:analysis-job:}
-      JAVA_OPTS: ${MONITORING_SERVICE_JAVA_OPTS:-}
-    expose:
-      - "8083"
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-      user-service:
-        condition: service_healthy
-      vision-service:
-        condition: service_healthy
-      ai-service:
-        condition: service_healthy
-    networks:
-      - platform
-    stop_grace_period: 40s
-    healthcheck:
-      test: ["CMD-SHELL", "curl --fail --silent http://localhost:8083/actuator/health/readiness > /dev/null || exit 1"]
-      interval: 15s
-      timeout: 5s
-      retries: 12
-      start_period: 45s
-
-  api-gateway:
-    <<: *runtime-defaults
-    build:
-      context: ../../..
-      dockerfile: infra/docker/dockerfiles/spring-service.Dockerfile
-      args:
-        SERVICE_MODULE: apps/backend/api-gateway
-        SERVICE_ARTIFACT: api-gateway
-    environment:
-      SECURITY_JWT_SECRET: ${SECURITY_JWT_SECRET:-YmFkaGFiaW5vdC1kZXZlbG9wbWVudC1zZWNyZXQta2V5LTIwMjYtYmFkaGFiaW5vdA==}
-      AUTH_SERVICE_URL: ${AUTH_SERVICE_URL:-http://auth-service:8081}
-      USER_SERVICE_URL: ${USER_SERVICE_URL:-http://user-service:8082}
-      MONITORING_SERVICE_URL: ${MONITORING_SERVICE_URL:-http://monitoring-service:8083}
-      JAVA_OPTS: ${GATEWAY_JAVA_OPTS:-}
-    expose:
-      - "8080"
-    depends_on:
-      auth-service:
-        condition: service_healthy
-      user-service:
-        condition: service_healthy
-      monitoring-service:
-        condition: service_healthy
-    networks:
-      - platform
-    stop_grace_period: 40s
-    healthcheck:
-      test: ["CMD-SHELL", "curl --fail --silent http://localhost:8080/actuator/health/readiness > /dev/null || exit 1"]
-      interval: 15s
-      timeout: 5s
-      retries: 10
-      start_period: 25s
-
   frontend-app:
     <<: *runtime-defaults
     build:
@@ -261,7 +164,7 @@ services:
     expose:
       - "80"
     depends_on:
-      api-gateway:
+      backend:
         condition: service_healthy
     networks:
       - platform

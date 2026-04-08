@@ -5,10 +5,10 @@ ARG VITE_API_BASE_URL=
 ENV VITE_API_BASE_URL=${VITE_API_BASE_URL}
 WORKDIR /workspace
 
-COPY apps/web/frontend-app/package*.json ./
+COPY frontend/package*.json ./
 RUN --mount=type=cache,target=/root/.npm npm ci
 
-COPY apps/web/frontend-app/ ./
+COPY frontend/ ./
 RUN npm run build
 
 FROM nginx:1.27-alpine

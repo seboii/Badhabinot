@@ -7,7 +7,7 @@ WORKDIR /workspace
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
 
-COPY apps/python-services apps/python-services
+COPY python-services python-services
 RUN --mount=type=cache,target=/root/.cache/pip pip install --prefix /install --no-cache-dir -r ${SERVICE_PATH}/requirements.txt
 
 FROM python:3.11-slim AS runtime

@@ -7,9 +7,9 @@ services:
     ports:
       - "${REDIS_PORT:-6379}:6379"
 
-  api-gateway:
+  backend:
     ports:
-      - "${GATEWAY_PORT:-8080}:8080"
+      - "${BACKEND_PORT:-8080}:8080"
 
   frontend-app:
     ports:
