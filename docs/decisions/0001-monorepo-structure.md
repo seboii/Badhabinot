@@ -8,9 +8,9 @@ Accepted
 
 The repository is organized by runtime boundary:
 
-- `apps/backend` for Spring Boot services
-- `apps/python-services` for FastAPI AI/CV services
-- `apps/web` for browser applications
+- `backend` for the single Spring Boot service
+- `python-services` for FastAPI AI/CV services
+- `frontend` for the browser application
 - `packages` for shared contracts, config fragments, and shared documentation
 - `infra` for Docker, nginx, Redis, database bootstrap, and operational scripts
 
@@ -23,7 +23,7 @@ The repository is organized by runtime boundary:
 
 ## Consequences
 
-- Build paths changed to `apps/backend/*` for Maven modules.
+- Build paths changed to `backend/*` for Maven modules.
 - Compose now uses generic Dockerfiles under `infra/docker/dockerfiles`.
 - Documentation and scripts reference the new paths.
 - Redis and nginx configuration are explicitly discoverable under `infra`.

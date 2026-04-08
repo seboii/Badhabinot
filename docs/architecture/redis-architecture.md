@@ -4,9 +4,9 @@
 
 Redis is used for low-latency, short-lived runtime data that should not live permanently in PostgreSQL.
 
-## Service usage
+## Backend usage
 
-### `user-service`
+### User cache
 
 - Cache names:
   - `user-context`
@@ -21,7 +21,7 @@ Redis is used for low-latency, short-lived runtime data that should not live per
   - consent updates evict `user-context`, `user-consents`, `analysis-context`
   - bootstrap evicts all user-scoped caches
 
-### `monitoring-service`
+### Monitoring job state
 
 - Key pattern: `ANALYSIS_JOB_KEY_PREFIX + <analysis-id>`
 - Default prefix: `badhabinot:monitoring:analysis-job:`
@@ -44,8 +44,8 @@ Redis is used for low-latency, short-lived runtime data that should not live per
 
 ## Failure handling
 
-- `user-service` cache failures are swallowed by a custom `CacheErrorHandler`; requests fall back to direct database reads.
-- `monitoring-service` Redis read/write failures are logged and ignored; persisted job state in PostgreSQL remains available.
+- User cache failures are swallowed by a custom `CacheErrorHandler`; requests fall back to direct database reads.
+- Monitoring Redis read/write failures are logged and ignored; persisted job state in PostgreSQL remains available.
 
 ## Non-goals
 

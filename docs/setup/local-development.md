@@ -14,77 +14,62 @@ Copy-Item .env.example .env
 docker compose up --build
 ```
 
-This works from the repository root because `compose.yaml` is the local entrypoint that extends the base service mesh under `infra/docker/compose/docker-compose.yml`. Docker Desktop must be running before you invoke the command.
+This works from the repository root because `compose.yaml` extends the base runtime file under `infra/docker/compose/docker-compose.yml`.
 
 All runtime configuration is centralized in the root `.env`. Do not create per-service `.env` files.
 
 The local compose entrypoint publishes:
 
 - `frontend-app` on `FRONTEND_PORT`
-- `api-gateway` on `GATEWAY_PORT`
-- `auth-service` on `AUTH_SERVICE_PORT`
-- `user-service` on `USER_SERVICE_PORT`
-- `monitoring-service` on `MONITORING_SERVICE_PORT`
+- `backend` on `BACKEND_PORT`
 - `vision-service` on `VISION_SERVICE_PORT`
 - `ai-service` on `AI_SERVICE_PORT`
 - PostgreSQL on `POSTGRES_PORT`
 - Redis on `REDIS_PORT`
 
-If any of those ports are already taken on your machine, change the values in `.env` before startup.
-
 Access points after startup:
 
 - Web UI: `http://localhost:3000`
-- API Gateway: `http://localhost:8080`
-- Auth service readiness: `http://localhost:8081/actuator/health/readiness`
-- User service readiness: `http://localhost:8082/actuator/health/readiness`
-- Monitoring service readiness: `http://localhost:8083/actuator/health/readiness`
+- Backend API: `http://localhost:8080`
+- Backend readiness: `http://localhost:8080/actuator/health/readiness`
 - Vision service readiness: `http://localhost:8091/ready`
 - AI service readiness: `http://localhost:8092/ready`
 - Frontend health: `http://localhost:3000/healthz`
-- Gateway readiness: `http://localhost:8080/actuator/health/readiness`
-
-The default path is external API-backed AI. Ensure `.env` contains:
-
-- `AI_PROVIDER=openai-compatible`
-- `AI_API_KEY=<your key>`
-- `AI_API_BASE_URL=https://api.openai.com/v1`
-- `AI_MODEL_NAME=<model name>`
-
-Optional local fallback (not production): set `AI_PROVIDER=mock`.
 
 ## Smoke test
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File infra/docker/scripts/smoke-test.ps1
+powershell -ExecutionPolicy Bypass -File infra/docker/scripts/smoke-test.ps1 -GatewayBaseUrl http://localhost:8080
 ```
 
-## Direct service development
+## Direct development
 
-### Spring services
+### Spring backend
 
-- Build all: `mvn clean package`
-- Run one service: `mvn -pl apps/backend/user-service spring-boot:run`
+- Build and test: `mvn -B -ntp -f backend/pom.xml verify`
+- Run locally: `mvn -f backend/pom.xml spring-boot:run`
 
 ### Python services
 
 - AI service:
-  - `cd apps/python-services/ai-service`
+  - `cd python-services/ai-service`
   - `pip install -r requirements.txt -r requirements-dev.txt`
+  - `pytest tests`
   - `uvicorn app.main:app --host 0.0.0.0 --port 8092`
 - Vision service:
-  - `cd apps/python-services/vision-service`
+  - `cd python-services/vision-service`
   - `pip install -r requirements.txt -r requirements-dev.txt`
+  - `pytest tests`
   - `uvicorn app.main:app --host 0.0.0.0 --port 8091`
 
 ### Frontend
 
-- `cd apps/web/frontend-app`
+- `cd frontend`
 - `npm install`
 - `npm run dev`
 
 ## Environment notes
 
-- Docker service-to-service communication uses container DNS names such as `user-service`, `monitoring-service`, `vision-service`, and `ai-service`.
+- Docker service-to-service communication uses container DNS names such as `backend`, `vision-service`, and `ai-service`.
 - Vite reads the repository root `.env`, so frontend and Docker share the same API settings.
 - Direct Spring and FastAPI runs should inherit environment values from the same root `.env`.

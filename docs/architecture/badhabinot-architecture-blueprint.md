@@ -2,43 +2,39 @@
 
 ## Objectives
 
-- Keep Java business services independent from Python AI/CV workloads.
+- Keep Java business logic in one maintainable Spring Boot backend.
+- Keep Python AI/CV workloads isolated behind HTTP integrations.
 - Keep the frontend standalone and environment-driven.
-- Centralize infrastructure and container build assets.
 - Use Redis for short-lived acceleration and orchestration support, never as the primary database.
 
 ## Runtime topology
 
 ```text
 frontend-app
-  -> api-gateway
-      -> auth-service
-      -> user-service
-      -> monitoring-service
-            -> user-service (internal analysis context)
-            -> vision-service
-                  -> ai-service
-
-auth-service -> user-service (internal bootstrap)
-auth-service/user-service/monitoring-service -> PostgreSQL
-user-service/monitoring-service -> Redis
+  -> backend
+        -> auth persistence (PostgreSQL)
+        -> user persistence (PostgreSQL)
+        -> monitoring persistence (PostgreSQL)
+        -> Redis
+        -> vision-service
+              -> ai-service
 ```
 
 ## Monorepo boundaries
 
-### `apps/backend`
+### `backend/src/main/java/com/badhabinot/backend`
 
-- Spring Boot services only.
-- Each service owns its own source set, persistence logic, and service-local configuration.
-- `monitoring-service` is the orchestration boundary for CV and AI workflows.
+- Unified Spring Boot backend.
+- Uses controller, service, repository, model, dto, config, exception, and integration package groupings.
+- Monitoring orchestration stays inside the backend service layer while Python calls remain isolated under `integration`.
 
-### `apps/python-services`
+### `python-services`
 
 - FastAPI microservices only.
 - `vision-service` owns image decoding, OpenCV analysis, and inference request preparation.
 - `ai-service` owns behavior classification and model metadata responses.
 
-### `apps/web`
+### `frontend`
 
 - SPA-only codebase.
 - API integration is isolated behind `src/api`.
@@ -47,7 +43,7 @@ user-service/monitoring-service -> Redis
 ### `packages`
 
 - Shared non-runtime assets only.
-- Contracts, config fragments, and shared docs live here to avoid leaking them into app folders.
+- Contracts, config fragments, and shared docs live here.
 
 ### `infra`
 
@@ -57,16 +53,17 @@ user-service/monitoring-service -> Redis
 
 ### PostgreSQL
 
-- Source of truth for auth, user, monitoring sessions, activity feeds, hydration logs, and persisted analysis jobs.
+- Source of truth for auth, user, monitoring sessions, activity feeds, hydration logs, chat history, and persisted analysis jobs.
+- The unified backend keeps separate auth, user, and monitoring databases for migration compatibility.
 
 ### Redis
 
-- `user-service` cache layer for repeated reads.
-- `monitoring-service` short-lived orchestration state for analysis jobs.
+- Cache layer for repeated user-context reads.
+- Short-lived orchestration state for analysis jobs.
 
 ## Failure model
 
-- PostgreSQL loss is critical for stateful services.
+- PostgreSQL loss is critical for stateful backend behavior.
 - Redis loss is non-critical:
   - caches are bypassed
   - analysis processing continues
@@ -74,7 +71,7 @@ user-service/monitoring-service -> Redis
 
 ## Build and deployment model
 
-- Root `pom.xml` is the Maven aggregator for Java services.
-- Docker builds use generic service Dockerfiles under `infra/docker/dockerfiles`.
+- `backend/pom.xml` builds the backend application directly.
+- Docker builds use the generic backend Dockerfile under `infra/docker/dockerfiles`.
 - Compose is defined under `infra/docker/compose/docker-compose.yml`.
-- Web assets are built once and served by Nginx, with `/api` routed to `api-gateway`.
+- Web assets are built once and served by Nginx, with `/api` routed to `backend`.

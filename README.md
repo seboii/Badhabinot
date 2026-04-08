@@ -5,17 +5,19 @@ BADHABINOT; web, Spring Boot backend servisleri ve Python analiz servislerinden 
 ## Depo Yapisi
 
 ```text
-apps/
-  web/
-    frontend-app/
-  backend/
-    api-gateway/
-    auth-service/
-    monitoring-service/
-    user-service/
-  python-services/
-    vision-service/
-    ai-service/
+backend/
+  pom.xml
+  src/
+    main/
+      java/
+        com/badhabinot/backend/
+      resources/
+    test/
+      java/
+frontend/
+python-services/
+  vision-service/
+  ai-service/
 infra/
   docker/
     compose/
@@ -45,13 +47,10 @@ packages/
 
 ## Servis Sorumluluklari
 
-- `apps/web/frontend-app`: Kamera erisimi, dashboard, raporlar, hatirlatici UI, sohbet UI.
-- `apps/backend/api-gateway`: Dis API girisi, route forwarding.
-- `apps/backend/auth-service`: Kimlik dogrulama ve token yasam dongusu.
-- `apps/backend/user-service`: Kullanici profili, ayarlar, onaylar.
-- `apps/backend/monitoring-service`: Izleme orkestrasyonu, davranis olaylari, rapor ve hatirlatici veri akis.
-- `apps/python-services/vision-service`: Goruntu on-isleme ve davranis sinyal cikarimi.
-- `apps/python-services/ai-service`: Harici AI saglayici uyarlama katmani.
+- `frontend`: Kamera erisimi, dashboard, raporlar, hatirlatici UI, sohbet UI.
+- `backend/src/main/java/com/badhabinot/backend`: Tek Spring Boot backend; auth, user ve monitoring alanlarini tek uygulamada toplar.
+- `python-services/vision-service`: Goruntu on-isleme ve davranis sinyal cikarimi.
+- `python-services/ai-service`: Harici AI saglayici uyarlama katmani.
 
 ## Hizli Baslangic (Docker)
 
@@ -65,7 +64,7 @@ Tüm gercek ortam degiskenleri depo kokundeki `.env` dosyasinda toplanmistir. Se
 Temel endpointler:
 
 - Frontend: `http://localhost:3000`
-- API Gateway: `http://localhost:8080`
+- Backend API: `http://localhost:8080`
 - Health: `http://localhost:8080/actuator/health/readiness`
 
 Smoke test:
@@ -85,27 +84,27 @@ docker compose down
 Backend build:
 
 ```powershell
-mvn -B -ntp -DskipTests package
+mvn -B -ntp -f backend/pom.xml verify
 ```
 
 Frontend build:
 
 ```powershell
-cd apps/web/frontend-app
+cd frontend
 npm ci
 npm run build
 ```
 
-Python compile kontrolu:
+Python testleri:
 
 ```powershell
-cd apps/python-services/ai-service
-pip install -r requirements.txt
-python -m compileall app
+cd python-services/ai-service
+pip install -r requirements.txt -r requirements-dev.txt
+pytest tests
 
 cd ../vision-service
-pip install -r requirements.txt
-python -m compileall app
+pip install -r requirements.txt -r requirements-dev.txt
+pytest tests
 ```
 
 ## Git Dallanma Modeli (Turkce)
