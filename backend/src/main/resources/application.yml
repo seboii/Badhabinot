@@ -1,0 +1,105 @@
+server:
+  port: 8080
+  shutdown: graceful
+
+spring:
+  application:
+    name: badhabinot-backend
+  lifecycle:
+    timeout-per-shutdown-phase: 20s
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
+        format_sql: true
+  flyway:
+    enabled: false
+  data:
+    redis:
+      repositories:
+        enabled: false
+      host: ${SPRING_DATA_REDIS_HOST:localhost}
+      port: ${SPRING_DATA_REDIS_PORT:6379}
+      timeout: 2s
+  cache:
+    type: redis
+  jackson:
+    property-naming-strategy: SNAKE_CASE
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: always
+      group:
+        readiness:
+          include: readinessState,ping,pythonServices
+        liveness:
+          include: livenessState,ping
+  health:
+    readinessstate:
+      enabled: true
+    livenessstate:
+      enabled: true
+
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+
+security:
+  jwt:
+    issuer: ${SECURITY_JWT_ISSUER:badhabinot-backend}
+    secret: ${SECURITY_JWT_SECRET}
+    access-token-ttl: ${SECURITY_JWT_ACCESS_TOKEN_TTL:PT15M}
+    refresh-token-ttl: ${SECURITY_JWT_REFRESH_TOKEN_TTL:P30D}
+  internal:
+    api-key: ${INTERNAL_API_KEY:change-me-in-real-environments}
+
+app:
+  datasource:
+    auth:
+      url: ${AUTH_DATASOURCE_URL:jdbc:postgresql://localhost:5432/badhabinot_auth}
+      username: ${AUTH_DATASOURCE_USERNAME:${POSTGRES_USER:badhabinot}}
+      password: ${AUTH_DATASOURCE_PASSWORD:${POSTGRES_PASSWORD:badhabinot}}
+    user:
+      url: ${USER_DATASOURCE_URL:jdbc:postgresql://localhost:5432/badhabinot_user}
+      username: ${USER_DATASOURCE_USERNAME:${POSTGRES_USER:badhabinot}}
+      password: ${USER_DATASOURCE_PASSWORD:${POSTGRES_PASSWORD:badhabinot}}
+    monitoring:
+      url: ${MONITORING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/badhabinot_monitoring}
+      username: ${MONITORING_DATASOURCE_USERNAME:${POSTGRES_USER:badhabinot}}
+      password: ${MONITORING_DATASOURCE_PASSWORD:${POSTGRES_PASSWORD:badhabinot}}
+
+integration:
+  internal-api-key: ${INTERNAL_API_KEY:change-me-in-real-environments}
+  vision-service:
+    base-url: ${VISION_SERVICE_URL:http://localhost:8091}
+    connect-timeout: PT2S
+    read-timeout: ${VISION_SERVICE_READ_TIMEOUT:PT10S}
+  ai-service:
+    base-url: ${AI_SERVICE_URL:http://localhost:8092}
+    connect-timeout: PT2S
+    read-timeout: ${AI_SERVICE_READ_TIMEOUT:PT25S}
+
+user:
+  cache:
+    ttl: ${USER_CONTEXT_CACHE_TTL:PT5M}
+
+monitoring:
+  redis:
+    analysis-job-key-prefix: ${ANALYSIS_JOB_KEY_PREFIX:badhabinot:monitoring:analysis-job:}
+    analysis-job-ttl: ${ANALYSIS_JOB_CACHE_TTL:PT15M}
+
+services:
+  auth-service-uri: ${AUTH_SERVICE_URL:http://localhost:8080}
+  user-service-uri: ${USER_SERVICE_URL:http://localhost:8080}
+  monitoring-service-uri: ${MONITORING_SERVICE_URL:http://localhost:8080}
