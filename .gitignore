@@ -42,9 +42,9 @@ pnpm-debug.log*
 # =========================
 node_modules/
 **/node_modules/
-apps/web/frontend-app/dist/
-apps/web/frontend-app/.vite/
-apps/web/frontend-app/coverage/
+frontend/dist/
+frontend/.vite/
+frontend/coverage/
 **/.eslintcache
 **/.stylelintcache
 **/.turbo/
@@ -102,6 +102,7 @@ htmlcov/
 *.tar
 *.tar.gz
 *.docker.env
+docker-compose.override.yml
 
 # =========================
 # Altyapi ve gecici artefaktlar
