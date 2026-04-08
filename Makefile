@@ -30,15 +30,15 @@ smoke:
 	powershell -ExecutionPolicy Bypass -File infra/docker/scripts/smoke-test.ps1 -GatewayBaseUrl http://localhost:8080
 
 backend-build:
-	mvn -B -ntp -DskipTests package
+	mvn -B -ntp -f backend/pom.xml -DskipTests package
 
 frontend-build:
-	cd apps/web/frontend-app && npm ci && npm run build
+	cd frontend && npm ci && npm run build
 
 python-check:
-	pip install -r apps/python-services/ai-service/requirements.txt
-	python -m compileall apps/python-services/ai-service/app
-	pip install -r apps/python-services/vision-service/requirements.txt
-	python -m compileall apps/python-services/vision-service/app
+	pip install -r python-services/ai-service/requirements.txt
+	python -m compileall python-services/ai-service/app
+	pip install -r python-services/vision-service/requirements.txt
+	python -m compileall python-services/vision-service/app
 
 ci: backend-build frontend-build python-check

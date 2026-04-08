@@ -15,19 +15,12 @@ services:
     ports:
       - "${REDIS_PORT:-6379}:6379"
 
-  user-service:
+  backend:
     extends:
       file: ./infra/docker/compose/docker-compose.yml
-      service: user-service
+      service: backend
     ports:
-      - "${USER_SERVICE_PORT:-8082}:8082"
-
-  auth-service:
-    extends:
-      file: ./infra/docker/compose/docker-compose.yml
-      service: auth-service
-    ports:
-      - "${AUTH_SERVICE_PORT:-8081}:8081"
+      - "${BACKEND_PORT:-8080}:8080"
 
   ai-service:
     extends:
@@ -42,20 +35,6 @@ services:
       service: vision-service
     ports:
       - "${VISION_SERVICE_PORT:-8091}:8091"
-
-  monitoring-service:
-    extends:
-      file: ./infra/docker/compose/docker-compose.yml
-      service: monitoring-service
-    ports:
-      - "${MONITORING_SERVICE_PORT:-8083}:8083"
-
-  api-gateway:
-    extends:
-      file: ./infra/docker/compose/docker-compose.yml
-      service: api-gateway
-    ports:
-      - "${GATEWAY_PORT:-8080}:8080"
 
   frontend-app:
     extends:
