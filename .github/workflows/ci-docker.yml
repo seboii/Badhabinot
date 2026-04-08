@@ -1,0 +1,33 @@
+name: Docker Build CI
+
+on:
+  push:
+    branches: [main, develop]
+
+jobs:
+  build:
+    name: Build Service Images
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Prepare environment file for Compose
+        run: cp .env.example .env
+
+      - name: Validate primary Compose configuration
+        run: docker compose -f infra/docker/compose/docker-compose.yml config > /dev/null
+        continue-on-error: false
+
+      - name: Validate dev Compose configuration
+        run: docker compose -f infra/docker/compose/docker-compose.dev.yml config > /dev/null
+        continue-on-error: false
+
+      - name: Validate root Compose configuration
+        run: docker compose -f compose.yaml config > /dev/null
+        continue-on-error: false
+
+      - name: Build all service images
+        run: docker compose -f infra/docker/compose/docker-compose.yml build backend ai-service vision-service frontend-app
+        continue-on-error: false
