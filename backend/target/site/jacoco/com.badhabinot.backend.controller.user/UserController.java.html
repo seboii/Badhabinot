@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>UserController.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">BADHABINOT Backend</a> &gt; <a href="index.source.html" class="el_package">com.badhabinot.backend.controller.user</a> &gt; <span class="el_source">UserController.java</span></div><h1>UserController.java</h1><pre class="source lang-java linenums">package com.badhabinot.backend.controller.user;
+
+import com.badhabinot.backend.dto.user.ConsentResponse;
+import com.badhabinot.backend.dto.user.SettingsResponse;
+import com.badhabinot.backend.dto.user.UpdateConsentsRequest;
+import com.badhabinot.backend.dto.user.UpdateProfileRequest;
+import com.badhabinot.backend.dto.user.UpdateSettingsRequest;
+import com.badhabinot.backend.dto.user.UserContextResponse;
+import com.badhabinot.backend.dto.user.UserProfileResponse;
+import com.badhabinot.backend.service.user.UserContextService;
+import com.badhabinot.backend.security.CurrentUserClaims;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
+import org.springframework.http.HttpStatus;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+@RestController
+@RequestMapping
+@Tag(name = &quot;Users&quot;, description = &quot;User profile, settings, consent, and bootstrap APIs&quot;)
+public class UserController {
+
+    private final UserContextService userContextService;
+
+<span class="nc" id="L33">    public UserController(UserContextService userContextService) {</span>
+<span class="nc" id="L34">        this.userContextService = userContextService;</span>
+<span class="nc" id="L35">    }</span>
+
+    @GetMapping(&quot;/api/v1/users/me&quot;)
+    @Operation(summary = &quot;Return current user profile and settings&quot;, security = @SecurityRequirement(name = &quot;bearerAuth&quot;))
+    public UserContextResponse me(@AuthenticationPrincipal Jwt jwt) {
+<span class="nc" id="L40">        return userContextService.getContext(CurrentUserClaims.from(jwt));</span>
+    }
+
+    @PutMapping(&quot;/api/v1/users/me&quot;)
+    @Operation(summary = &quot;Update current user profile&quot;, security = @SecurityRequirement(name = &quot;bearerAuth&quot;))
+    public UserProfileResponse updateProfile(@AuthenticationPrincipal Jwt jwt, @Valid @RequestBody UpdateProfileRequest request) {
+<span class="nc" id="L46">        return userContextService.updateProfile(CurrentUserClaims.from(jwt), request);</span>
+    }
+
+    @GetMapping(&quot;/api/v1/users/me/settings&quot;)
+    @Operation(summary = &quot;Return current user settings&quot;, security = @SecurityRequirement(name = &quot;bearerAuth&quot;))
+    public SettingsResponse getSettings(@AuthenticationPrincipal Jwt jwt) {
+<span class="nc" id="L52">        return userContextService.getSettings(CurrentUserClaims.from(jwt));</span>
+    }
+
+    @PutMapping(&quot;/api/v1/users/me/settings&quot;)
+    @Operation(summary = &quot;Update current user settings&quot;, security = @SecurityRequirement(name = &quot;bearerAuth&quot;))
+    public SettingsResponse updateSettings(@AuthenticationPrincipal Jwt jwt, @Valid @RequestBody UpdateSettingsRequest request) {
+<span class="nc" id="L58">        return userContextService.updateSettings(CurrentUserClaims.from(jwt), request);</span>
+    }
+
+    @GetMapping(&quot;/api/v1/users/me/consents&quot;)
+    @Operation(summary = &quot;Return current user consents&quot;, security = @SecurityRequirement(name = &quot;bearerAuth&quot;))
+    public ConsentResponse getConsents(@AuthenticationPrincipal Jwt jwt) {
+<span class="nc" id="L64">        return userContextService.getConsents(CurrentUserClaims.from(jwt));</span>
+    }
+
+    @PutMapping(&quot;/api/v1/users/me/consents&quot;)
+    @Operation(summary = &quot;Update current user consents&quot;, security = @SecurityRequirement(name = &quot;bearerAuth&quot;))
+    public ConsentResponse updateConsents(@AuthenticationPrincipal Jwt jwt, @Valid @RequestBody UpdateConsentsRequest request) {
+<span class="nc" id="L70">        return userContextService.updateConsents(CurrentUserClaims.from(jwt), request);</span>
+    }
+}
+
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.12.202403310830</span></div></body></html>

@@ -1,0 +1,310 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>ChatContextBuilderService.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">BADHABINOT Backend</a> &gt; <a href="index.source.html" class="el_package">com.badhabinot.backend.service.monitoring</a> &gt; <span class="el_source">ChatContextBuilderService.java</span></div><h1>ChatContextBuilderService.java</h1><pre class="source lang-java linenums">package com.badhabinot.backend.service.monitoring;
+
+import com.badhabinot.backend.dto.monitoring.AiChatRequest;
+import com.badhabinot.backend.dto.monitoring.DailyReportResponse;
+import com.badhabinot.backend.dto.monitoring.InternalUserAnalysisContext;
+import com.badhabinot.backend.model.monitoring.BehaviorEvent;
+import com.badhabinot.backend.model.monitoring.DailyReport;
+import com.badhabinot.backend.model.monitoring.HydrationLog;
+import com.badhabinot.backend.model.monitoring.MonitoringSession;
+import com.badhabinot.backend.model.monitoring.ReminderEvent;
+import com.badhabinot.backend.repository.monitoring.BehaviorEventRepository;
+import com.badhabinot.backend.repository.monitoring.DailyReportRepository;
+import com.badhabinot.backend.repository.monitoring.HydrationLogRepository;
+import com.badhabinot.backend.repository.monitoring.MonitoringSessionRepository;
+import com.badhabinot.backend.repository.monitoring.ReminderEventRepository;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import java.time.Duration;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneId;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+import java.util.stream.Collectors;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.stereotype.Service;
+
+@Service
+public class ChatContextBuilderService {
+
+<span class="fc" id="L35">    private static final TypeReference&lt;Map&lt;String, Object&gt;&gt; MAP_TYPE = new TypeReference&lt;&gt;() {</span>
+    };
+
+    private final BehaviorEventRepository behaviorEventRepository;
+    private final ReminderEventRepository reminderEventRepository;
+    private final DailyReportRepository dailyReportRepository;
+    private final MonitoringSessionRepository monitoringSessionRepository;
+    private final HydrationLogRepository hydrationLogRepository;
+    private final ObjectMapper objectMapper;
+
+    public ChatContextBuilderService(
+            BehaviorEventRepository behaviorEventRepository,
+            ReminderEventRepository reminderEventRepository,
+            DailyReportRepository dailyReportRepository,
+            MonitoringSessionRepository monitoringSessionRepository,
+            HydrationLogRepository hydrationLogRepository,
+            ObjectMapper objectMapper
+<span class="nc" id="L52">    ) {</span>
+<span class="nc" id="L53">        this.behaviorEventRepository = behaviorEventRepository;</span>
+<span class="nc" id="L54">        this.reminderEventRepository = reminderEventRepository;</span>
+<span class="nc" id="L55">        this.dailyReportRepository = dailyReportRepository;</span>
+<span class="nc" id="L56">        this.monitoringSessionRepository = monitoringSessionRepository;</span>
+<span class="nc" id="L57">        this.hydrationLogRepository = hydrationLogRepository;</span>
+<span class="nc" id="L58">        this.objectMapper = objectMapper;</span>
+<span class="nc" id="L59">    }</span>
+
+    public AiChatRequest.Context build(
+            UUID userId,
+            InternalUserAnalysisContext userContext,
+            LocalDate reportDate,
+            DailyReportResponse currentReport
+    ) {
+<span class="nc" id="L67">        ZoneId zoneId = zoneId(userContext.timezone());</span>
+<span class="nc" id="L68">        LocalDate fromDate = reportDate.minusDays(6);</span>
+<span class="nc" id="L69">        Instant rangeStart = fromDate.atStartOfDay(zoneId).toInstant();</span>
+<span class="nc" id="L70">        Instant rangeEnd = reportDate.plusDays(1).atStartOfDay(zoneId).toInstant();</span>
+
+<span class="nc" id="L72">        List&lt;BehaviorEvent&gt; recentEvents = behaviorEventRepository.findByUserIdOrderByOccurredAtDesc(</span>
+                userId,
+<span class="nc" id="L74">                PageRequest.of(0, 20)</span>
+        );
+<span class="nc" id="L76">        List&lt;ReminderEvent&gt; recentReminders = reminderEventRepository.findByUserIdOrderByOccurredAtDesc(</span>
+                userId,
+<span class="nc" id="L78">                PageRequest.of(0, 16)</span>
+        );
+<span class="nc" id="L80">        List&lt;MonitoringSession&gt; recentSessions = monitoringSessionRepository.findByUserIdOrderByStartedAtDesc(</span>
+                userId,
+<span class="nc" id="L82">                PageRequest.of(0, 12)</span>
+        );
+<span class="nc" id="L84">        List&lt;HydrationLog&gt; hydrationLogsLast7Days = hydrationLogRepository.findByUserIdAndOccurredAtBetweenOrderByOccurredAtAsc(</span>
+                userId,
+                rangeStart,
+                rangeEnd
+        );
+
+<span class="nc" id="L90">        List&lt;DailyReport&gt; reportHistory = dailyReportRepository.findByUserIdAndReportDateBetweenOrderByReportDateDesc(</span>
+                userId,
+                fromDate,
+                reportDate
+        );
+<span class="nc" id="L95">        List&lt;AiChatRequest.DailySnapshot&gt; dailySnapshots = reportHistory.stream()</span>
+<span class="nc" id="L96">                .sorted(Comparator.comparing(DailyReport::getReportDate).reversed())</span>
+<span class="nc" id="L97">                .limit(7)</span>
+<span class="nc" id="L98">                .map(this::toDailySnapshot)</span>
+<span class="nc" id="L99">                .toList();</span>
+
+<span class="nc" id="L101">        DailyReport previousReport = dailyReportRepository.findFirstByUserIdAndReportDateBeforeOrderByReportDateDesc(</span>
+                        userId,
+                        reportDate
+                )
+<span class="nc" id="L105">                .orElse(null);</span>
+
+<span class="nc" id="L107">        Map&lt;String, Integer&gt; recentEventTypeCounts = toCountMap(</span>
+<span class="nc" id="L108">                recentEvents.stream()</span>
+<span class="nc" id="L109">                        .map(BehaviorEvent::getEventType)</span>
+<span class="nc" id="L110">                        .toList()</span>
+        );
+<span class="nc" id="L112">        Map&lt;String, Integer&gt; recentReminderTypeCounts = toCountMap(</span>
+<span class="nc" id="L113">                recentReminders.stream()</span>
+<span class="nc" id="L114">                        .map(ReminderEvent::getReminderType)</span>
+<span class="nc" id="L115">                        .toList()</span>
+        );
+
+<span class="nc" id="L118">        int totalSessionsLast7Days = (int) recentSessions.stream()</span>
+<span class="nc bnc" id="L119" title="All 4 branches missed.">                .filter(session -&gt; !session.getStartedAt().isBefore(rangeStart) &amp;&amp; session.getStartedAt().isBefore(rangeEnd))</span>
+<span class="nc" id="L120">                .count();</span>
+<span class="nc" id="L121">        int totalSessionMinutesLast7Days = recentSessions.stream()</span>
+<span class="nc bnc" id="L122" title="All 4 branches missed.">                .filter(session -&gt; !session.getStartedAt().isBefore(rangeStart) &amp;&amp; session.getStartedAt().isBefore(rangeEnd))</span>
+<span class="nc" id="L123">                .mapToInt(session -&gt; (int) sessionDurationMinutes(session))</span>
+<span class="nc" id="L124">                .sum();</span>
+<span class="nc" id="L125">        int hydrationLast7DaysMl = hydrationLogsLast7Days.stream().mapToInt(HydrationLog::getAmountMl).sum();</span>
+<span class="nc" id="L126">        int analysesCompletedLast7Days = reportHistory.stream().mapToInt(DailyReport::getAnalysesCompleted).sum();</span>
+
+<span class="nc" id="L128">        List&lt;String&gt; dataGaps = buildDataGaps(currentReport, reportHistory, recentEvents, recentReminders, recentSessions);</span>
+<span class="nc" id="L129">        String comparison = comparisonToPreviousDay(currentReport, previousReport);</span>
+
+<span class="nc" id="L131">        List&lt;AiChatRequest.Fact&gt; facts = buildFacts(</span>
+                currentReport,
+                analysesCompletedLast7Days,
+                hydrationLast7DaysMl,
+                totalSessionsLast7Days,
+                totalSessionMinutesLast7Days,
+                comparison
+        );
+
+<span class="nc" id="L140">        return new AiChatRequest.Context(</span>
+<span class="nc" id="L141">                currentReport.hydrationProgressMl(),</span>
+<span class="nc" id="L142">                currentReport.waterGoalMl(),</span>
+<span class="nc" id="L143">                currentReport.analysesCompleted(),</span>
+<span class="nc" id="L144">                currentReport.postureAlertCount(),</span>
+<span class="nc" id="L145">                currentReport.handMovementCount(),</span>
+<span class="nc" id="L146">                currentReport.smokingLikeCount(),</span>
+<span class="nc" id="L147">                currentReport.reminderCount(),</span>
+<span class="nc" id="L148">                currentReport.poorPostureRatio(),</span>
+<span class="nc" id="L149">                currentReport.summary(),</span>
+<span class="nc" id="L150">                currentReport.recommendations(),</span>
+                facts,
+<span class="nc" id="L152">                recentEvents.stream().map(this::toEvent).toList(),</span>
+<span class="nc" id="L153">                recentReminders.stream().map(this::toReminder).toList(),</span>
+                dailySnapshots,
+                recentEventTypeCounts,
+                recentReminderTypeCounts,
+<span class="nc" id="L157">                recentSessions.stream().map(this::toSessionSnapshot).toList(),</span>
+                totalSessionsLast7Days,
+                totalSessionMinutesLast7Days,
+                hydrationLast7DaysMl,
+                analysesCompletedLast7Days,
+                comparison,
+                dataGaps
+        );
+    }
+
+    private List&lt;AiChatRequest.Fact&gt; buildFacts(
+            DailyReportResponse currentReport,
+            int analysesCompletedLast7Days,
+            int hydrationLast7DaysMl,
+            int totalSessionsLast7Days,
+            int totalSessionMinutesLast7Days,
+            String comparison
+    ) {
+<span class="nc" id="L175">        return List.of(</span>
+<span class="nc" id="L176">                new AiChatRequest.Fact(&quot;report_date&quot;, currentReport.reportDate().toString()),</span>
+<span class="nc" id="L177">                new AiChatRequest.Fact(&quot;hydration_progress_ml&quot;, String.valueOf(currentReport.hydrationProgressMl())),</span>
+<span class="nc" id="L178">                new AiChatRequest.Fact(&quot;water_goal_ml&quot;, String.valueOf(currentReport.waterGoalMl())),</span>
+<span class="nc" id="L179">                new AiChatRequest.Fact(&quot;posture_alert_count&quot;, String.valueOf(currentReport.postureAlertCount())),</span>
+<span class="nc" id="L180">                new AiChatRequest.Fact(&quot;hand_movement_count&quot;, String.valueOf(currentReport.handMovementCount())),</span>
+<span class="nc" id="L181">                new AiChatRequest.Fact(&quot;smoking_like_count&quot;, String.valueOf(currentReport.smokingLikeCount())),</span>
+<span class="nc" id="L182">                new AiChatRequest.Fact(&quot;analyses_completed_last_7_days&quot;, String.valueOf(analysesCompletedLast7Days)),</span>
+<span class="nc" id="L183">                new AiChatRequest.Fact(&quot;hydration_last_7_days_ml&quot;, String.valueOf(hydrationLast7DaysMl)),</span>
+<span class="nc" id="L184">                new AiChatRequest.Fact(&quot;total_sessions_last_7_days&quot;, String.valueOf(totalSessionsLast7Days)),</span>
+<span class="nc" id="L185">                new AiChatRequest.Fact(&quot;total_session_minutes_last_7_days&quot;, String.valueOf(totalSessionMinutesLast7Days)),</span>
+                new AiChatRequest.Fact(&quot;comparison_to_previous_day&quot;, comparison)
+        );
+    }
+
+    private List&lt;String&gt; buildDataGaps(
+            DailyReportResponse currentReport,
+            List&lt;DailyReport&gt; reportHistory,
+            List&lt;BehaviorEvent&gt; events,
+            List&lt;ReminderEvent&gt; reminders,
+            List&lt;MonitoringSession&gt; sessions
+    ) {
+<span class="nc" id="L197">        List&lt;String&gt; gaps = new ArrayList&lt;&gt;();</span>
+<span class="nc bnc" id="L198" title="All 2 branches missed.">        if (currentReport.analysesCompleted() == 0) {</span>
+<span class="nc" id="L199">            gaps.add(&quot;No analysis frames were processed for the requested day.&quot;);</span>
+        }
+<span class="nc bnc" id="L201" title="All 2 branches missed.">        if (reportHistory.size() &lt; 2) {</span>
+<span class="nc" id="L202">            gaps.add(&quot;Historical comparison is limited because fewer than two daily reports are available.&quot;);</span>
+        }
+<span class="nc bnc" id="L204" title="All 2 branches missed.">        if (events.isEmpty()) {</span>
+<span class="nc" id="L205">            gaps.add(&quot;Recent behavior event history is empty.&quot;);</span>
+        }
+<span class="nc bnc" id="L207" title="All 2 branches missed.">        if (reminders.isEmpty()) {</span>
+<span class="nc" id="L208">            gaps.add(&quot;No recent reminder history is available.&quot;);</span>
+        }
+<span class="nc bnc" id="L210" title="All 2 branches missed.">        if (sessions.isEmpty()) {</span>
+<span class="nc" id="L211">            gaps.add(&quot;No monitoring session history is available.&quot;);</span>
+        }
+<span class="nc" id="L213">        return gaps;</span>
+    }
+
+    private String comparisonToPreviousDay(DailyReportResponse currentReport, DailyReport previousReport) {
+<span class="nc bnc" id="L217" title="All 2 branches missed.">        if (previousReport == null) {</span>
+<span class="nc" id="L218">            return &quot;No previous daily report exists for direct day-over-day comparison.&quot;;</span>
+        }
+<span class="nc" id="L220">        int postureDelta = currentReport.postureAlertCount() - previousReport.getPostureAlertCount();</span>
+<span class="nc" id="L221">        int hydrationDelta = currentReport.hydrationProgressMl() - previousReport.getHydrationProgressMl();</span>
+<span class="nc" id="L222">        int smokingDelta = currentReport.smokingLikeCount() - previousReport.getSmokingLikeCount();</span>
+
+<span class="nc" id="L224">        return String.format(</span>
+                &quot;Compared with %s: posture alerts %+d, hydration %+d ml, smoking-like cues %+d.&quot;,
+<span class="nc" id="L226">                previousReport.getReportDate(),</span>
+<span class="nc" id="L227">                postureDelta,</span>
+<span class="nc" id="L228">                hydrationDelta,</span>
+<span class="nc" id="L229">                smokingDelta</span>
+        );
+    }
+
+    private Map&lt;String, Integer&gt; toCountMap(List&lt;String&gt; values) {
+<span class="nc" id="L234">        return values.stream()</span>
+<span class="nc" id="L235">                .collect(Collectors.toMap(</span>
+<span class="nc" id="L236">                        value -&gt; value,</span>
+<span class="nc" id="L237">                        value -&gt; 1,</span>
+                        Integer::sum,
+                        LinkedHashMap::new
+                ));
+    }
+
+    private AiChatRequest.Event toEvent(BehaviorEvent event) {
+<span class="nc" id="L244">        return new AiChatRequest.Event(</span>
+<span class="nc" id="L245">                event.getEventType(),</span>
+<span class="nc" id="L246">                event.getConfidence().doubleValue(),</span>
+<span class="nc" id="L247">                event.getSeverity(),</span>
+<span class="nc" id="L248">                event.getInterpretation(),</span>
+<span class="nc" id="L249">                event.getOccurredAt(),</span>
+<span class="nc" id="L250">                readMap(event.getEvidenceJson())</span>
+        );
+    }
+
+    private AiChatRequest.Reminder toReminder(ReminderEvent reminder) {
+<span class="nc" id="L255">        return new AiChatRequest.Reminder(</span>
+<span class="nc" id="L256">                reminder.getReminderType(),</span>
+<span class="nc" id="L257">                reminder.getMessage(),</span>
+<span class="nc" id="L258">                reminder.getTriggerReason(),</span>
+<span class="nc" id="L259">                reminder.getOccurredAt()</span>
+        );
+    }
+
+    private AiChatRequest.DailySnapshot toDailySnapshot(DailyReport report) {
+<span class="nc" id="L264">        return new AiChatRequest.DailySnapshot(</span>
+<span class="nc" id="L265">                report.getReportDate(),</span>
+<span class="nc" id="L266">                report.getAnalysesCompleted(),</span>
+<span class="nc" id="L267">                report.getPostureAlertCount(),</span>
+<span class="nc" id="L268">                report.getHandMovementCount(),</span>
+<span class="nc" id="L269">                report.getSmokingLikeCount(),</span>
+<span class="nc" id="L270">                report.getReminderCount(),</span>
+<span class="nc" id="L271">                report.getHydrationProgressMl(),</span>
+<span class="nc" id="L272">                report.getWaterGoalMl(),</span>
+<span class="nc" id="L273">                report.getPoorPostureRatio().doubleValue(),</span>
+<span class="nc" id="L274">                report.getSummary()</span>
+        );
+    }
+
+    private AiChatRequest.SessionSnapshot toSessionSnapshot(MonitoringSession session) {
+<span class="nc" id="L279">        return new AiChatRequest.SessionSnapshot(</span>
+<span class="nc" id="L280">                session.getId().toString(),</span>
+<span class="nc" id="L281">                session.getStatus().name(),</span>
+<span class="nc" id="L282">                session.getStartedAt(),</span>
+<span class="nc" id="L283">                session.getEndedAt(),</span>
+<span class="nc" id="L284">                sessionDurationMinutes(session)</span>
+        );
+    }
+
+    private long sessionDurationMinutes(MonitoringSession session) {
+<span class="nc bnc" id="L289" title="All 2 branches missed.">        Instant end = session.getEndedAt() == null ? Instant.now() : session.getEndedAt();</span>
+<span class="nc" id="L290">        return Math.max(0, Duration.between(session.getStartedAt(), end).toMinutes());</span>
+    }
+
+    private Map&lt;String, Object&gt; readMap(String payload) {
+        try {
+<span class="nc" id="L295">            return objectMapper.readValue(payload, MAP_TYPE);</span>
+<span class="nc" id="L296">        } catch (Exception exception) {</span>
+<span class="nc" id="L297">            return Map.of();</span>
+        }
+    }
+
+    private ZoneId zoneId(String timezone) {
+        try {
+<span class="nc" id="L303">            return ZoneId.of(timezone);</span>
+<span class="nc" id="L304">        } catch (RuntimeException exception) {</span>
+<span class="nc" id="L305">            return ZoneId.of(&quot;UTC&quot;);</span>
+        }
+    }
+}
+
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.12.202403310830</span></div></body></html>

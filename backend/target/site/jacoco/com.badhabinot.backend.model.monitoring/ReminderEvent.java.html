@@ -1,0 +1,142 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>ReminderEvent.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">BADHABINOT Backend</a> &gt; <a href="index.source.html" class="el_package">com.badhabinot.backend.model.monitoring</a> &gt; <span class="el_source">ReminderEvent.java</span></div><h1>ReminderEvent.java</h1><pre class="source lang-java linenums">package com.badhabinot.backend.model.monitoring;
+
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.Id;
+import jakarta.persistence.PrePersist;
+import jakarta.persistence.Table;
+import java.time.Instant;
+import java.util.UUID;
+
+@Entity
+@Table(name = &quot;reminder_events&quot;)
+public class ReminderEvent {
+
+    @Id
+    private UUID id;
+
+    @Column(name = &quot;user_id&quot;, nullable = false)
+    private UUID userId;
+
+    @Column(name = &quot;session_id&quot;)
+    private UUID sessionId;
+
+    @Column(name = &quot;reminder_type&quot;, nullable = false, length = 64)
+    private String reminderType;
+
+    @Column(nullable = false, length = 32)
+    private String source;
+
+    @Column(nullable = false, length = 16)
+    private String severity;
+
+    @Column(nullable = false, length = 255)
+    private String message;
+
+    @Column(name = &quot;trigger_reason&quot;, nullable = false, length = 255)
+    private String triggerReason;
+
+    @Column(name = &quot;metadata_json&quot;, nullable = false, columnDefinition = &quot;TEXT&quot;)
+    private String metadataJson;
+
+    @Column(name = &quot;occurred_at&quot;, nullable = false)
+    private Instant occurredAt;
+
+    @Column(name = &quot;created_at&quot;, nullable = false)
+    private Instant createdAt;
+
+<span class="nc" id="L48">    protected ReminderEvent() {</span>
+<span class="nc" id="L49">    }</span>
+
+    private ReminderEvent(
+            UUID id,
+            UUID userId,
+            UUID sessionId,
+            String reminderType,
+            String source,
+            String severity,
+            String message,
+            String triggerReason,
+            String metadataJson,
+            Instant occurredAt
+<span class="fc" id="L62">    ) {</span>
+<span class="fc" id="L63">        this.id = id;</span>
+<span class="fc" id="L64">        this.userId = userId;</span>
+<span class="fc" id="L65">        this.sessionId = sessionId;</span>
+<span class="fc" id="L66">        this.reminderType = reminderType;</span>
+<span class="fc" id="L67">        this.source = source;</span>
+<span class="fc" id="L68">        this.severity = severity;</span>
+<span class="fc" id="L69">        this.message = message;</span>
+<span class="fc" id="L70">        this.triggerReason = triggerReason;</span>
+<span class="fc" id="L71">        this.metadataJson = metadataJson;</span>
+<span class="fc" id="L72">        this.occurredAt = occurredAt;</span>
+<span class="fc" id="L73">    }</span>
+
+    public static ReminderEvent create(
+            UUID userId,
+            UUID sessionId,
+            String reminderType,
+            String source,
+            String severity,
+            String message,
+            String triggerReason,
+            String metadataJson,
+            Instant occurredAt
+    ) {
+<span class="fc" id="L86">        return new ReminderEvent(</span>
+<span class="fc" id="L87">                UUID.randomUUID(),</span>
+                userId,
+                sessionId,
+                reminderType,
+                source,
+                severity,
+                message,
+                triggerReason,
+                metadataJson,
+                occurredAt
+        );
+    }
+
+    @PrePersist
+    void onCreate() {
+<span class="nc" id="L102">        createdAt = Instant.now();</span>
+<span class="nc" id="L103">    }</span>
+
+    public UUID getId() {
+<span class="fc" id="L106">        return id;</span>
+    }
+
+    public UUID getSessionId() {
+<span class="fc" id="L110">        return sessionId;</span>
+    }
+
+    public String getReminderType() {
+<span class="fc" id="L114">        return reminderType;</span>
+    }
+
+    public String getSource() {
+<span class="fc" id="L118">        return source;</span>
+    }
+
+    public String getSeverity() {
+<span class="fc" id="L122">        return severity;</span>
+    }
+
+    public String getMessage() {
+<span class="fc" id="L126">        return message;</span>
+    }
+
+    public String getTriggerReason() {
+<span class="fc" id="L130">        return triggerReason;</span>
+    }
+
+    public String getMetadataJson() {
+<span class="fc" id="L134">        return metadataJson;</span>
+    }
+
+    public Instant getOccurredAt() {
+<span class="fc" id="L138">        return occurredAt;</span>
+    }
+}
+
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.12.202403310830</span></div></body></html>

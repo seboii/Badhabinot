@@ -1,0 +1,266 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>DailyReportService.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">BADHABINOT Backend</a> &gt; <a href="index.source.html" class="el_package">com.badhabinot.backend.service.monitoring</a> &gt; <span class="el_source">DailyReportService.java</span></div><h1>DailyReportService.java</h1><pre class="source lang-java linenums">package com.badhabinot.backend.service.monitoring;
+
+import com.badhabinot.backend.dto.monitoring.ActivityItemResponse;
+import com.badhabinot.backend.dto.monitoring.BehaviorEventResponse;
+import com.badhabinot.backend.dto.monitoring.DailyReportResponse;
+import com.badhabinot.backend.dto.monitoring.InternalUserAnalysisContext;
+import com.badhabinot.backend.dto.monitoring.ReminderEventResponse;
+import com.badhabinot.backend.model.monitoring.ActivityFeedItem;
+import com.badhabinot.backend.model.monitoring.AnalysisJob;
+import com.badhabinot.backend.model.monitoring.BehaviorEvent;
+import com.badhabinot.backend.model.monitoring.DailyReport;
+import com.badhabinot.backend.model.monitoring.HydrationLog;
+import com.badhabinot.backend.model.monitoring.ReminderEvent;
+import com.badhabinot.backend.repository.monitoring.ActivityFeedRepository;
+import com.badhabinot.backend.repository.monitoring.AnalysisJobRepository;
+import com.badhabinot.backend.repository.monitoring.BehaviorEventRepository;
+import com.badhabinot.backend.repository.monitoring.DailyReportRepository;
+import com.badhabinot.backend.repository.monitoring.HydrationLogRepository;
+import com.badhabinot.backend.repository.monitoring.ReminderEventRepository;
+import com.badhabinot.backend.service.user.UserContextService;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneId;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+@Service
+public class DailyReportService {
+
+<span class="fc" id="L38">    private static final TypeReference&lt;List&lt;String&gt;&gt; STRING_LIST = new TypeReference&lt;&gt;() {</span>
+    };
+<span class="fc" id="L40">    private static final TypeReference&lt;Map&lt;String, Object&gt;&gt; MAP_TYPE = new TypeReference&lt;&gt;() {</span>
+    };
+
+    private final DailyReportRepository dailyReportRepository;
+    private final BehaviorEventRepository behaviorEventRepository;
+    private final ReminderEventRepository reminderEventRepository;
+    private final HydrationLogRepository hydrationLogRepository;
+    private final ActivityFeedRepository activityFeedRepository;
+    private final AnalysisJobRepository analysisJobRepository;
+    private final UserContextService userContextService;
+    private final BehaviorEventService behaviorEventService;
+    private final ReminderEngineService reminderEngineService;
+    private final ObjectMapper objectMapper;
+
+    public DailyReportService(
+            DailyReportRepository dailyReportRepository,
+            BehaviorEventRepository behaviorEventRepository,
+            ReminderEventRepository reminderEventRepository,
+            HydrationLogRepository hydrationLogRepository,
+            ActivityFeedRepository activityFeedRepository,
+            AnalysisJobRepository analysisJobRepository,
+            UserContextService userContextService,
+            BehaviorEventService behaviorEventService,
+            ReminderEngineService reminderEngineService,
+            ObjectMapper objectMapper
+<span class="fc" id="L65">    ) {</span>
+<span class="fc" id="L66">        this.dailyReportRepository = dailyReportRepository;</span>
+<span class="fc" id="L67">        this.behaviorEventRepository = behaviorEventRepository;</span>
+<span class="fc" id="L68">        this.reminderEventRepository = reminderEventRepository;</span>
+<span class="fc" id="L69">        this.hydrationLogRepository = hydrationLogRepository;</span>
+<span class="fc" id="L70">        this.activityFeedRepository = activityFeedRepository;</span>
+<span class="fc" id="L71">        this.analysisJobRepository = analysisJobRepository;</span>
+<span class="fc" id="L72">        this.userContextService = userContextService;</span>
+<span class="fc" id="L73">        this.behaviorEventService = behaviorEventService;</span>
+<span class="fc" id="L74">        this.reminderEngineService = reminderEngineService;</span>
+<span class="fc" id="L75">        this.objectMapper = objectMapper;</span>
+<span class="fc" id="L76">    }</span>
+
+    @Transactional(transactionManager = &quot;monitoringTransactionManager&quot;)
+    public DailyReportResponse getDailyReport(Jwt jwt, LocalDate requestedDate) {
+<span class="nc" id="L80">        UUID userId = UUID.fromString(jwt.getSubject());</span>
+<span class="nc" id="L81">        InternalUserAnalysisContext context = userContextService.getMonitoringAnalysisContext(userId);</span>
+<span class="nc bnc" id="L82" title="All 2 branches missed.">        LocalDate reportDate = requestedDate == null ? LocalDate.now(zoneId(context.timezone())) : requestedDate;</span>
+<span class="nc" id="L83">        return getDailyReport(userId, reportDate, context);</span>
+    }
+
+    @Transactional(transactionManager = &quot;monitoringTransactionManager&quot;)
+    public DailyReportResponse getDailyReport(UUID userId, LocalDate reportDate, InternalUserAnalysisContext context) {
+<span class="fc" id="L88">        ZoneId zoneId = zoneId(context.timezone());</span>
+<span class="fc" id="L89">        Instant dayStart = reportDate.atStartOfDay(zoneId).toInstant();</span>
+<span class="fc" id="L90">        Instant dayEnd = reportDate.plusDays(1).atStartOfDay(zoneId).toInstant();</span>
+
+<span class="fc" id="L92">        List&lt;AnalysisJob&gt; analyses = analysisJobRepository.findByUserIdAndCreatedAtBetweenOrderByCreatedAtAsc(userId, dayStart, dayEnd);</span>
+<span class="fc" id="L93">        List&lt;BehaviorEvent&gt; events = behaviorEventRepository.findByUserIdAndOccurredAtBetweenOrderByOccurredAtAsc(userId, dayStart, dayEnd);</span>
+<span class="fc" id="L94">        List&lt;ReminderEvent&gt; reminders = reminderEventRepository.findByUserIdAndOccurredAtBetweenOrderByOccurredAtAsc(userId, dayStart, dayEnd);</span>
+<span class="fc" id="L95">        List&lt;HydrationLog&gt; hydrationLogs = hydrationLogRepository.findByUserIdAndOccurredAtBetweenOrderByOccurredAtAsc(userId, dayStart, dayEnd);</span>
+<span class="fc" id="L96">        List&lt;ActivityFeedItem&gt; timeline = activityFeedRepository.findByUserIdAndOccurredAtBetweenOrderByOccurredAtAsc(userId, dayStart, dayEnd);</span>
+
+<span class="fc" id="L98">        int postureAlertCount = (int) events.stream().filter(event -&gt; &quot;poor_posture&quot;.equals(event.getEventType())).count();</span>
+<span class="fc" id="L99">        int handMovementCount = (int) events.stream().filter(event -&gt; &quot;hand_movement_pattern&quot;.equals(event.getEventType())).count();</span>
+<span class="fc" id="L100">        int smokingLikeCount = (int) events.stream().filter(event -&gt; &quot;smoking_like_gesture&quot;.equals(event.getEventType())).count();</span>
+<span class="fc" id="L101">        int reminderCount = reminders.size();</span>
+<span class="fc" id="L102">        int hydrationProgressMl = hydrationLogs.stream().mapToInt(HydrationLog::getAmountMl).sum();</span>
+<span class="fc" id="L103">        long poorPostureFrames = analyses.stream().filter(job -&gt; &quot;poor&quot;.equalsIgnoreCase(job.getPostureState())).count();</span>
+<span class="fc bfc" id="L104" title="All 2 branches covered.">        double poorPostureRatio = analyses.isEmpty() ? 0.0 : (double) poorPostureFrames / analyses.size();</span>
+
+<span class="fc" id="L106">        List&lt;String&gt; recommendations = buildRecommendations(</span>
+                postureAlertCount,
+                handMovementCount,
+                smokingLikeCount,
+                hydrationProgressMl,
+<span class="fc" id="L111">                context.waterGoalMl(),</span>
+                poorPostureRatio
+        );
+<span class="fc" id="L114">        String summary = buildSummary(</span>
+<span class="fc" id="L115">                analyses.size(),</span>
+                postureAlertCount,
+                handMovementCount,
+                smokingLikeCount,
+                reminderCount,
+                hydrationProgressMl,
+<span class="fc" id="L121">                context.waterGoalMl(),</span>
+                poorPostureRatio
+        );
+
+<span class="fc" id="L125">        DailyReport report = dailyReportRepository.findByUserIdAndReportDate(userId, reportDate)</span>
+<span class="fc" id="L126">                .orElseGet(() -&gt; DailyReport.create(userId, reportDate));</span>
+<span class="fc" id="L127">        report.refresh(</span>
+<span class="fc" id="L128">                analyses.size(),</span>
+                postureAlertCount,
+                handMovementCount,
+                smokingLikeCount,
+                reminderCount,
+                hydrationProgressMl,
+<span class="fc" id="L134">                context.waterGoalMl(),</span>
+                poorPostureRatio,
+                summary,
+<span class="fc" id="L137">                writeJson(recommendations),</span>
+<span class="fc" id="L138">                Instant.now()</span>
+        );
+<span class="fc" id="L140">        report = dailyReportRepository.save(report);</span>
+
+<span class="fc" id="L142">        List&lt;BehaviorEventResponse&gt; keyEvents = events.stream()</span>
+<span class="fc" id="L143">                .sorted(Comparator.comparing(BehaviorEvent::getOccurredAt).reversed()</span>
+<span class="pc" id="L144">                        .thenComparing(event -&gt; event.getConfidence().doubleValue(), Comparator.reverseOrder()))</span>
+<span class="fc" id="L145">                .limit(8)</span>
+<span class="fc" id="L146">                .map(behaviorEventService::toResponse)</span>
+<span class="fc" id="L147">                .toList();</span>
+
+<span class="fc" id="L149">        List&lt;ReminderEventResponse&gt; reminderResponses = reminders.stream()</span>
+<span class="fc" id="L150">                .sorted(Comparator.comparing(ReminderEvent::getOccurredAt).reversed())</span>
+<span class="fc" id="L151">                .limit(8)</span>
+<span class="fc" id="L152">                .map(reminderEngineService::toResponse)</span>
+<span class="fc" id="L153">                .toList();</span>
+
+<span class="fc" id="L155">        return new DailyReportResponse(</span>
+<span class="fc" id="L156">                report.getId(),</span>
+                reportDate,
+<span class="fc" id="L158">                analyses.size(),</span>
+                postureAlertCount,
+                handMovementCount,
+                smokingLikeCount,
+                reminderCount,
+                hydrationProgressMl,
+<span class="fc" id="L164">                context.waterGoalMl(),</span>
+<span class="fc" id="L165">                round(poorPostureRatio),</span>
+<span class="fc" id="L166">                report.getSummary(),</span>
+<span class="fc" id="L167">                readStringList(report.getRecommendationsJson()),</span>
+                keyEvents,
+                reminderResponses,
+<span class="fc" id="L170">                timeline.stream().sorted(Comparator.comparing(ActivityFeedItem::getOccurredAt).reversed()).limit(20).map(this::toActivityResponse).toList(),</span>
+<span class="fc" id="L171">                report.getGeneratedAt()</span>
+        );
+    }
+
+    private List&lt;String&gt; buildRecommendations(
+            int postureAlertCount,
+            int handMovementCount,
+            int smokingLikeCount,
+            int hydrationProgressMl,
+            int waterGoalMl,
+            double poorPostureRatio
+    ) {
+<span class="fc" id="L183">        List&lt;String&gt; recommendations = new ArrayList&lt;&gt;();</span>
+<span class="pc bpc" id="L184" title="1 of 4 branches missed.">        if (postureAlertCount &gt; 0 || poorPostureRatio &gt;= 0.35) {</span>
+<span class="fc" id="L185">            recommendations.add(&quot;Schedule a posture reset every 30 to 45 minutes and lift the display closer to eye level.&quot;);</span>
+        }
+<span class="pc bpc" id="L187" title="1 of 2 branches missed.">        if (handMovementCount &gt;= 3) {</span>
+<span class="nc" id="L188">            recommendations.add(&quot;Keep hands occupied with a low-friction substitute to reduce repetitive hand-to-face movement.&quot;);</span>
+        }
+<span class="pc bpc" id="L190" title="1 of 2 branches missed.">        if (smokingLikeCount &gt; 0) {</span>
+<span class="nc" id="L191">            recommendations.add(&quot;Review the times of the smoking-like cues and log what was happening immediately before them.&quot;);</span>
+        }
+<span class="fc bfc" id="L193" title="All 2 branches covered.">        if (hydrationProgressMl &lt; (waterGoalMl * 0.7)) {</span>
+<span class="fc" id="L194">            recommendations.add(&quot;Hydration stayed below the daily target. Add a water checkpoint earlier in the work block.&quot;);</span>
+        }
+<span class="fc bfc" id="L196" title="All 2 branches covered.">        if (recommendations.isEmpty()) {</span>
+<span class="fc" id="L197">            recommendations.add(&quot;The tracked patterns stayed stable today. Keep the same monitoring cadence tomorrow.&quot;);</span>
+        }
+<span class="fc" id="L199">        return recommendations;</span>
+    }
+
+    private String buildSummary(
+            int analysesCompleted,
+            int postureAlertCount,
+            int handMovementCount,
+            int smokingLikeCount,
+            int reminderCount,
+            int hydrationProgressMl,
+            int waterGoalMl,
+            double poorPostureRatio
+    ) {
+<span class="fc" id="L212">        return String.format(</span>
+                &quot;The system processed %d analysis frames today. It recorded %d posture alerts, %d hand-movement events, %d smoking-like cues, and %d reminders. Hydration reached %d of %d ml, and poor-posture frames accounted for %.0f%% of analyzed captures.&quot;,
+<span class="fc" id="L214">                analysesCompleted,</span>
+<span class="fc" id="L215">                postureAlertCount,</span>
+<span class="fc" id="L216">                handMovementCount,</span>
+<span class="fc" id="L217">                smokingLikeCount,</span>
+<span class="fc" id="L218">                reminderCount,</span>
+<span class="fc" id="L219">                hydrationProgressMl,</span>
+<span class="fc" id="L220">                waterGoalMl,</span>
+<span class="fc" id="L221">                poorPostureRatio * 100</span>
+        );
+    }
+
+    private ActivityItemResponse toActivityResponse(ActivityFeedItem item) {
+<span class="fc" id="L226">        return new ActivityItemResponse(</span>
+<span class="fc" id="L227">                item.getId(),</span>
+<span class="fc" id="L228">                item.getActivityType(),</span>
+<span class="fc" id="L229">                item.getCategory().name(),</span>
+<span class="fc" id="L230">                item.getTitle(),</span>
+<span class="fc" id="L231">                item.getMessage(),</span>
+<span class="pc bpc" id="L232" title="1 of 2 branches missed.">                item.getConfidence() == null ? null : item.getConfidence().doubleValue(),</span>
+<span class="fc" id="L233">                item.getOccurredAt()</span>
+        );
+    }
+
+    private ZoneId zoneId(String timezone) {
+        try {
+<span class="fc" id="L239">            return ZoneId.of(timezone);</span>
+<span class="nc" id="L240">        } catch (RuntimeException exception) {</span>
+<span class="nc" id="L241">            return ZoneId.of(&quot;UTC&quot;);</span>
+        }
+    }
+
+    private String writeJson(List&lt;String&gt; values) {
+        try {
+<span class="fc" id="L247">            return objectMapper.writeValueAsString(values);</span>
+<span class="nc" id="L248">        } catch (Exception exception) {</span>
+<span class="nc" id="L249">            return &quot;[]&quot;;</span>
+        }
+    }
+
+    private List&lt;String&gt; readStringList(String payload) {
+        try {
+<span class="fc" id="L255">            return objectMapper.readValue(payload, STRING_LIST);</span>
+<span class="nc" id="L256">        } catch (Exception exception) {</span>
+<span class="nc" id="L257">            return List.of();</span>
+        }
+    }
+
+    private double round(double value) {
+<span class="fc" id="L262">        return Math.round(value * 10_000.0) / 10_000.0;</span>
+    }
+}
+
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.12.202403310830</span></div></body></html>

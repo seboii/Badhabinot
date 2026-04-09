@@ -1,0 +1,164 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>MonitoringController.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">BADHABINOT Backend</a> &gt; <a href="index.source.html" class="el_package">com.badhabinot.backend.controller.monitoring</a> &gt; <span class="el_source">MonitoringController.java</span></div><h1>MonitoringController.java</h1><pre class="source lang-java linenums">package com.badhabinot.backend.controller.monitoring;
+
+import com.badhabinot.backend.dto.monitoring.AnalyzeFrameRequest;
+import com.badhabinot.backend.dto.monitoring.AnalyzeFrameResponse;
+import com.badhabinot.backend.dto.monitoring.AnalysisJobStatusResponse;
+import com.badhabinot.backend.dto.monitoring.ActivityItemResponse;
+import com.badhabinot.backend.dto.monitoring.DashboardResponse;
+import com.badhabinot.backend.dto.monitoring.DailyReportResponse;
+import com.badhabinot.backend.dto.monitoring.HydrationLogRequest;
+import com.badhabinot.backend.dto.monitoring.HydrationLogResponse;
+import com.badhabinot.backend.dto.monitoring.ReminderTriggerRequest;
+import com.badhabinot.backend.dto.monitoring.SessionStartRequest;
+import com.badhabinot.backend.dto.monitoring.SessionStartResponse;
+import com.badhabinot.backend.dto.monitoring.SessionStopResponse;
+import com.badhabinot.backend.dto.monitoring.WeeklyTrendResponse;
+import com.badhabinot.backend.dto.monitoring.BehaviorEventResponse;
+import com.badhabinot.backend.dto.monitoring.ChatHistoryResponse;
+import com.badhabinot.backend.dto.monitoring.ChatRequest;
+import com.badhabinot.backend.dto.monitoring.ChatResponse;
+import com.badhabinot.backend.service.monitoring.AnalysisOrchestratorService;
+import com.badhabinot.backend.service.monitoring.BehaviorEventService;
+import com.badhabinot.backend.service.monitoring.DailyReportService;
+import com.badhabinot.backend.service.monitoring.GroundedChatService;
+import com.badhabinot.backend.service.monitoring.MonitoringExperienceService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
+import java.time.LocalDate;
+import java.util.List;
+import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RequestParam;
+
+@RestController
+@RequestMapping(&quot;/api/v1/monitoring&quot;)
+@Tag(name = &quot;Monitoring&quot;, description = &quot;Spring-to-Python orchestration endpoints&quot;)
+public class MonitoringController {
+
+    private final AnalysisOrchestratorService analysisOrchestratorService;
+    private final MonitoringExperienceService monitoringExperienceService;
+    private final BehaviorEventService behaviorEventService;
+    private final DailyReportService dailyReportService;
+    private final GroundedChatService groundedChatService;
+
+    public MonitoringController(
+            AnalysisOrchestratorService analysisOrchestratorService,
+            MonitoringExperienceService monitoringExperienceService,
+            BehaviorEventService behaviorEventService,
+            DailyReportService dailyReportService,
+            GroundedChatService groundedChatService
+<span class="nc" id="L59">    ) {</span>
+<span class="nc" id="L60">        this.analysisOrchestratorService = analysisOrchestratorService;</span>
+<span class="nc" id="L61">        this.monitoringExperienceService = monitoringExperienceService;</span>
+<span class="nc" id="L62">        this.behaviorEventService = behaviorEventService;</span>
+<span class="nc" id="L63">        this.dailyReportService = dailyReportService;</span>
+<span class="nc" id="L64">        this.groundedChatService = groundedChatService;</span>
+<span class="nc" id="L65">    }</span>
+
+    @PostMapping(&quot;/sessions/start&quot;)
+    @Operation(summary = &quot;Start a live monitoring session&quot;, security = @SecurityRequirement(name = &quot;bearerAuth&quot;))
+    public SessionStartResponse startSession(@AuthenticationPrincipal Jwt jwt, @Valid @RequestBody SessionStartRequest request) {
+<span class="nc" id="L70">        return monitoringExperienceService.startSession(jwt, request);</span>
+    }
+
+    @PostMapping(&quot;/sessions/{sessionId}/stop&quot;)
+    @Operation(summary = &quot;Stop a live monitoring session&quot;, security = @SecurityRequirement(name = &quot;bearerAuth&quot;))
+    public SessionStopResponse stopSession(@AuthenticationPrincipal Jwt jwt, @PathVariable(&quot;sessionId&quot;) String sessionId) {
+<span class="nc" id="L76">        return monitoringExperienceService.stopSession(jwt, sessionId);</span>
+    }
+
+    @PostMapping(&quot;/analyze&quot;)
+    @Operation(summary = &quot;Analyze a frame through the vision and AI microservices&quot;, security = @SecurityRequirement(name = &quot;bearerAuth&quot;))
+    public AnalyzeFrameResponse analyze(@AuthenticationPrincipal Jwt jwt, @Valid @RequestBody AnalyzeFrameRequest request) {
+<span class="nc" id="L82">        return analysisOrchestratorService.analyze(jwt, request);</span>
+    }
+
+    @GetMapping(&quot;/jobs/{analysisId}&quot;)
+    @Operation(summary = &quot;Return the short-lived orchestration state for an analysis job&quot;, security = @SecurityRequirement(name = &quot;bearerAuth&quot;))
+    public AnalysisJobStatusResponse analysisJob(@AuthenticationPrincipal Jwt jwt, @PathVariable(&quot;analysisId&quot;) String analysisId) {
+<span class="nc" id="L88">        return analysisOrchestratorService.getJobStatus(jwt, analysisId);</span>
+    }
+
+    @GetMapping(&quot;/dashboard&quot;)
+    @Operation(summary = &quot;Return the dashboard screen payload&quot;, security = @SecurityRequirement(name = &quot;bearerAuth&quot;))
+    public DashboardResponse dashboard(@AuthenticationPrincipal Jwt jwt) {
+<span class="nc" id="L94">        return monitoringExperienceService.getDashboard(jwt);</span>
+    }
+
+    @GetMapping(&quot;/activities&quot;)
+    @Operation(summary = &quot;Return recent activity feed items&quot;, security = @SecurityRequirement(name = &quot;bearerAuth&quot;))
+    public List&lt;ActivityItemResponse&gt; activities(
+            @AuthenticationPrincipal Jwt jwt,
+            @RequestParam(name = &quot;limit&quot;, defaultValue = &quot;10&quot;) int limit
+    ) {
+<span class="nc" id="L103">        return monitoringExperienceService.getRecentActivities(jwt, limit);</span>
+    }
+
+    @GetMapping(&quot;/events&quot;)
+    @Operation(summary = &quot;Return normalized behavior events&quot;, security = @SecurityRequirement(name = &quot;bearerAuth&quot;))
+    public List&lt;BehaviorEventResponse&gt; events(
+            @AuthenticationPrincipal Jwt jwt,
+            @RequestParam(name = &quot;limit&quot;, defaultValue = &quot;12&quot;) int limit
+    ) {
+<span class="nc" id="L112">        return behaviorEventService.getRecentEvents(java.util.UUID.fromString(jwt.getSubject()), limit);</span>
+    }
+
+    @GetMapping(&quot;/history/weekly&quot;)
+    @Operation(summary = &quot;Return weekly history trend for the UI history screen&quot;, security = @SecurityRequirement(name = &quot;bearerAuth&quot;))
+    public WeeklyTrendResponse weeklyHistory(
+            @AuthenticationPrincipal Jwt jwt,
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
+            @RequestParam(name = &quot;from&quot;, required = false) LocalDate from
+    ) {
+<span class="nc" id="L122">        return monitoringExperienceService.getWeeklyTrend(jwt, from);</span>
+    }
+
+    @PostMapping(&quot;/hydration/log&quot;)
+    @Operation(summary = &quot;Log manual water intake from the dashboard&quot;, security = @SecurityRequirement(name = &quot;bearerAuth&quot;))
+    public HydrationLogResponse logHydration(@AuthenticationPrincipal Jwt jwt, @Valid @RequestBody HydrationLogRequest request) {
+<span class="nc" id="L128">        return monitoringExperienceService.logHydration(jwt, request);</span>
+    }
+
+    @PostMapping(&quot;/reminders/trigger&quot;)
+    @Operation(summary = &quot;Trigger a reminder event for UI and scheduling workflows&quot;, security = @SecurityRequirement(name = &quot;bearerAuth&quot;))
+    public ActivityItemResponse triggerReminder(@AuthenticationPrincipal Jwt jwt, @Valid @RequestBody ReminderTriggerRequest request) {
+<span class="nc" id="L134">        return monitoringExperienceService.triggerReminder(jwt, request);</span>
+    }
+
+    @GetMapping(&quot;/reports/daily&quot;)
+    @Operation(summary = &quot;Generate or return the persisted daily behavior report&quot;, security = @SecurityRequirement(name = &quot;bearerAuth&quot;))
+    public DailyReportResponse dailyReport(
+            @AuthenticationPrincipal Jwt jwt,
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
+            @RequestParam(name = &quot;date&quot;, required = false) LocalDate date
+    ) {
+<span class="nc" id="L144">        return dailyReportService.getDailyReport(jwt, date);</span>
+    }
+
+    @PostMapping(&quot;/chat&quot;)
+    @Operation(summary = &quot;Respond to a grounded behavior-history chat message&quot;, security = @SecurityRequirement(name = &quot;bearerAuth&quot;))
+    public ChatResponse chat(@AuthenticationPrincipal Jwt jwt, @Valid @RequestBody ChatRequest request) {
+<span class="nc" id="L150">        return groundedChatService.chat(jwt, request);</span>
+    }
+
+    @GetMapping(&quot;/chat/history&quot;)
+    @Operation(summary = &quot;Return recent chat history for the latest or requested conversation&quot;, security = @SecurityRequirement(name = &quot;bearerAuth&quot;))
+    public ChatHistoryResponse chatHistory(
+            @AuthenticationPrincipal Jwt jwt,
+            @RequestParam(name = &quot;conversation_id&quot;, required = false) String conversationId,
+            @RequestParam(name = &quot;limit&quot;, defaultValue = &quot;40&quot;) int limit
+    ) {
+<span class="nc" id="L160">        return groundedChatService.history(jwt, conversationId, limit);</span>
+    }
+}
+
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.12.202403310830</span></div></body></html>
