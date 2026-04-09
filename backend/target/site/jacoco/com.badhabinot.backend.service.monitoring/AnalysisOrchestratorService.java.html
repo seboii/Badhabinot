@@ -1,0 +1,341 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>AnalysisOrchestratorService.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">BADHABINOT Backend</a> &gt; <a href="index.source.html" class="el_package">com.badhabinot.backend.service.monitoring</a> &gt; <span class="el_source">AnalysisOrchestratorService.java</span></div><h1>AnalysisOrchestratorService.java</h1><pre class="source lang-java linenums">package com.badhabinot.backend.service.monitoring;
+
+import com.badhabinot.backend.dto.monitoring.AiAnalysisRequest;
+import com.badhabinot.backend.dto.monitoring.AiAnalysisResponse;
+import com.badhabinot.backend.dto.monitoring.AnalyzeFrameRequest;
+import com.badhabinot.backend.dto.monitoring.AnalyzeFrameResponse;
+import com.badhabinot.backend.dto.monitoring.AnalysisJobStatusResponse;
+import com.badhabinot.backend.dto.monitoring.BehaviorEventResponse;
+import com.badhabinot.backend.dto.monitoring.InternalUserAnalysisContext;
+import com.badhabinot.backend.dto.monitoring.ReminderEventResponse;
+import com.badhabinot.backend.dto.monitoring.VisionAnalysisRequest;
+import com.badhabinot.backend.dto.monitoring.VisionAnalysisResponse;
+import com.badhabinot.backend.exception.monitoring.DownstreamServiceException;
+import com.badhabinot.backend.model.monitoring.AnalysisJob;
+import com.badhabinot.backend.model.monitoring.MonitoringSessionStatus;
+import com.badhabinot.backend.repository.monitoring.AnalysisJobRepository;
+import com.badhabinot.backend.repository.monitoring.MonitoringSessionRepository;
+import com.badhabinot.backend.integration.python.AiAnalysisClient;
+import com.badhabinot.backend.integration.python.VisionServiceClient;
+import com.badhabinot.backend.integration.redis.AnalysisJobStateStore;
+import com.badhabinot.backend.service.user.UserContextService;
+import java.time.Instant;
+import java.util.Comparator;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+@Service
+public class AnalysisOrchestratorService {
+
+    private final AnalysisJobRepository analysisJobRepository;
+    private final MonitoringSessionRepository monitoringSessionRepository;
+    private final UserContextService userContextService;
+    private final VisionServiceClient visionServiceClient;
+    private final AiAnalysisClient aiAnalysisClient;
+    private final BehaviorEventService behaviorEventService;
+    private final ReminderEngineService reminderEngineService;
+    private final AnalysisJobStateStore analysisJobStateStore;
+
+    public AnalysisOrchestratorService(
+            AnalysisJobRepository analysisJobRepository,
+            MonitoringSessionRepository monitoringSessionRepository,
+            UserContextService userContextService,
+            VisionServiceClient visionServiceClient,
+            AiAnalysisClient aiAnalysisClient,
+            BehaviorEventService behaviorEventService,
+            ReminderEngineService reminderEngineService,
+            AnalysisJobStateStore analysisJobStateStore
+<span class="fc" id="L52">    ) {</span>
+<span class="fc" id="L53">        this.analysisJobRepository = analysisJobRepository;</span>
+<span class="fc" id="L54">        this.monitoringSessionRepository = monitoringSessionRepository;</span>
+<span class="fc" id="L55">        this.userContextService = userContextService;</span>
+<span class="fc" id="L56">        this.visionServiceClient = visionServiceClient;</span>
+<span class="fc" id="L57">        this.aiAnalysisClient = aiAnalysisClient;</span>
+<span class="fc" id="L58">        this.behaviorEventService = behaviorEventService;</span>
+<span class="fc" id="L59">        this.reminderEngineService = reminderEngineService;</span>
+<span class="fc" id="L60">        this.analysisJobStateStore = analysisJobStateStore;</span>
+<span class="fc" id="L61">    }</span>
+
+    @Transactional(transactionManager = &quot;monitoringTransactionManager&quot;, noRollbackFor = DownstreamServiceException.class)
+    public AnalyzeFrameResponse analyze(Jwt jwt, AnalyzeFrameRequest request) {
+<span class="fc" id="L65">        UUID userId = UUID.fromString(jwt.getSubject());</span>
+<span class="fc" id="L66">        UUID sessionId = requireActiveSession(userId, request.sessionId());</span>
+<span class="fc" id="L67">        InternalUserAnalysisContext context = userContextService.getMonitoringAnalysisContext(userId);</span>
+<span class="fc" id="L68">        ensureAnalysisAllowed(context);</span>
+<span class="fc" id="L69">        AnalysisJob job = analysisJobRepository.saveAndFlush(AnalysisJob.create(userId, request.sessionId(), request.frameId()));</span>
+<span class="fc" id="L70">        analysisJobStateStore.markProcessing(job);</span>
+
+        try {
+<span class="fc" id="L73">            VisionAnalysisRequest visionRequest = new VisionAnalysisRequest(</span>
+<span class="fc" id="L74">                    job.getId().toString(),</span>
+<span class="fc" id="L75">                    userId.toString(),</span>
+<span class="fc" id="L76">                    request.sessionId(),</span>
+<span class="fc" id="L77">                    request.frameId(),</span>
+<span class="fc" id="L78">                    request.capturedAt(),</span>
+<span class="fc" id="L79">                    request.imageBase64(),</span>
+<span class="fc" id="L80">                    request.imageContentType()</span>
+            );
+
+<span class="fc" id="L83">            VisionAnalysisResponse visionResponse = visionServiceClient.analyze(visionRequest);</span>
+<span class="fc" id="L84">            AiAnalysisClient.AiAnalysisInvocation aiInvocation = buildAiResponse(job, request, context, visionResponse);</span>
+<span class="fc" id="L85">            AiAnalysisResponse aiResponse = aiInvocation.response();</span>
+<span class="fc" id="L86">            Instant processedAt = Instant.now();</span>
+<span class="fc" id="L87">            List&lt;BehaviorEventResponse&gt; events = behaviorEventService.recordAnalysisEvents(</span>
+                    userId,
+                    sessionId,
+<span class="fc" id="L90">                    job.getId(),</span>
+                    processedAt,
+                    visionResponse,
+                    aiResponse
+            );
+<span class="fc" id="L95">            List&lt;ReminderEventResponse&gt; generatedReminders = reminderEngineService.evaluateAfterAnalysis(</span>
+                    userId,
+                    sessionId,
+                    context,
+                    processedAt,
+                    events
+            );
+<span class="fc" id="L102">            String dominantBehaviorType = resolveBehaviorType(aiResponse, events);</span>
+<span class="fc" id="L103">            double dominantConfidence = resolveConfidence(aiResponse, visionResponse, events);</span>
+
+<span class="fc" id="L105">            job.markCompleted(</span>
+<span class="fc" id="L106">                    visionResponse.subjectPresent(),</span>
+<span class="fc" id="L107">                    visionResponse.postureState(),</span>
+                    dominantBehaviorType,
+                    dominantConfidence
+            );
+
+<span class="fc" id="L112">            job = analysisJobRepository.saveAndFlush(job);</span>
+
+<span class="fc" id="L114">            AnalyzeFrameResponse response = new AnalyzeFrameResponse(</span>
+<span class="fc" id="L115">                    job.getId(),</span>
+<span class="fc" id="L116">                    request.sessionId(),</span>
+<span class="fc" id="L117">                    request.frameId(),</span>
+<span class="fc" id="L118">                    visionResponse.subjectPresent(),</span>
+<span class="fc" id="L119">                    visionResponse.postureState(),</span>
+                    dominantBehaviorType,
+                    dominantConfidence,
+                    processedAt,
+<span class="fc" id="L123">                    resolveSummary(aiResponse, events, visionResponse),</span>
+<span class="fc" id="L124">                    resolveRecommendation(aiResponse, events),</span>
+                    events,
+                    generatedReminders,
+                    new AnalyzeFrameResponse.ProcessingDetails(
+<span class="fc" id="L128">                            visionResponse.processing().frameWidth(),</span>
+<span class="fc" id="L129">                            visionResponse.processing().frameHeight(),</span>
+<span class="fc" id="L130">                            visionResponse.processing().brightnessMean(),</span>
+<span class="fc" id="L131">                            visionResponse.processing().edgeDensity(),</span>
+<span class="fc" id="L132">                            visionResponse.processing().focusScore(),</span>
+<span class="fc" id="L133">                            visionResponse.signals().postureRiskScore(),</span>
+<span class="fc" id="L134">                            visionResponse.processing().visionLatencyMs(),</span>
+<span class="fc" id="L135">                            aiInvocation.latencyMs(),</span>
+<span class="fc" id="L136">                            aiResponse.scores()</span>
+                    ),
+                    new AnalyzeFrameResponse.ModelDetails(
+<span class="fc" id="L139">                            aiResponse.model().provider(),</span>
+<span class="fc" id="L140">                            aiResponse.model().name(),</span>
+<span class="fc" id="L141">                            aiResponse.model().mode()</span>
+                    )
+            );
+<span class="fc" id="L144">            analysisJobStateStore.markCompleted(job, response);</span>
+<span class="fc" id="L145">            return response;</span>
+<span class="nc" id="L146">        } catch (DownstreamServiceException exception) {</span>
+<span class="nc" id="L147">            job.markFailed(exception.getErrorCode(), exception.getMessage());</span>
+<span class="nc" id="L148">            job = analysisJobRepository.saveAndFlush(job);</span>
+<span class="nc" id="L149">            analysisJobStateStore.markFailed(job);</span>
+<span class="nc" id="L150">            throw exception;</span>
+        }
+    }
+
+    @Transactional(transactionManager = &quot;monitoringTransactionManager&quot;, readOnly = true)
+    public AnalysisJobStatusResponse getJobStatus(Jwt jwt, String analysisId) {
+<span class="fc" id="L156">        UUID userId = UUID.fromString(jwt.getSubject());</span>
+<span class="fc" id="L157">        UUID jobId = parseAnalysisId(analysisId);</span>
+
+<span class="fc" id="L159">        Optional&lt;AnalysisJobStatusResponse&gt; cached = analysisJobStateStore.findOwned(jobId, userId);</span>
+<span class="pc bpc" id="L160" title="1 of 2 branches missed.">        if (cached.isPresent()) {</span>
+<span class="fc" id="L161">            return cached.get();</span>
+        }
+
+<span class="nc" id="L164">        AnalysisJob job = analysisJobRepository.findByIdAndUserId(jobId, userId)</span>
+<span class="nc" id="L165">                .orElseThrow(() -&gt; new IllegalArgumentException(&quot;Analysis job not found&quot;));</span>
+
+<span class="nc" id="L167">        return new AnalysisJobStatusResponse(</span>
+<span class="nc" id="L168">                job.getId(),</span>
+<span class="nc" id="L169">                job.getStatus().name(),</span>
+<span class="nc" id="L170">                job.getSessionId(),</span>
+<span class="nc" id="L171">                job.getFrameId(),</span>
+<span class="nc" id="L172">                job.getSubjectPresent(),</span>
+<span class="nc" id="L173">                job.getPostureState(),</span>
+<span class="nc" id="L174">                job.getBehaviorType(),</span>
+<span class="nc bnc" id="L175" title="All 2 branches missed.">                job.getConfidence() == null ? null : job.getConfidence().doubleValue(),</span>
+<span class="nc" id="L176">                job.getCreatedAt(),</span>
+<span class="nc" id="L177">                job.getUpdatedAt(),</span>
+                null,
+                null,
+<span class="nc" id="L180">                job.getFailureCode(),</span>
+<span class="nc" id="L181">                job.getFailureMessage()</span>
+        );
+    }
+
+    private UUID requireActiveSession(UUID userId, String sessionId) {
+<span class="fc" id="L186">        UUID parsedSessionId = parseAnalysisId(sessionId);</span>
+<span class="fc" id="L187">        monitoringSessionRepository.findByIdAndUserId(parsedSessionId, userId)</span>
+<span class="pc bpc" id="L188" title="1 of 2 branches missed.">                .filter(session -&gt; session.getStatus() == MonitoringSessionStatus.ACTIVE)</span>
+<span class="pc" id="L189">                .orElseThrow(() -&gt; new IllegalArgumentException(&quot;Monitoring session is not active&quot;));</span>
+<span class="fc" id="L190">        return parsedSessionId;</span>
+    }
+
+    private void ensureAnalysisAllowed(InternalUserAnalysisContext context) {
+<span class="pc bpc" id="L194" title="1 of 2 branches missed.">        if (!context.cameraMonitoringAccepted()) {</span>
+<span class="nc" id="L195">            throw new IllegalStateException(&quot;Camera monitoring consent must be enabled before analyzing frames&quot;);</span>
+        }
+<span class="fc bfc" id="L197" title="All 2 branches covered.">        if (!context.remoteInferenceAccepted()) {</span>
+<span class="fc" id="L198">            throw new IllegalStateException(&quot;Remote inference consent must be enabled for API-based analysis&quot;);</span>
+        }
+<span class="fc" id="L200">    }</span>
+
+    private AiAnalysisClient.AiAnalysisInvocation buildAiResponse(
+            AnalysisJob job,
+            AnalyzeFrameRequest request,
+            InternalUserAnalysisContext context,
+            VisionAnalysisResponse visionResponse
+    ) {
+<span class="pc bpc" id="L208" title="1 of 2 branches missed.">        if (!visionResponse.subjectPresent()) {</span>
+<span class="fc" id="L209">            return new AiAnalysisClient.AiAnalysisInvocation(</span>
+                new AiAnalysisResponse(
+<span class="fc" id="L211">                            job.getId().toString(),</span>
+                            &quot;none&quot;,
+                            0.0,
+<span class="fc" id="L214">                            java.util.Map.of(&quot;hand_movement_pattern&quot;, 0.0, &quot;smoking_like_gesture&quot;, 0.0),</span>
+                            &quot;No subject was detected clearly enough for behavior interpretation.&quot;,
+                            &quot;Move into frame and retry the analysis.&quot;,
+<span class="fc" id="L217">                            java.util.List.of(),</span>
+                            new AiAnalysisResponse.ModelDetails(&quot;none&quot;, &quot;not-invoked&quot;, &quot;not_invoked&quot;)
+                    ),
+                    0L
+            );
+        }
+
+<span class="nc" id="L224">        return aiAnalysisClient.analyze(new AiAnalysisRequest(</span>
+<span class="nc" id="L225">                job.getId().toString(),</span>
+<span class="nc" id="L226">                context.userId(),</span>
+<span class="nc" id="L227">                request.sessionId(),</span>
+<span class="nc" id="L228">                request.frameId(),</span>
+<span class="nc" id="L229">                request.capturedAt(),</span>
+<span class="nc" id="L230">                context.timezone(),</span>
+<span class="nc" id="L231">                request.imageBase64(),</span>
+<span class="nc" id="L232">                request.imageContentType(),</span>
+                new AiAnalysisRequest.AnalysisSettings(
+<span class="nc" id="L234">                        context.sensitivity(),</span>
+<span class="nc" id="L235">                        context.modelMode(),</span>
+<span class="nc" id="L236">                        context.remoteInferenceAccepted()</span>
+                ),
+                new AiAnalysisRequest.VisionContext(
+<span class="nc" id="L239">                        visionResponse.subjectPresent(),</span>
+<span class="nc" id="L240">                        visionResponse.postureState(),</span>
+<span class="nc" id="L241">                        visionResponse.processing().frameWidth(),</span>
+<span class="nc" id="L242">                        visionResponse.processing().frameHeight(),</span>
+<span class="nc" id="L243">                        visionResponse.detections().stream()</span>
+<span class="nc" id="L244">                                .map(detection -&gt; new AiAnalysisRequest.VisionDetection(</span>
+<span class="nc" id="L245">                                        detection.eventType(),</span>
+<span class="nc" id="L246">                                        detection.confidence(),</span>
+<span class="nc" id="L247">                                        detection.severity(),</span>
+<span class="nc" id="L248">                                        detection.recommendationHint(),</span>
+                                        new AiAnalysisRequest.VisionEvidence(
+<span class="nc" id="L250">                                                detection.evidence().faceDetected(),</span>
+<span class="nc" id="L251">                                                detection.evidence().upperBodyDetected(),</span>
+<span class="nc" id="L252">                                                detection.evidence().handCount(),</span>
+<span class="nc" id="L253">                                                detection.evidence().postureAlignmentScore(),</span>
+<span class="nc" id="L254">                                                detection.evidence().handFaceProximityScore(),</span>
+<span class="nc" id="L255">                                                detection.evidence().handMotionScore(),</span>
+<span class="nc" id="L256">                                                detection.evidence().repetitiveMotionScore(),</span>
+<span class="nc" id="L257">                                                detection.evidence().repeatedHandToFaceScore(),</span>
+<span class="nc" id="L258">                                                detection.evidence().elongatedObjectScore()</span>
+                                        )
+                                ))
+<span class="nc" id="L261">                                .toList(),</span>
+                        new AiAnalysisRequest.VisionSignals(
+<span class="nc" id="L263">                                visionResponse.signals().brightnessMean(),</span>
+<span class="nc" id="L264">                                visionResponse.signals().edgeDensity(),</span>
+<span class="nc" id="L265">                                visionResponse.signals().centerEdgeDensity(),</span>
+<span class="nc" id="L266">                                visionResponse.signals().postureRiskScore(),</span>
+<span class="nc" id="L267">                                visionResponse.signals().handFaceProximityScore(),</span>
+<span class="nc" id="L268">                                visionResponse.signals().elongatedObjectScore(),</span>
+<span class="nc" id="L269">                                visionResponse.signals().focusScore(),</span>
+<span class="nc" id="L270">                                visionResponse.signals().postureConfidence(),</span>
+<span class="nc" id="L271">                                visionResponse.signals().postureAlignmentScore(),</span>
+<span class="nc" id="L272">                                visionResponse.signals().handMotionScore(),</span>
+<span class="nc" id="L273">                                visionResponse.signals().repetitiveMotionScore(),</span>
+<span class="nc" id="L274">                                visionResponse.signals().smokingGestureScore(),</span>
+<span class="nc" id="L275">                                visionResponse.signals().faceSizeRatio()</span>
+                        )
+                )
+        ));
+    }
+
+    private String resolveBehaviorType(AiAnalysisResponse aiResponse, List&lt;BehaviorEventResponse&gt; events) {
+<span class="pc bpc" id="L282" title="2 of 4 branches missed.">        if (aiResponse.behaviorType() != null &amp;&amp; !&quot;none&quot;.equalsIgnoreCase(aiResponse.behaviorType())) {</span>
+<span class="nc" id="L283">            return aiResponse.behaviorType();</span>
+        }
+<span class="fc" id="L285">        return events.stream()</span>
+<span class="pc bnc" id="L286" title="All 2 branches missed.">                .filter(event -&gt; !&quot;poor_posture&quot;.equals(event.eventType()))</span>
+<span class="fc" id="L287">                .max(Comparator.comparingDouble(BehaviorEventResponse::confidence))</span>
+<span class="fc" id="L288">                .map(BehaviorEventResponse::eventType)</span>
+<span class="fc" id="L289">                .orElse(&quot;none&quot;);</span>
+    }
+
+    private double resolveConfidence(
+            AiAnalysisResponse aiResponse,
+            VisionAnalysisResponse visionResponse,
+            List&lt;BehaviorEventResponse&gt; events
+    ) {
+<span class="fc" id="L297">        double eventConfidence = events.stream().mapToDouble(BehaviorEventResponse::confidence).max().orElse(0.0);</span>
+<span class="fc" id="L298">        return Math.max(</span>
+<span class="fc" id="L299">                Math.max(aiResponse.confidence(), eventConfidence),</span>
+<span class="pc bpc" id="L300" title="1 of 2 branches missed.">                &quot;poor&quot;.equalsIgnoreCase(visionResponse.postureState()) ? visionResponse.postureConfidence() : 0.0</span>
+        );
+    }
+
+    private String resolveSummary(
+            AiAnalysisResponse aiResponse,
+            List&lt;BehaviorEventResponse&gt; events,
+            VisionAnalysisResponse visionResponse
+    ) {
+<span class="pc bpc" id="L309" title="2 of 4 branches missed.">        if (aiResponse.summary() != null &amp;&amp; !aiResponse.summary().isBlank()</span>
+<span class="pc bpc" id="L310" title="1 of 2 branches missed.">                &amp;&amp; !&quot;none&quot;.equalsIgnoreCase(aiResponse.behaviorType())) {</span>
+<span class="nc" id="L311">            return aiResponse.summary();</span>
+        }
+<span class="fc" id="L313">        return events.stream()</span>
+<span class="fc" id="L314">                .max(Comparator.comparingDouble(BehaviorEventResponse::confidence))</span>
+<span class="fc" id="L315">                .map(BehaviorEventResponse::interpretation)</span>
+<span class="pc bpc" id="L316" title="1 of 2 branches missed.">                .orElseGet(() -&gt; visionResponse.subjectPresent()</span>
+<span class="nc" id="L317">                        ? &quot;The frame was processed successfully and no high-confidence risky behavior event was recorded.&quot;</span>
+<span class="fc" id="L318">                        : &quot;No subject was detected clearly enough to produce a behavior summary.&quot;);</span>
+    }
+
+    private String resolveRecommendation(AiAnalysisResponse aiResponse, List&lt;BehaviorEventResponse&gt; events) {
+<span class="pc bpc" id="L322" title="2 of 4 branches missed.">        if (aiResponse.recommendation() != null &amp;&amp; !aiResponse.recommendation().isBlank()</span>
+<span class="pc bpc" id="L323" title="1 of 2 branches missed.">                &amp;&amp; !&quot;none&quot;.equalsIgnoreCase(aiResponse.behaviorType())) {</span>
+<span class="nc" id="L324">            return aiResponse.recommendation();</span>
+        }
+<span class="fc" id="L326">        return events.stream()</span>
+<span class="fc" id="L327">                .max(Comparator.comparingDouble(BehaviorEventResponse::confidence))</span>
+<span class="fc" id="L328">                .map(BehaviorEventResponse::recommendationHint)</span>
+<span class="fc" id="L329">                .orElse(&quot;Continue monitoring and capture another frame if posture or behavior changes.&quot;);</span>
+    }
+
+    private UUID parseAnalysisId(String analysisId) {
+        try {
+<span class="fc" id="L334">            return UUID.fromString(analysisId);</span>
+<span class="nc" id="L335">        } catch (RuntimeException exception) {</span>
+<span class="nc" id="L336">            throw new IllegalArgumentException(&quot;Invalid analysis identifier&quot;);</span>
+        }
+    }
+}
+
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.12.202403310830</span></div></body></html>

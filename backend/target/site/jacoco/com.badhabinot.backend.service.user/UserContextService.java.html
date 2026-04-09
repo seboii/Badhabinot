@@ -1,0 +1,276 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>UserContextService.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">BADHABINOT Backend</a> &gt; <a href="index.source.html" class="el_package">com.badhabinot.backend.service.user</a> &gt; <span class="el_source">UserContextService.java</span></div><h1>UserContextService.java</h1><pre class="source lang-java linenums">package com.badhabinot.backend.service.user;
+
+import com.badhabinot.backend.dto.user.ConsentResponse;
+import com.badhabinot.backend.dto.user.InternalUserBootstrapRequest;
+import com.badhabinot.backend.dto.user.InternalUserAnalysisContextResponse;
+import com.badhabinot.backend.dto.user.SettingsResponse;
+import com.badhabinot.backend.dto.user.UpdateConsentsRequest;
+import com.badhabinot.backend.dto.user.UpdateProfileRequest;
+import com.badhabinot.backend.dto.user.UpdateSettingsRequest;
+import com.badhabinot.backend.dto.user.UserContextResponse;
+import com.badhabinot.backend.dto.user.UserProfileResponse;
+import com.badhabinot.backend.dto.monitoring.InternalUserAnalysisContext;
+import com.badhabinot.backend.model.user.UserConsent;
+import com.badhabinot.backend.model.user.UserProfile;
+import com.badhabinot.backend.model.user.UserSettings;
+import com.badhabinot.backend.repository.user.UserConsentRepository;
+import com.badhabinot.backend.repository.user.UserProfileRepository;
+import com.badhabinot.backend.repository.user.UserSettingsRepository;
+import com.badhabinot.backend.security.CurrentUserClaims;
+import java.util.UUID;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.cache.annotation.Caching;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+@Service
+public class UserContextService {
+
+    private final UserProfileRepository userProfileRepository;
+    private final UserSettingsRepository userSettingsRepository;
+    private final UserConsentRepository userConsentRepository;
+
+    public UserContextService(
+            UserProfileRepository userProfileRepository,
+            UserSettingsRepository userSettingsRepository,
+            UserConsentRepository userConsentRepository
+<span class="fc" id="L38">    ) {</span>
+<span class="fc" id="L39">        this.userProfileRepository = userProfileRepository;</span>
+<span class="fc" id="L40">        this.userSettingsRepository = userSettingsRepository;</span>
+<span class="fc" id="L41">        this.userConsentRepository = userConsentRepository;</span>
+<span class="fc" id="L42">    }</span>
+
+    @Transactional(transactionManager = &quot;userTransactionManager&quot;)
+    @Cacheable(cacheNames = &quot;user-context&quot;, key = &quot;#claims.userId.toString()&quot;)
+    public UserContextResponse getContext(CurrentUserClaims claims) {
+<span class="nc" id="L47">        UserProfile profile = ensureProfile(claims.userId(), claims.email());</span>
+<span class="nc" id="L48">        UserSettings settings = ensureSettings(claims.userId());</span>
+<span class="nc" id="L49">        UserConsent consent = ensureConsent(claims.userId());</span>
+<span class="nc" id="L50">        return toContextResponse(profile, settings, consent);</span>
+    }
+
+    @Transactional(transactionManager = &quot;userTransactionManager&quot;)
+    @Caching(evict = {
+            @CacheEvict(cacheNames = &quot;user-context&quot;, key = &quot;#claims.userId.toString()&quot;),
+            @CacheEvict(cacheNames = &quot;analysis-context&quot;, key = &quot;#claims.userId.toString()&quot;)
+    })
+    public UserProfileResponse updateProfile(CurrentUserClaims claims, UpdateProfileRequest request) {
+<span class="nc" id="L59">        UserProfile profile = ensureProfile(claims.userId(), claims.email());</span>
+<span class="nc" id="L60">        ensureSettings(claims.userId());</span>
+<span class="nc" id="L61">        ensureConsent(claims.userId());</span>
+
+<span class="nc" id="L63">        profile.updateProfile(request.displayName(), request.timezone(), request.locale());</span>
+<span class="nc" id="L64">        return toProfileResponse(userProfileRepository.save(profile));</span>
+    }
+
+    @Transactional(transactionManager = &quot;userTransactionManager&quot;)
+    @Cacheable(cacheNames = &quot;user-settings&quot;, key = &quot;#claims.userId.toString()&quot;)
+    public SettingsResponse getSettings(CurrentUserClaims claims) {
+<span class="nc" id="L70">        ensureProfile(claims.userId(), claims.email());</span>
+<span class="nc" id="L71">        return toSettingsResponse(ensureSettings(claims.userId()));</span>
+    }
+
+    @Transactional(transactionManager = &quot;userTransactionManager&quot;)
+    @Caching(evict = {
+            @CacheEvict(cacheNames = &quot;user-context&quot;, key = &quot;#claims.userId.toString()&quot;),
+            @CacheEvict(cacheNames = &quot;user-settings&quot;, key = &quot;#claims.userId.toString()&quot;),
+            @CacheEvict(cacheNames = &quot;analysis-context&quot;, key = &quot;#claims.userId.toString()&quot;)
+    })
+    public SettingsResponse updateSettings(CurrentUserClaims claims, UpdateSettingsRequest request) {
+<span class="nc" id="L81">        ensureProfile(claims.userId(), claims.email());</span>
+<span class="nc" id="L82">        ensureConsent(claims.userId());</span>
+<span class="nc" id="L83">        UserSettings settings = ensureSettings(claims.userId());</span>
+<span class="nc" id="L84">        settings.update(</span>
+<span class="nc" id="L85">                request.sensitivity(),</span>
+<span class="nc" id="L86">                request.waterGoalMl(),</span>
+<span class="nc" id="L87">                request.waterIntervalMin(),</span>
+<span class="nc" id="L88">                request.exerciseIntervalMin(),</span>
+<span class="nc" id="L89">                request.quietHoursEnabled(),</span>
+<span class="nc" id="L90">                request.quietHoursStart(),</span>
+<span class="nc" id="L91">                request.quietHoursEnd(),</span>
+<span class="nc" id="L92">                request.modelMode(),</span>
+<span class="nc" id="L93">                request.notificationsEnabled()</span>
+        );
+<span class="nc" id="L95">        return toSettingsResponse(userSettingsRepository.save(settings));</span>
+    }
+
+    @Transactional(transactionManager = &quot;userTransactionManager&quot;)
+    @Cacheable(cacheNames = &quot;user-consents&quot;, key = &quot;#claims.userId.toString()&quot;)
+    public ConsentResponse getConsents(CurrentUserClaims claims) {
+<span class="nc" id="L101">        ensureProfile(claims.userId(), claims.email());</span>
+<span class="nc" id="L102">        ensureSettings(claims.userId());</span>
+<span class="nc" id="L103">        return toConsentResponse(ensureConsent(claims.userId()));</span>
+    }
+
+    @Transactional(transactionManager = &quot;userTransactionManager&quot;)
+    @Caching(evict = {
+            @CacheEvict(cacheNames = &quot;user-context&quot;, key = &quot;#claims.userId.toString()&quot;),
+            @CacheEvict(cacheNames = &quot;user-consents&quot;, key = &quot;#claims.userId.toString()&quot;),
+            @CacheEvict(cacheNames = &quot;analysis-context&quot;, key = &quot;#claims.userId.toString()&quot;)
+    })
+    public ConsentResponse updateConsents(CurrentUserClaims claims, UpdateConsentsRequest request) {
+<span class="nc" id="L113">        ensureProfile(claims.userId(), claims.email());</span>
+<span class="nc" id="L114">        ensureSettings(claims.userId());</span>
+<span class="nc" id="L115">        UserConsent consent = ensureConsent(claims.userId());</span>
+<span class="nc" id="L116">        consent.update(</span>
+<span class="nc" id="L117">                request.privacyPolicyAccepted(),</span>
+<span class="nc" id="L118">                request.cameraMonitoringAccepted(),</span>
+<span class="nc" id="L119">                request.remoteInferenceAccepted()</span>
+        );
+<span class="nc" id="L121">        return toConsentResponse(userConsentRepository.save(consent));</span>
+    }
+
+    @Transactional(transactionManager = &quot;userTransactionManager&quot;)
+    @Caching(evict = {
+            @CacheEvict(cacheNames = &quot;user-context&quot;, key = &quot;#request.userId.toString()&quot;),
+            @CacheEvict(cacheNames = &quot;user-settings&quot;, key = &quot;#request.userId.toString()&quot;),
+            @CacheEvict(cacheNames = &quot;user-consents&quot;, key = &quot;#request.userId.toString()&quot;),
+            @CacheEvict(cacheNames = &quot;analysis-context&quot;, key = &quot;#request.userId.toString()&quot;)
+    })
+    public void bootstrap(InternalUserBootstrapRequest request) {
+<span class="nc" id="L132">        bootstrap(request.userId(), request.email(), request.displayName(), request.timezone(), request.locale());</span>
+<span class="nc" id="L133">    }</span>
+
+    @Transactional(transactionManager = &quot;userTransactionManager&quot;)
+    @Caching(evict = {
+            @CacheEvict(cacheNames = &quot;user-context&quot;, key = &quot;#userId.toString()&quot;),
+            @CacheEvict(cacheNames = &quot;user-settings&quot;, key = &quot;#userId.toString()&quot;),
+            @CacheEvict(cacheNames = &quot;user-consents&quot;, key = &quot;#userId.toString()&quot;),
+            @CacheEvict(cacheNames = &quot;analysis-context&quot;, key = &quot;#userId.toString()&quot;)
+    })
+    public void bootstrap(UUID userId, String email, String displayName, String timezone, String locale) {
+<span class="fc" id="L143">        UserProfile profile = userProfileRepository.findById(userId)</span>
+<span class="fc" id="L144">                .orElseGet(() -&gt; UserProfile.create(</span>
+                        userId,
+                        email,
+                        displayName,
+                        timezone,
+                        locale
+                ));
+<span class="fc" id="L151">        profile.updateFromBootstrap(email, displayName, timezone, locale);</span>
+<span class="fc" id="L152">        userProfileRepository.save(profile);</span>
+<span class="fc" id="L153">        ensureSettings(userId);</span>
+<span class="fc" id="L154">        ensureConsent(userId);</span>
+<span class="fc" id="L155">    }</span>
+
+    @Transactional(transactionManager = &quot;userTransactionManager&quot;)
+    @Cacheable(cacheNames = &quot;analysis-context&quot;, key = &quot;#userId.toString()&quot;)
+    public InternalUserAnalysisContextResponse getInternalAnalysisContext(UUID userId) {
+<span class="fc" id="L160">        UserProfile profile = userProfileRepository.findById(userId)</span>
+<span class="pc" id="L161">                .orElseThrow(() -&gt; new IllegalArgumentException(&quot;User profile not found&quot;));</span>
+<span class="fc" id="L162">        UserSettings settings = ensureSettings(userId);</span>
+<span class="fc" id="L163">        UserConsent consent = ensureConsent(userId);</span>
+<span class="fc" id="L164">        return new InternalUserAnalysisContextResponse(</span>
+                userId,
+<span class="fc" id="L166">                profile.getTimezone(),</span>
+<span class="fc" id="L167">                settings.getSensitivity(),</span>
+<span class="fc" id="L168">                settings.getModelMode(),</span>
+<span class="fc" id="L169">                consent.isCameraMonitoringAccepted(),</span>
+<span class="fc" id="L170">                settings.getWaterGoalMl(),</span>
+<span class="fc" id="L171">                settings.getWaterIntervalMin(),</span>
+<span class="fc" id="L172">                settings.getExerciseIntervalMin(),</span>
+<span class="fc" id="L173">                settings.isNotificationsEnabled(),</span>
+<span class="fc" id="L174">                settings.isQuietHoursEnabled(),</span>
+<span class="fc" id="L175">                settings.getQuietHoursStart(),</span>
+<span class="fc" id="L176">                settings.getQuietHoursEnd(),</span>
+<span class="fc" id="L177">                consent.isRemoteInferenceAccepted()</span>
+        );
+    }
+
+    @Transactional(transactionManager = &quot;userTransactionManager&quot;, readOnly = true)
+    public InternalUserAnalysisContext getMonitoringAnalysisContext(UUID userId) {
+<span class="fc" id="L183">        InternalUserAnalysisContextResponse context = getInternalAnalysisContext(userId);</span>
+<span class="fc" id="L184">        return new InternalUserAnalysisContext(</span>
+<span class="fc" id="L185">                context.userId().toString(),</span>
+<span class="fc" id="L186">                context.timezone(),</span>
+<span class="fc" id="L187">                context.sensitivity().name(),</span>
+<span class="fc" id="L188">                context.modelMode().name(),</span>
+<span class="fc" id="L189">                context.cameraMonitoringAccepted(),</span>
+<span class="fc" id="L190">                context.waterGoalMl(),</span>
+<span class="fc" id="L191">                context.waterIntervalMin(),</span>
+<span class="fc" id="L192">                context.exerciseIntervalMin(),</span>
+<span class="fc" id="L193">                context.notificationsEnabled(),</span>
+<span class="fc" id="L194">                context.quietHoursEnabled(),</span>
+<span class="fc" id="L195">                context.quietHoursStart().toString(),</span>
+<span class="fc" id="L196">                context.quietHoursEnd().toString(),</span>
+<span class="fc" id="L197">                context.remoteInferenceAccepted()</span>
+        );
+    }
+
+    private UserProfile ensureProfile(UUID userId, String email) {
+<span class="nc" id="L202">        return userProfileRepository.findById(userId)</span>
+<span class="nc" id="L203">                .orElseGet(() -&gt; userProfileRepository.save(UserProfile.create(</span>
+                        userId,
+                        email,
+<span class="nc" id="L206">                        deriveDisplayName(email),</span>
+                        &quot;Europe/Istanbul&quot;,
+                        &quot;tr-TR&quot;
+                )));
+    }
+
+    private UserSettings ensureSettings(UUID userId) {
+<span class="fc" id="L213">        return userSettingsRepository.findById(userId)</span>
+<span class="fc" id="L214">                .orElseGet(() -&gt; userSettingsRepository.save(UserSettings.createDefault(userId)));</span>
+    }
+
+    private UserConsent ensureConsent(UUID userId) {
+<span class="fc" id="L218">        return userConsentRepository.findById(userId)</span>
+<span class="fc" id="L219">                .orElseGet(() -&gt; userConsentRepository.save(UserConsent.createDefault(userId)));</span>
+    }
+
+    private String deriveDisplayName(String email) {
+<span class="nc" id="L223">        int atIndex = email.indexOf('@');</span>
+<span class="nc bnc" id="L224" title="All 2 branches missed.">        return atIndex &gt; 0 ? email.substring(0, atIndex) : email;</span>
+    }
+
+    private UserContextResponse toContextResponse(UserProfile profile, UserSettings settings, UserConsent consent) {
+<span class="nc" id="L228">        return new UserContextResponse(</span>
+<span class="nc" id="L229">                profile.getUserId(),</span>
+<span class="nc" id="L230">                profile.getEmail(),</span>
+<span class="nc" id="L231">                profile.getDisplayName(),</span>
+<span class="nc" id="L232">                profile.getTimezone(),</span>
+<span class="nc" id="L233">                profile.getLocale(),</span>
+<span class="nc" id="L234">                toSettingsResponse(settings),</span>
+<span class="nc" id="L235">                toConsentResponse(consent)</span>
+        );
+    }
+
+    private UserProfileResponse toProfileResponse(UserProfile profile) {
+<span class="nc" id="L240">        return new UserProfileResponse(</span>
+<span class="nc" id="L241">                profile.getUserId(),</span>
+<span class="nc" id="L242">                profile.getEmail(),</span>
+<span class="nc" id="L243">                profile.getDisplayName(),</span>
+<span class="nc" id="L244">                profile.getTimezone(),</span>
+<span class="nc" id="L245">                profile.getLocale(),</span>
+<span class="nc" id="L246">                profile.getUpdatedAt()</span>
+        );
+    }
+
+    private SettingsResponse toSettingsResponse(UserSettings settings) {
+<span class="nc" id="L251">        return new SettingsResponse(</span>
+<span class="nc" id="L252">                settings.getSensitivity(),</span>
+<span class="nc" id="L253">                settings.getWaterGoalMl(),</span>
+<span class="nc" id="L254">                settings.getWaterIntervalMin(),</span>
+<span class="nc" id="L255">                settings.getExerciseIntervalMin(),</span>
+<span class="nc" id="L256">                settings.isQuietHoursEnabled(),</span>
+<span class="nc" id="L257">                settings.getQuietHoursStart(),</span>
+<span class="nc" id="L258">                settings.getQuietHoursEnd(),</span>
+<span class="nc" id="L259">                settings.getModelMode(),</span>
+<span class="nc" id="L260">                settings.isNotificationsEnabled(),</span>
+<span class="nc" id="L261">                settings.getUpdatedAt()</span>
+        );
+    }
+
+    private ConsentResponse toConsentResponse(UserConsent consent) {
+<span class="nc" id="L266">        return new ConsentResponse(</span>
+<span class="nc" id="L267">                consent.isPrivacyPolicyAccepted(),</span>
+<span class="nc" id="L268">                consent.isCameraMonitoringAccepted(),</span>
+<span class="nc" id="L269">                consent.isRemoteInferenceAccepted(),</span>
+<span class="nc" id="L270">                consent.getAcceptedAt(),</span>
+<span class="nc" id="L271">                consent.getUpdatedAt()</span>
+        );
+    }
+}
+
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.12.202403310830</span></div></body></html>

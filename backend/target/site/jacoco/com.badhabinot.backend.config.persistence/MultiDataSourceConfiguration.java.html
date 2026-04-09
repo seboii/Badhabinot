@@ -1,0 +1,185 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>MultiDataSourceConfiguration.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">BADHABINOT Backend</a> &gt; <a href="index.source.html" class="el_package">com.badhabinot.backend.config.persistence</a> &gt; <span class="el_source">MultiDataSourceConfiguration.java</span></div><h1>MultiDataSourceConfiguration.java</h1><pre class="source lang-java linenums">package com.badhabinot.backend.config.persistence;
+
+import com.zaxxer.hikari.HikariDataSource;
+import jakarta.persistence.EntityManagerFactory;
+import java.util.HashMap;
+import java.util.Map;
+import javax.sql.DataSource;
+import org.flywaydb.core.Flyway;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.boot.autoconfigure.flyway.FlywayMigrationInitializer;
+import org.springframework.boot.autoconfigure.jdbc.DataSourceProperties;
+import org.springframework.boot.autoconfigure.orm.jpa.HibernateProperties;
+import org.springframework.boot.autoconfigure.orm.jpa.JpaProperties;
+import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.DependsOn;
+import org.springframework.context.annotation.Primary;
+import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
+import org.springframework.orm.jpa.JpaTransactionManager;
+import org.springframework.orm.jpa.LocalContainerEntityManagerFactoryBean;
+import org.springframework.orm.jpa.vendor.HibernateJpaVendorAdapter;
+import org.springframework.transaction.PlatformTransactionManager;
+
+@Configuration
+public class MultiDataSourceConfiguration {
+
+    private final JpaProperties jpaProperties;
+    private final HibernateProperties hibernateProperties;
+
+<span class="nc" id="L31">    public MultiDataSourceConfiguration(JpaProperties jpaProperties, HibernateProperties hibernateProperties) {</span>
+<span class="nc" id="L32">        this.jpaProperties = jpaProperties;</span>
+<span class="nc" id="L33">        this.hibernateProperties = hibernateProperties;</span>
+<span class="nc" id="L34">    }</span>
+
+    @Bean
+    @Primary
+    @ConfigurationProperties(&quot;app.datasource.auth&quot;)
+    public DataSourceProperties authDataSourceProperties() {
+<span class="nc" id="L40">        return new DataSourceProperties();</span>
+    }
+
+    @Bean
+    @Primary
+    public DataSource authDataSource(@Qualifier(&quot;authDataSourceProperties&quot;) DataSourceProperties properties) {
+<span class="nc" id="L46">        return properties.initializeDataSourceBuilder().type(HikariDataSource.class).build();</span>
+    }
+
+    @Bean
+    @ConfigurationProperties(&quot;app.datasource.user&quot;)
+    public DataSourceProperties userDataSourceProperties() {
+<span class="nc" id="L52">        return new DataSourceProperties();</span>
+    }
+
+    @Bean
+    public DataSource userDataSource(@Qualifier(&quot;userDataSourceProperties&quot;) DataSourceProperties properties) {
+<span class="nc" id="L57">        return properties.initializeDataSourceBuilder().type(HikariDataSource.class).build();</span>
+    }
+
+    @Bean
+    @ConfigurationProperties(&quot;app.datasource.monitoring&quot;)
+    public DataSourceProperties monitoringDataSourceProperties() {
+<span class="nc" id="L63">        return new DataSourceProperties();</span>
+    }
+
+    @Bean
+    public DataSource monitoringDataSource(@Qualifier(&quot;monitoringDataSourceProperties&quot;) DataSourceProperties properties) {
+<span class="nc" id="L68">        return properties.initializeDataSourceBuilder().type(HikariDataSource.class).build();</span>
+    }
+
+    @Bean
+    public Flyway authFlyway(@Qualifier(&quot;authDataSource&quot;) DataSource dataSource) {
+<span class="nc" id="L73">        return Flyway.configure().dataSource(dataSource).locations(&quot;classpath:db/auth&quot;).load();</span>
+    }
+
+    @Bean
+    public FlywayMigrationInitializer authFlywayInitializer(@Qualifier(&quot;authFlyway&quot;) Flyway flyway) {
+<span class="nc" id="L78">        return new FlywayMigrationInitializer(flyway);</span>
+    }
+
+    @Bean
+    public Flyway userFlyway(@Qualifier(&quot;userDataSource&quot;) DataSource dataSource) {
+<span class="nc" id="L83">        return Flyway.configure().dataSource(dataSource).locations(&quot;classpath:db/user&quot;).load();</span>
+    }
+
+    @Bean
+    public FlywayMigrationInitializer userFlywayInitializer(@Qualifier(&quot;userFlyway&quot;) Flyway flyway) {
+<span class="nc" id="L88">        return new FlywayMigrationInitializer(flyway);</span>
+    }
+
+    @Bean
+    public Flyway monitoringFlyway(@Qualifier(&quot;monitoringDataSource&quot;) DataSource dataSource) {
+<span class="nc" id="L93">        return Flyway.configure().dataSource(dataSource).locations(&quot;classpath:db/monitoring&quot;).load();</span>
+    }
+
+    @Bean
+    public FlywayMigrationInitializer monitoringFlywayInitializer(@Qualifier(&quot;monitoringFlyway&quot;) Flyway flyway) {
+<span class="nc" id="L98">        return new FlywayMigrationInitializer(flyway);</span>
+    }
+
+    @Bean(name = &quot;authEntityManagerFactory&quot;)
+    @Primary
+    @DependsOn(&quot;authFlywayInitializer&quot;)
+    public LocalContainerEntityManagerFactoryBean authEntityManagerFactory(@Qualifier(&quot;authDataSource&quot;) DataSource dataSource) {
+<span class="nc" id="L105">        return entityManagerFactory(dataSource, &quot;com.badhabinot.backend.model.auth&quot;, &quot;auth&quot;);</span>
+    }
+
+    @Bean(name = &quot;userEntityManagerFactory&quot;)
+    @DependsOn(&quot;userFlywayInitializer&quot;)
+    public LocalContainerEntityManagerFactoryBean userEntityManagerFactory(@Qualifier(&quot;userDataSource&quot;) DataSource dataSource) {
+<span class="nc" id="L111">        return entityManagerFactory(dataSource, &quot;com.badhabinot.backend.model.user&quot;, &quot;user&quot;);</span>
+    }
+
+    @Bean(name = &quot;monitoringEntityManagerFactory&quot;)
+    @DependsOn(&quot;monitoringFlywayInitializer&quot;)
+    public LocalContainerEntityManagerFactoryBean monitoringEntityManagerFactory(@Qualifier(&quot;monitoringDataSource&quot;) DataSource dataSource) {
+<span class="nc" id="L117">        return entityManagerFactory(dataSource, &quot;com.badhabinot.backend.model.monitoring&quot;, &quot;monitoring&quot;);</span>
+    }
+
+    @Bean(name = &quot;authTransactionManager&quot;)
+    @Primary
+    public PlatformTransactionManager authTransactionManager(@Qualifier(&quot;authEntityManagerFactory&quot;) EntityManagerFactory entityManagerFactory) {
+<span class="nc" id="L123">        return new JpaTransactionManager(entityManagerFactory);</span>
+    }
+
+    @Bean(name = &quot;userTransactionManager&quot;)
+    public PlatformTransactionManager userTransactionManager(@Qualifier(&quot;userEntityManagerFactory&quot;) EntityManagerFactory entityManagerFactory) {
+<span class="nc" id="L128">        return new JpaTransactionManager(entityManagerFactory);</span>
+    }
+
+    @Bean(name = &quot;monitoringTransactionManager&quot;)
+    public PlatformTransactionManager monitoringTransactionManager(@Qualifier(&quot;monitoringEntityManagerFactory&quot;) EntityManagerFactory entityManagerFactory) {
+<span class="nc" id="L133">        return new JpaTransactionManager(entityManagerFactory);</span>
+    }
+
+    private LocalContainerEntityManagerFactoryBean entityManagerFactory(
+            DataSource dataSource,
+            String packagesToScan,
+            String persistenceUnit
+    ) {
+<span class="nc" id="L141">        LocalContainerEntityManagerFactoryBean entityManagerFactory = new LocalContainerEntityManagerFactoryBean();</span>
+<span class="nc" id="L142">        entityManagerFactory.setDataSource(dataSource);</span>
+<span class="nc" id="L143">        entityManagerFactory.setPackagesToScan(packagesToScan);</span>
+<span class="nc" id="L144">        entityManagerFactory.setPersistenceUnitName(persistenceUnit);</span>
+<span class="nc" id="L145">        entityManagerFactory.setJpaVendorAdapter(new HibernateJpaVendorAdapter());</span>
+<span class="nc" id="L146">        entityManagerFactory.setJpaPropertyMap(determineHibernateProperties());</span>
+<span class="nc" id="L147">        return entityManagerFactory;</span>
+    }
+
+    private Map&lt;String, Object&gt; determineHibernateProperties() {
+<span class="nc" id="L151">        Map&lt;String, Object&gt; properties = new HashMap&lt;&gt;(</span>
+<span class="nc" id="L152">                hibernateProperties.determineHibernateProperties(jpaProperties.getProperties(), new org.springframework.boot.autoconfigure.orm.jpa.HibernateSettings())</span>
+        );
+<span class="nc" id="L154">        properties.putIfAbsent(&quot;hibernate.hbm2ddl.auto&quot;, &quot;validate&quot;);</span>
+<span class="nc" id="L155">        return properties;</span>
+    }
+
+    @Configuration
+    @EnableJpaRepositories(
+            basePackages = &quot;com.badhabinot.backend.repository.auth&quot;,
+            entityManagerFactoryRef = &quot;authEntityManagerFactory&quot;,
+            transactionManagerRef = &quot;authTransactionManager&quot;
+    )
+<span class="nc" id="L164">    static class AuthJpaConfiguration {</span>
+    }
+
+    @Configuration
+    @EnableJpaRepositories(
+            basePackages = &quot;com.badhabinot.backend.repository.user&quot;,
+            entityManagerFactoryRef = &quot;userEntityManagerFactory&quot;,
+            transactionManagerRef = &quot;userTransactionManager&quot;
+    )
+<span class="nc" id="L173">    static class UserJpaConfiguration {</span>
+    }
+
+    @Configuration
+    @EnableJpaRepositories(
+            basePackages = &quot;com.badhabinot.backend.repository.monitoring&quot;,
+            entityManagerFactoryRef = &quot;monitoringEntityManagerFactory&quot;,
+            transactionManagerRef = &quot;monitoringTransactionManager&quot;
+    )
+<span class="nc" id="L182">    static class MonitoringJpaConfiguration {</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.12.202403310830</span></div></body></html>

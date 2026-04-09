@@ -1,0 +1,157 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>UserSettings.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">BADHABINOT Backend</a> &gt; <a href="index.source.html" class="el_package">com.badhabinot.backend.model.user</a> &gt; <span class="el_source">UserSettings.java</span></div><h1>UserSettings.java</h1><pre class="source lang-java linenums">package com.badhabinot.backend.model.user;
+
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.Id;
+import jakarta.persistence.PrePersist;
+import jakarta.persistence.PreUpdate;
+import jakarta.persistence.Table;
+import java.time.Instant;
+import java.time.LocalTime;
+import java.util.UUID;
+
+@Entity
+@Table(name = &quot;user_settings&quot;)
+public class UserSettings {
+
+    @Id
+    @Column(name = &quot;user_id&quot;)
+    private UUID userId;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 16)
+    private Sensitivity sensitivity;
+
+    @Column(name = &quot;water_goal_ml&quot;, nullable = false)
+    private int waterGoalMl;
+
+    @Column(name = &quot;water_interval_min&quot;, nullable = false)
+    private int waterIntervalMin;
+
+    @Column(name = &quot;exercise_interval_min&quot;, nullable = false)
+    private int exerciseIntervalMin;
+
+    @Column(name = &quot;quiet_hours_enabled&quot;, nullable = false)
+    private boolean quietHoursEnabled;
+
+    @Column(name = &quot;quiet_hours_start&quot;, nullable = false)
+    private LocalTime quietHoursStart;
+
+    @Column(name = &quot;quiet_hours_end&quot;, nullable = false)
+    private LocalTime quietHoursEnd;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = &quot;model_mode&quot;, nullable = false, length = 16)
+    private ModelMode modelMode;
+
+    @Column(name = &quot;notifications_enabled&quot;, nullable = false)
+    private boolean notificationsEnabled;
+
+    @Column(name = &quot;created_at&quot;, nullable = false)
+    private Instant createdAt;
+
+    @Column(name = &quot;updated_at&quot;, nullable = false)
+    private Instant updatedAt;
+
+<span class="nc" id="L58">    protected UserSettings() {</span>
+<span class="nc" id="L59">    }</span>
+
+<span class="fc" id="L61">    private UserSettings(UUID userId) {</span>
+<span class="fc" id="L62">        this.userId = userId;</span>
+<span class="fc" id="L63">        this.sensitivity = Sensitivity.MEDIUM;</span>
+<span class="fc" id="L64">        this.waterGoalMl = 2500;</span>
+<span class="fc" id="L65">        this.waterIntervalMin = 60;</span>
+<span class="fc" id="L66">        this.exerciseIntervalMin = 60;</span>
+<span class="fc" id="L67">        this.quietHoursEnabled = false;</span>
+<span class="fc" id="L68">        this.quietHoursStart = LocalTime.of(22, 0);</span>
+<span class="fc" id="L69">        this.quietHoursEnd = LocalTime.of(8, 0);</span>
+<span class="fc" id="L70">        this.modelMode = ModelMode.API;</span>
+<span class="fc" id="L71">        this.notificationsEnabled = true;</span>
+<span class="fc" id="L72">    }</span>
+
+    public static UserSettings createDefault(UUID userId) {
+<span class="fc" id="L75">        return new UserSettings(userId);</span>
+    }
+
+    @PrePersist
+    void onCreate() {
+<span class="nc" id="L80">        Instant now = Instant.now();</span>
+<span class="nc" id="L81">        createdAt = now;</span>
+<span class="nc" id="L82">        updatedAt = now;</span>
+<span class="nc" id="L83">    }</span>
+
+    @PreUpdate
+    void onUpdate() {
+<span class="nc" id="L87">        updatedAt = Instant.now();</span>
+<span class="nc" id="L88">    }</span>
+
+    public void update(
+            Sensitivity sensitivity,
+            int waterGoalMl,
+            int waterIntervalMin,
+            int exerciseIntervalMin,
+            boolean quietHoursEnabled,
+            LocalTime quietHoursStart,
+            LocalTime quietHoursEnd,
+            ModelMode modelMode,
+            boolean notificationsEnabled
+    ) {
+<span class="fc" id="L101">        this.sensitivity = sensitivity;</span>
+<span class="fc" id="L102">        this.waterGoalMl = waterGoalMl;</span>
+<span class="fc" id="L103">        this.waterIntervalMin = waterIntervalMin;</span>
+<span class="fc" id="L104">        this.exerciseIntervalMin = exerciseIntervalMin;</span>
+<span class="fc" id="L105">        this.quietHoursEnabled = quietHoursEnabled;</span>
+<span class="fc" id="L106">        this.quietHoursStart = quietHoursStart;</span>
+<span class="fc" id="L107">        this.quietHoursEnd = quietHoursEnd;</span>
+<span class="fc" id="L108">        this.modelMode = modelMode;</span>
+<span class="fc" id="L109">        this.notificationsEnabled = notificationsEnabled;</span>
+<span class="fc" id="L110">    }</span>
+
+    public UUID getUserId() {
+<span class="nc" id="L113">        return userId;</span>
+    }
+
+    public Sensitivity getSensitivity() {
+<span class="fc" id="L117">        return sensitivity;</span>
+    }
+
+    public int getWaterIntervalMin() {
+<span class="fc" id="L121">        return waterIntervalMin;</span>
+    }
+
+    public int getWaterGoalMl() {
+<span class="fc" id="L125">        return waterGoalMl;</span>
+    }
+
+    public int getExerciseIntervalMin() {
+<span class="fc" id="L129">        return exerciseIntervalMin;</span>
+    }
+
+    public boolean isQuietHoursEnabled() {
+<span class="fc" id="L133">        return quietHoursEnabled;</span>
+    }
+
+    public LocalTime getQuietHoursStart() {
+<span class="fc" id="L137">        return quietHoursStart;</span>
+    }
+
+    public LocalTime getQuietHoursEnd() {
+<span class="fc" id="L141">        return quietHoursEnd;</span>
+    }
+
+    public ModelMode getModelMode() {
+<span class="fc" id="L145">        return modelMode;</span>
+    }
+
+    public boolean isNotificationsEnabled() {
+<span class="fc" id="L149">        return notificationsEnabled;</span>
+    }
+
+    public Instant getUpdatedAt() {
+<span class="nc" id="L153">        return updatedAt;</span>
+    }
+}
+
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.12.202403310830</span></div></body></html>

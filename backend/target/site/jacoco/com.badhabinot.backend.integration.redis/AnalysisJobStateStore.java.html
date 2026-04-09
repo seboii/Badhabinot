@@ -1,0 +1,176 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>AnalysisJobStateStore.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">BADHABINOT Backend</a> &gt; <a href="index.source.html" class="el_package">com.badhabinot.backend.integration.redis</a> &gt; <span class="el_source">AnalysisJobStateStore.java</span></div><h1>AnalysisJobStateStore.java</h1><pre class="source lang-java linenums">package com.badhabinot.backend.integration.redis;
+
+import com.badhabinot.backend.dto.monitoring.AnalysisJobStatusResponse;
+import com.badhabinot.backend.dto.monitoring.AnalyzeFrameResponse;
+import com.badhabinot.backend.model.monitoring.AnalysisJob;
+import com.badhabinot.backend.config.MonitoringRedisProperties;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import java.time.Instant;
+import java.util.Map;
+import java.util.Optional;
+import java.util.UUID;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.stereotype.Component;
+
+@Component
+public class AnalysisJobStateStore {
+
+<span class="fc" id="L21">    private static final Logger log = LoggerFactory.getLogger(AnalysisJobStateStore.class);</span>
+
+    private final StringRedisTemplate redisTemplate;
+    private final ObjectMapper objectMapper;
+    private final MonitoringRedisProperties properties;
+
+    public AnalysisJobStateStore(
+            StringRedisTemplate redisTemplate,
+            ObjectMapper objectMapper,
+            MonitoringRedisProperties properties
+<span class="nc" id="L31">    ) {</span>
+<span class="nc" id="L32">        this.redisTemplate = redisTemplate;</span>
+<span class="nc" id="L33">        this.objectMapper = objectMapper;</span>
+<span class="nc" id="L34">        this.properties = properties;</span>
+<span class="nc" id="L35">    }</span>
+
+    public void markProcessing(AnalysisJob job) {
+<span class="nc" id="L38">        Instant expiresAt = Instant.now().plus(properties.analysisJobTtl());</span>
+<span class="nc" id="L39">        save(new StoredAnalysisJobState(</span>
+<span class="nc" id="L40">                job.getId(),</span>
+<span class="nc" id="L41">                job.getUserId(),</span>
+<span class="nc" id="L42">                job.getStatus().name(),</span>
+<span class="nc" id="L43">                job.getSessionId(),</span>
+<span class="nc" id="L44">                job.getFrameId(),</span>
+                null,
+                null,
+                null,
+                null,
+<span class="nc" id="L49">                job.getCreatedAt(),</span>
+<span class="nc" id="L50">                job.getUpdatedAt(),</span>
+                expiresAt,
+                null,
+                null,
+                null
+        ));
+<span class="nc" id="L56">    }</span>
+
+    public void markCompleted(AnalysisJob job, AnalyzeFrameResponse response) {
+<span class="nc" id="L59">        Instant expiresAt = Instant.now().plus(properties.analysisJobTtl());</span>
+<span class="nc" id="L60">        save(new StoredAnalysisJobState(</span>
+<span class="nc" id="L61">                job.getId(),</span>
+<span class="nc" id="L62">                job.getUserId(),</span>
+<span class="nc" id="L63">                job.getStatus().name(),</span>
+<span class="nc" id="L64">                job.getSessionId(),</span>
+<span class="nc" id="L65">                job.getFrameId(),</span>
+<span class="nc" id="L66">                response.subjectPresent(),</span>
+<span class="nc" id="L67">                response.postureState(),</span>
+<span class="nc" id="L68">                response.behaviorType(),</span>
+<span class="nc" id="L69">                response.confidence(),</span>
+<span class="nc" id="L70">                job.getCreatedAt(),</span>
+<span class="nc" id="L71">                job.getUpdatedAt(),</span>
+                expiresAt,
+<span class="nc" id="L73">                objectMapper.convertValue(response.processing(), Map.class),</span>
+                null,
+                null
+        ));
+<span class="nc" id="L77">    }</span>
+
+    public void markFailed(AnalysisJob job) {
+<span class="nc" id="L80">        Instant expiresAt = Instant.now().plus(properties.analysisJobTtl());</span>
+<span class="nc" id="L81">        save(new StoredAnalysisJobState(</span>
+<span class="nc" id="L82">                job.getId(),</span>
+<span class="nc" id="L83">                job.getUserId(),</span>
+<span class="nc" id="L84">                job.getStatus().name(),</span>
+<span class="nc" id="L85">                job.getSessionId(),</span>
+<span class="nc" id="L86">                job.getFrameId(),</span>
+<span class="nc" id="L87">                job.getSubjectPresent(),</span>
+<span class="nc" id="L88">                job.getPostureState(),</span>
+<span class="nc" id="L89">                job.getBehaviorType(),</span>
+<span class="nc bnc" id="L90" title="All 2 branches missed.">                job.getConfidence() == null ? null : job.getConfidence().doubleValue(),</span>
+<span class="nc" id="L91">                job.getCreatedAt(),</span>
+<span class="nc" id="L92">                job.getUpdatedAt(),</span>
+                expiresAt,
+                null,
+<span class="nc" id="L95">                job.getFailureCode(),</span>
+<span class="nc" id="L96">                job.getFailureMessage()</span>
+        ));
+<span class="nc" id="L98">    }</span>
+
+    public Optional&lt;AnalysisJobStatusResponse&gt; findOwned(UUID analysisId, UUID userId) {
+<span class="nc" id="L101">        return read(analysisId)</span>
+<span class="nc" id="L102">                .filter(state -&gt; state.userId().equals(userId))</span>
+<span class="nc" id="L103">                .map(this::toResponse);</span>
+    }
+
+    private Optional&lt;StoredAnalysisJobState&gt; read(UUID analysisId) {
+        try {
+<span class="nc" id="L108">            String value = redisTemplate.opsForValue().get(key(analysisId));</span>
+<span class="nc bnc" id="L109" title="All 4 branches missed.">            if (value == null || value.isBlank()) {</span>
+<span class="nc" id="L110">                return Optional.empty();</span>
+            }
+<span class="nc" id="L112">            return Optional.of(objectMapper.readValue(value, StoredAnalysisJobState.class));</span>
+<span class="nc" id="L113">        } catch (Exception exception) {</span>
+<span class="nc" id="L114">            log.warn(&quot;Redis analysis job lookup failed for {}: {}&quot;, analysisId, exception.getMessage());</span>
+<span class="nc" id="L115">            return Optional.empty();</span>
+        }
+    }
+
+    private void save(StoredAnalysisJobState state) {
+        try {
+<span class="nc" id="L121">            redisTemplate.opsForValue().set(</span>
+<span class="nc" id="L122">                    key(state.analysisId()),</span>
+<span class="nc" id="L123">                    objectMapper.writeValueAsString(state),</span>
+<span class="nc" id="L124">                    properties.analysisJobTtl()</span>
+            );
+<span class="nc" id="L126">        } catch (JsonProcessingException exception) {</span>
+<span class="nc" id="L127">            log.warn(&quot;Unable to serialize analysis job state for {}: {}&quot;, state.analysisId(), exception.getMessage());</span>
+<span class="nc" id="L128">        } catch (Exception exception) {</span>
+<span class="nc" id="L129">            log.warn(&quot;Redis analysis job update failed for {}: {}&quot;, state.analysisId(), exception.getMessage());</span>
+<span class="nc" id="L130">        }</span>
+<span class="nc" id="L131">    }</span>
+
+    private AnalysisJobStatusResponse toResponse(StoredAnalysisJobState state) {
+<span class="nc" id="L134">        return new AnalysisJobStatusResponse(</span>
+<span class="nc" id="L135">                state.analysisId(),</span>
+<span class="nc" id="L136">                state.status(),</span>
+<span class="nc" id="L137">                state.sessionId(),</span>
+<span class="nc" id="L138">                state.frameId(),</span>
+<span class="nc" id="L139">                state.subjectPresent(),</span>
+<span class="nc" id="L140">                state.postureState(),</span>
+<span class="nc" id="L141">                state.behaviorType(),</span>
+<span class="nc" id="L142">                state.confidence(),</span>
+<span class="nc" id="L143">                state.createdAt(),</span>
+<span class="nc" id="L144">                state.updatedAt(),</span>
+<span class="nc" id="L145">                state.expiresAt(),</span>
+<span class="nc" id="L146">                state.processing(),</span>
+<span class="nc" id="L147">                state.failureCode(),</span>
+<span class="nc" id="L148">                state.failureMessage()</span>
+        );
+    }
+
+    private String key(UUID analysisId) {
+<span class="nc" id="L153">        return properties.analysisJobKeyPrefix() + analysisId;</span>
+    }
+
+<span class="nc" id="L156">    private record StoredAnalysisJobState(</span>
+            UUID analysisId,
+            UUID userId,
+            String status,
+            String sessionId,
+            String frameId,
+            Boolean subjectPresent,
+            String postureState,
+            String behaviorType,
+            Double confidence,
+            Instant createdAt,
+            Instant updatedAt,
+            Instant expiresAt,
+            Map&lt;String, Object&gt; processing,
+            String failureCode,
+            String failureMessage
+    ) {
+    }
+}
+
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.12.202403310830</span></div></body></html>

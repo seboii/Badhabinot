@@ -1,0 +1,99 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>AiChatRequest.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">BADHABINOT Backend</a> &gt; <a href="index.source.html" class="el_package">com.badhabinot.backend.dto.monitoring</a> &gt; <span class="el_source">AiChatRequest.java</span></div><h1>AiChatRequest.java</h1><pre class="source lang-java linenums">package com.badhabinot.backend.dto.monitoring;
+
+import java.time.Instant;
+import java.time.LocalDate;
+import java.util.List;
+import java.util.Map;
+
+<span class="fc" id="L8">public record AiChatRequest(</span>
+        String conversationId,
+        String userId,
+        String timezone,
+        LocalDate reportDate,
+        String message,
+        List&lt;Message&gt; history,
+        Context context
+) {
+<span class="fc" id="L17">    public record Message(</span>
+            String role,
+            String content,
+            Instant createdAt
+    ) {
+    }
+
+<span class="fc" id="L24">    public record Context(</span>
+            int hydrationProgressMl,
+            int waterGoalMl,
+            int analysesCompleted,
+            int postureAlertCount,
+            int handMovementCount,
+            int smokingLikeCount,
+            int reminderCount,
+            double poorPostureRatio,
+            String summary,
+            List&lt;String&gt; recommendations,
+            List&lt;Fact&gt; facts,
+            List&lt;Event&gt; recentEvents,
+            List&lt;Reminder&gt; recentReminders,
+            List&lt;DailySnapshot&gt; recentDailySnapshots,
+            Map&lt;String, Integer&gt; recentEventTypeCounts,
+            Map&lt;String, Integer&gt; recentReminderTypeCounts,
+            List&lt;SessionSnapshot&gt; recentSessions,
+            int totalSessionsLast7Days,
+            int totalSessionMinutesLast7Days,
+            int hydrationLast7DaysMl,
+            int analysesCompletedLast7Days,
+            String comparisonToPreviousDay,
+            List&lt;String&gt; dataGaps
+    ) {
+    }
+
+<span class="fc" id="L51">    public record Fact(</span>
+            String label,
+            String value
+    ) {
+    }
+
+<span class="nc" id="L57">    public record Event(</span>
+            String eventType,
+            double confidence,
+            String severity,
+            String interpretation,
+            Instant occurredAt,
+            Map&lt;String, Object&gt; evidence
+    ) {
+    }
+
+<span class="nc" id="L67">    public record Reminder(</span>
+            String reminderType,
+            String message,
+            String triggerReason,
+            Instant occurredAt
+    ) {
+    }
+
+<span class="nc" id="L75">    public record DailySnapshot(</span>
+            LocalDate reportDate,
+            int analysesCompleted,
+            int postureAlertCount,
+            int handMovementCount,
+            int smokingLikeCount,
+            int reminderCount,
+            int hydrationProgressMl,
+            int waterGoalMl,
+            double poorPostureRatio,
+            String summary
+    ) {
+    }
+
+<span class="nc" id="L89">    public record SessionSnapshot(</span>
+            String sessionId,
+            String status,
+            Instant startedAt,
+            Instant endedAt,
+            long durationMinutes
+    ) {
+    }
+}
+
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.12.202403310830</span></div></body></html>

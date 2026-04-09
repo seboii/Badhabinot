@@ -1,0 +1,143 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>AuthApplicationService.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">BADHABINOT Backend</a> &gt; <a href="index.source.html" class="el_package">com.badhabinot.backend.service.auth</a> &gt; <span class="el_source">AuthApplicationService.java</span></div><h1>AuthApplicationService.java</h1><pre class="source lang-java linenums">package com.badhabinot.backend.service.auth;
+
+import com.badhabinot.backend.dto.auth.AuthenticatedUserResponse;
+import com.badhabinot.backend.dto.auth.LoginRequest;
+import com.badhabinot.backend.dto.auth.LogoutRequest;
+import com.badhabinot.backend.dto.auth.RefreshTokenRequest;
+import com.badhabinot.backend.dto.auth.RegisterRequest;
+import com.badhabinot.backend.dto.auth.TokenResponse;
+import com.badhabinot.backend.exception.auth.AuthenticationFailedException;
+import com.badhabinot.backend.exception.auth.DuplicateEmailException;
+import com.badhabinot.backend.exception.auth.InvalidRefreshTokenException;
+import com.badhabinot.backend.model.auth.AccountStatus;
+import com.badhabinot.backend.model.auth.AuthUser;
+import com.badhabinot.backend.model.auth.RefreshToken;
+import com.badhabinot.backend.model.auth.UserRole;
+import com.badhabinot.backend.repository.auth.AuthUserRepository;
+import com.badhabinot.backend.repository.auth.RefreshTokenRepository;
+import com.badhabinot.backend.service.auth.RefreshTokenService;
+import com.badhabinot.backend.service.auth.TokenIssuer;
+import com.badhabinot.backend.service.user.UserContextService;
+import java.time.Instant;
+import java.util.List;
+import java.util.Locale;
+import java.util.UUID;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+@Service
+public class AuthApplicationService {
+
+    private final AuthUserRepository authUserRepository;
+    private final RefreshTokenRepository refreshTokenRepository;
+    private final PasswordEncoder passwordEncoder;
+    private final TokenIssuer tokenIssuer;
+    private final RefreshTokenService refreshTokenService;
+    private final UserContextService userContextService;
+
+    public AuthApplicationService(
+            AuthUserRepository authUserRepository,
+            RefreshTokenRepository refreshTokenRepository,
+            PasswordEncoder passwordEncoder,
+            TokenIssuer tokenIssuer,
+            RefreshTokenService refreshTokenService,
+            UserContextService userContextService
+<span class="fc" id="L47">    ) {</span>
+<span class="fc" id="L48">        this.authUserRepository = authUserRepository;</span>
+<span class="fc" id="L49">        this.refreshTokenRepository = refreshTokenRepository;</span>
+<span class="fc" id="L50">        this.passwordEncoder = passwordEncoder;</span>
+<span class="fc" id="L51">        this.tokenIssuer = tokenIssuer;</span>
+<span class="fc" id="L52">        this.refreshTokenService = refreshTokenService;</span>
+<span class="fc" id="L53">        this.userContextService = userContextService;</span>
+<span class="fc" id="L54">    }</span>
+
+    @Transactional(transactionManager = &quot;authTransactionManager&quot;)
+    public TokenResponse register(RegisterRequest request) {
+<span class="fc" id="L58">        String normalizedEmail = normalizeEmail(request.email());</span>
+<span class="fc bfc" id="L59" title="All 2 branches covered.">        if (authUserRepository.existsByEmail(normalizedEmail)) {</span>
+<span class="fc" id="L60">            throw new DuplicateEmailException(&quot;An account already exists for that email address&quot;);</span>
+        }
+
+<span class="fc" id="L63">        AuthUser user = AuthUser.create(</span>
+                normalizedEmail,
+<span class="fc" id="L65">                passwordEncoder.encode(request.password()),</span>
+                UserRole.USER,
+                AccountStatus.ACTIVE
+        );
+<span class="fc" id="L69">        authUserRepository.save(user);</span>
+
+<span class="fc" id="L71">        userContextService.bootstrap(user.getId(), normalizedEmail, request.displayName(), request.timezone(), request.locale());</span>
+<span class="fc" id="L72">        return issueTokenResponse(user);</span>
+    }
+
+    @Transactional(transactionManager = &quot;authTransactionManager&quot;)
+    public TokenResponse login(LoginRequest request) {
+<span class="nc" id="L77">        AuthUser user = authUserRepository.findByEmail(normalizeEmail(request.email()))</span>
+<span class="nc" id="L78">                .orElseThrow(() -&gt; new AuthenticationFailedException(&quot;Invalid email or password&quot;));</span>
+<span class="nc bnc" id="L79" title="All 2 branches missed.">        if (!passwordEncoder.matches(request.password(), user.getPasswordHash())) {</span>
+<span class="nc" id="L80">            throw new AuthenticationFailedException(&quot;Invalid email or password&quot;);</span>
+        }
+<span class="nc bnc" id="L82" title="All 2 branches missed.">        if (user.getStatus() != AccountStatus.ACTIVE) {</span>
+<span class="nc" id="L83">            throw new AuthenticationFailedException(&quot;Account is not active&quot;);</span>
+        }
+<span class="nc" id="L85">        return issueTokenResponse(user);</span>
+    }
+
+    @Transactional(transactionManager = &quot;authTransactionManager&quot;)
+    public TokenResponse refresh(RefreshTokenRequest request) {
+<span class="fc" id="L90">        RefreshToken storedToken = refreshTokenRepository.findByTokenHash(refreshTokenService.hash(request.refreshToken()))</span>
+<span class="pc" id="L91">                .orElseThrow(() -&gt; new InvalidRefreshTokenException(&quot;Refresh token is invalid&quot;));</span>
+
+<span class="pc bpc" id="L93" title="1 of 2 branches missed.">        if (!storedToken.isUsable()) {</span>
+<span class="fc" id="L94">            throw new InvalidRefreshTokenException(&quot;Refresh token is expired or revoked&quot;);</span>
+        }
+
+<span class="nc" id="L97">        AuthUser user = authUserRepository.findById(storedToken.getUserId())</span>
+<span class="nc" id="L98">                .orElseThrow(() -&gt; new InvalidRefreshTokenException(&quot;User no longer exists for refresh token&quot;));</span>
+
+<span class="nc" id="L100">        storedToken.revoke(Instant.now());</span>
+<span class="nc" id="L101">        return issueTokenResponse(user);</span>
+    }
+
+    @Transactional(transactionManager = &quot;authTransactionManager&quot;, readOnly = true)
+    public AuthenticatedUserResponse me(Jwt jwt) {
+<span class="nc" id="L106">        UUID userId = UUID.fromString(jwt.getSubject());</span>
+<span class="nc" id="L107">        String email = jwt.getClaimAsString(&quot;email&quot;);</span>
+<span class="nc" id="L108">        List&lt;String&gt; roles = jwt.getClaimAsStringList(&quot;roles&quot;);</span>
+<span class="nc" id="L109">        return new AuthenticatedUserResponse(userId, email, roles, jwt.getIssuedAt(), jwt.getExpiresAt());</span>
+    }
+
+    @Transactional(transactionManager = &quot;authTransactionManager&quot;)
+    public void logout(Jwt jwt, LogoutRequest request) {
+<span class="nc" id="L114">        refreshTokenRepository.findByTokenHash(refreshTokenService.hash(request.refreshToken()))</span>
+<span class="nc" id="L115">                .filter(token -&gt; token.getUserId().equals(UUID.fromString(jwt.getSubject())))</span>
+<span class="nc" id="L116">                .ifPresent(token -&gt; token.revoke(Instant.now()));</span>
+<span class="nc" id="L117">    }</span>
+
+    private TokenResponse issueTokenResponse(AuthUser user) {
+<span class="fc" id="L120">        TokenIssuer.IssuedAccessToken accessToken = tokenIssuer.issueAccessToken(user);</span>
+<span class="fc" id="L121">        RefreshTokenService.GeneratedRefreshToken refresh = refreshTokenService.generate(user.getId());</span>
+
+<span class="fc" id="L123">        refreshTokenRepository.save(RefreshToken.issue(</span>
+<span class="fc" id="L124">                user.getId(),</span>
+<span class="fc" id="L125">                refresh.tokenHash(),</span>
+<span class="fc" id="L126">                refresh.expiresAt()</span>
+        ));
+
+<span class="fc" id="L129">        return new TokenResponse(</span>
+<span class="fc" id="L130">                accessToken.tokenValue(),</span>
+<span class="fc" id="L131">                accessToken.expiresAt(),</span>
+<span class="fc" id="L132">                refresh.plainTextToken(),</span>
+<span class="fc" id="L133">                refresh.expiresAt(),</span>
+<span class="fc" id="L134">                new TokenResponse.UserSummary(user.getId(), user.getEmail(), user.getRole().name())</span>
+        );
+    }
+
+    private String normalizeEmail(String email) {
+<span class="fc" id="L139">        return email.trim().toLowerCase(Locale.ROOT);</span>
+    }
+}
+
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.12.202403310830</span></div></body></html>

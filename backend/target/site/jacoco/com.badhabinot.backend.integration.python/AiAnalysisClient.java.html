@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>AiAnalysisClient.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">BADHABINOT Backend</a> &gt; <a href="index.source.html" class="el_package">com.badhabinot.backend.integration.python</a> &gt; <span class="el_source">AiAnalysisClient.java</span></div><h1>AiAnalysisClient.java</h1><pre class="source lang-java linenums">package com.badhabinot.backend.integration.python;
+
+import com.badhabinot.backend.dto.monitoring.AiAnalysisRequest;
+import com.badhabinot.backend.dto.monitoring.AiAnalysisResponse;
+import com.badhabinot.backend.exception.monitoring.DownstreamServiceException;
+import com.badhabinot.backend.exception.monitoring.DownstreamTimeoutException;
+import java.time.Duration;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.http.HttpStatusCode;
+import org.springframework.stereotype.Component;
+import org.springframework.web.reactive.function.client.WebClient;
+import org.springframework.web.reactive.function.client.WebClientRequestException;
+import reactor.core.publisher.Mono;
+
+@Component
+public class AiAnalysisClient {
+
+    private final WebClient webClient;
+
+<span class="fc" id="L20">    public AiAnalysisClient(@Qualifier(&quot;aiServiceWebClient&quot;) WebClient webClient) {</span>
+<span class="fc" id="L21">        this.webClient = webClient;</span>
+<span class="fc" id="L22">    }</span>
+
+    public AiAnalysisInvocation analyze(AiAnalysisRequest request) {
+<span class="fc" id="L25">        long started = System.nanoTime();</span>
+        try {
+<span class="fc" id="L27">            AiAnalysisResponse analysisResponse = webClient.post()</span>
+<span class="fc" id="L28">                    .uri(&quot;/v1/analysis/interpret&quot;)</span>
+<span class="fc" id="L29">                    .bodyValue(request)</span>
+<span class="fc" id="L30">                    .retrieve()</span>
+<span class="fc" id="L31">                    .onStatus(HttpStatusCode::isError, clientResponse -&gt; clientResponse.bodyToMono(String.class)</span>
+<span class="fc" id="L32">                            .defaultIfEmpty(&quot;ai-service error&quot;)</span>
+<span class="fc" id="L33">                            .flatMap(body -&gt; Mono.error(new DownstreamServiceException(&quot;ai_service_error&quot;, body))))</span>
+<span class="fc" id="L34">                    .bodyToMono(AiAnalysisResponse.class)</span>
+<span class="fc" id="L35">                    .block(Duration.ofSeconds(20));</span>
+<span class="fc" id="L36">            long latencyMs = (System.nanoTime() - started) / 1_000_000;</span>
+<span class="fc" id="L37">            return new AiAnalysisInvocation(analysisResponse, latencyMs);</span>
+<span class="fc" id="L38">        } catch (DownstreamServiceException exception) {</span>
+<span class="fc" id="L39">            throw exception;</span>
+<span class="fc" id="L40">        } catch (WebClientRequestException exception) {</span>
+<span class="pc bpc" id="L41" title="1 of 2 branches missed.">            if (isTimeout(exception)) {</span>
+<span class="fc" id="L42">                throw new DownstreamTimeoutException(&quot;ai_service_timeout&quot;, &quot;Timed out while waiting for ai-service&quot;);</span>
+            }
+<span class="nc" id="L44">            throw new DownstreamServiceException(&quot;ai_service_unavailable&quot;, &quot;Unable to reach ai-service&quot;);</span>
+<span class="nc" id="L45">        } catch (Exception exception) {</span>
+<span class="nc" id="L46">            throw new DownstreamServiceException(&quot;ai_service_unavailable&quot;, &quot;Unexpected failure while calling ai-service&quot;);</span>
+        }
+    }
+
+    private boolean isTimeout(Throwable throwable) {
+<span class="fc" id="L51">        Throwable cursor = throwable;</span>
+<span class="pc bpc" id="L52" title="1 of 2 branches missed.">        while (cursor != null) {</span>
+<span class="fc" id="L53">            String simpleName = cursor.getClass().getSimpleName().toLowerCase();</span>
+<span class="fc bfc" id="L54" title="All 2 branches covered.">            if (simpleName.contains(&quot;timeout&quot;)) {</span>
+<span class="fc" id="L55">                return true;</span>
+            }
+<span class="fc" id="L57">            cursor = cursor.getCause();</span>
+<span class="fc" id="L58">        }</span>
+<span class="nc" id="L59">        return false;</span>
+    }
+
+<span class="fc" id="L62">    public record AiAnalysisInvocation(</span>
+            AiAnalysisResponse response,
+            long latencyMs
+    ) {
+    }
+}
+
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.12.202403310830</span></div></body></html>

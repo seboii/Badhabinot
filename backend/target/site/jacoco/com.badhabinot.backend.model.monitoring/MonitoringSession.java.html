@@ -1,0 +1,101 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>MonitoringSession.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">BADHABINOT Backend</a> &gt; <a href="index.source.html" class="el_package">com.badhabinot.backend.model.monitoring</a> &gt; <span class="el_source">MonitoringSession.java</span></div><h1>MonitoringSession.java</h1><pre class="source lang-java linenums">package com.badhabinot.backend.model.monitoring;
+
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.Id;
+import jakarta.persistence.PrePersist;
+import jakarta.persistence.PreUpdate;
+import jakarta.persistence.Table;
+import java.time.Instant;
+import java.util.UUID;
+
+@Entity
+@Table(name = &quot;monitoring_sessions&quot;)
+public class MonitoringSession {
+
+    @Id
+    private UUID id;
+
+    @Column(name = &quot;user_id&quot;, nullable = false)
+    private UUID userId;
+
+    @Column(name = &quot;client_surface&quot;, nullable = false, length = 32)
+    private String clientSurface;
+
+    @Column(name = &quot;device_type&quot;, nullable = false, length = 32)
+    private String deviceType;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 32)
+    private MonitoringSessionStatus status;
+
+    @Column(name = &quot;started_at&quot;, nullable = false)
+    private Instant startedAt;
+
+    @Column(name = &quot;ended_at&quot;)
+    private Instant endedAt;
+
+    @Column(name = &quot;created_at&quot;, nullable = false)
+    private Instant createdAt;
+
+    @Column(name = &quot;updated_at&quot;, nullable = false)
+    private Instant updatedAt;
+
+<span class="nc" id="L46">    protected MonitoringSession() {</span>
+<span class="nc" id="L47">    }</span>
+
+<span class="fc" id="L49">    private MonitoringSession(UUID id, UUID userId, String clientSurface, String deviceType) {</span>
+<span class="fc" id="L50">        this.id = id;</span>
+<span class="fc" id="L51">        this.userId = userId;</span>
+<span class="fc" id="L52">        this.clientSurface = clientSurface;</span>
+<span class="fc" id="L53">        this.deviceType = deviceType;</span>
+<span class="fc" id="L54">        this.status = MonitoringSessionStatus.ACTIVE;</span>
+<span class="fc" id="L55">        this.startedAt = Instant.now();</span>
+<span class="fc" id="L56">    }</span>
+
+    public static MonitoringSession start(UUID userId, String clientSurface, String deviceType) {
+<span class="fc" id="L59">        return new MonitoringSession(UUID.randomUUID(), userId, clientSurface, deviceType);</span>
+    }
+
+    @PrePersist
+    void onCreate() {
+<span class="nc" id="L64">        Instant now = Instant.now();</span>
+<span class="nc" id="L65">        createdAt = now;</span>
+<span class="nc" id="L66">        updatedAt = now;</span>
+<span class="nc" id="L67">    }</span>
+
+    @PreUpdate
+    void onUpdate() {
+<span class="nc" id="L71">        updatedAt = Instant.now();</span>
+<span class="nc" id="L72">    }</span>
+
+    public void stop() {
+<span class="fc" id="L75">        this.status = MonitoringSessionStatus.STOPPED;</span>
+<span class="fc" id="L76">        this.endedAt = Instant.now();</span>
+<span class="fc" id="L77">    }</span>
+
+    public UUID getId() {
+<span class="fc" id="L80">        return id;</span>
+    }
+
+    public UUID getUserId() {
+<span class="nc" id="L84">        return userId;</span>
+    }
+
+    public MonitoringSessionStatus getStatus() {
+<span class="fc" id="L88">        return status;</span>
+    }
+
+    public Instant getStartedAt() {
+<span class="fc" id="L92">        return startedAt;</span>
+    }
+
+    public Instant getEndedAt() {
+<span class="nc" id="L96">        return endedAt;</span>
+    }
+}
+
+
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.12.202403310830</span></div></body></html>

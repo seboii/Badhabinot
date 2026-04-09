@@ -1,0 +1,10 @@
+/workspace/backend/src/test/java/com/badhabinot/backend/integration/python/AiAnalysisClientTest.java
+/workspace/backend/src/test/java/com/badhabinot/backend/integration/python/AiChatClientTest.java
+/workspace/backend/src/test/java/com/badhabinot/backend/integration/python/VisionServiceClientTest.java
+/workspace/backend/src/test/java/com/badhabinot/backend/service/auth/AuthApplicationServiceTest.java
+/workspace/backend/src/test/java/com/badhabinot/backend/service/monitoring/AnalysisOrchestratorServiceTest.java
+/workspace/backend/src/test/java/com/badhabinot/backend/service/monitoring/DailyReportServiceTest.java
+/workspace/backend/src/test/java/com/badhabinot/backend/service/monitoring/GroundedChatServiceTest.java
+/workspace/backend/src/test/java/com/badhabinot/backend/service/monitoring/MonitoringExperienceServiceTest.java
+/workspace/backend/src/test/java/com/badhabinot/backend/service/monitoring/ReminderEngineServiceTest.java
+/workspace/backend/src/test/java/com/badhabinot/backend/service/user/UserContextServiceTest.java

@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>RefreshTokenService.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">BADHABINOT Backend</a> &gt; <a href="index.source.html" class="el_package">com.badhabinot.backend.service.auth</a> &gt; <span class="el_source">RefreshTokenService.java</span></div><h1>RefreshTokenService.java</h1><pre class="source lang-java linenums">package com.badhabinot.backend.service.auth;
+
+import com.badhabinot.backend.config.JwtProperties;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.time.Instant;
+import java.util.Base64;
+import java.util.HexFormat;
+import java.util.UUID;
+import org.springframework.stereotype.Component;
+
+@Component
+public class RefreshTokenService {
+
+    private final JwtProperties jwtProperties;
+
+<span class="nc" id="L18">    public RefreshTokenService(JwtProperties jwtProperties) {</span>
+<span class="nc" id="L19">        this.jwtProperties = jwtProperties;</span>
+<span class="nc" id="L20">    }</span>
+
+    public GeneratedRefreshToken generate(UUID userId) {
+<span class="nc" id="L23">        String token = Base64.getUrlEncoder().withoutPadding()</span>
+<span class="nc" id="L24">                .encodeToString((userId + &quot;:&quot; + UUID.randomUUID() + &quot;:&quot; + Instant.now()).getBytes(StandardCharsets.UTF_8));</span>
+<span class="nc" id="L25">        Instant expiresAt = Instant.now().plus(jwtProperties.refreshTokenTtl());</span>
+<span class="nc" id="L26">        return new GeneratedRefreshToken(token, hash(token), expiresAt);</span>
+    }
+
+    public String hash(String token) {
+        try {
+<span class="nc" id="L31">            MessageDigest digest = MessageDigest.getInstance(&quot;SHA-256&quot;);</span>
+<span class="nc" id="L32">            byte[] hash = digest.digest(token.getBytes(StandardCharsets.UTF_8));</span>
+<span class="nc" id="L33">            return HexFormat.of().formatHex(hash);</span>
+<span class="nc" id="L34">        } catch (NoSuchAlgorithmException exception) {</span>
+<span class="nc" id="L35">            throw new IllegalStateException(&quot;SHA-256 must be available in the JDK&quot;, exception);</span>
+        }
+    }
+
+<span class="fc" id="L39">    public record GeneratedRefreshToken(</span>
+            String plainTextToken,
+            String tokenHash,
+            Instant expiresAt
+    ) {
+    }
+}
+
+
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.12.202403310830</span></div></body></html>

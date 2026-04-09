@@ -1,0 +1,104 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>UserProfile.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">BADHABINOT Backend</a> &gt; <a href="index.source.html" class="el_package">com.badhabinot.backend.model.user</a> &gt; <span class="el_source">UserProfile.java</span></div><h1>UserProfile.java</h1><pre class="source lang-java linenums">package com.badhabinot.backend.model.user;
+
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.Id;
+import jakarta.persistence.PrePersist;
+import jakarta.persistence.PreUpdate;
+import jakarta.persistence.Table;
+import java.time.Instant;
+import java.util.UUID;
+
+@Entity
+@Table(name = &quot;user_profiles&quot;)
+public class UserProfile {
+
+    @Id
+    @Column(name = &quot;user_id&quot;)
+    private UUID userId;
+
+    @Column(nullable = false, unique = true, length = 320)
+    private String email;
+
+    @Column(name = &quot;display_name&quot;, nullable = false, length = 100)
+    private String displayName;
+
+    @Column(nullable = false, length = 64)
+    private String timezone;
+
+    @Column(nullable = false, length = 16)
+    private String locale;
+
+    @Column(name = &quot;created_at&quot;, nullable = false)
+    private Instant createdAt;
+
+    @Column(name = &quot;updated_at&quot;, nullable = false)
+    private Instant updatedAt;
+
+<span class="nc" id="L38">    protected UserProfile() {</span>
+<span class="nc" id="L39">    }</span>
+
+<span class="fc" id="L41">    private UserProfile(UUID userId, String email, String displayName, String timezone, String locale) {</span>
+<span class="fc" id="L42">        this.userId = userId;</span>
+<span class="fc" id="L43">        this.email = email;</span>
+<span class="fc" id="L44">        this.displayName = displayName;</span>
+<span class="fc" id="L45">        this.timezone = timezone;</span>
+<span class="fc" id="L46">        this.locale = locale;</span>
+<span class="fc" id="L47">    }</span>
+
+    public static UserProfile create(UUID userId, String email, String displayName, String timezone, String locale) {
+<span class="fc" id="L50">        return new UserProfile(userId, email, displayName, timezone, locale);</span>
+    }
+
+    @PrePersist
+    void onCreate() {
+<span class="nc" id="L55">        Instant now = Instant.now();</span>
+<span class="nc" id="L56">        createdAt = now;</span>
+<span class="nc" id="L57">        updatedAt = now;</span>
+<span class="nc" id="L58">    }</span>
+
+    @PreUpdate
+    void onUpdate() {
+<span class="nc" id="L62">        updatedAt = Instant.now();</span>
+<span class="nc" id="L63">    }</span>
+
+    public void updateFromBootstrap(String email, String displayName, String timezone, String locale) {
+<span class="fc" id="L66">        this.email = email;</span>
+<span class="fc" id="L67">        this.displayName = displayName;</span>
+<span class="fc" id="L68">        this.timezone = timezone;</span>
+<span class="fc" id="L69">        this.locale = locale;</span>
+<span class="fc" id="L70">    }</span>
+
+    public void updateProfile(String displayName, String timezone, String locale) {
+<span class="nc" id="L73">        this.displayName = displayName;</span>
+<span class="nc" id="L74">        this.timezone = timezone;</span>
+<span class="nc" id="L75">        this.locale = locale;</span>
+<span class="nc" id="L76">    }</span>
+
+    public UUID getUserId() {
+<span class="nc" id="L79">        return userId;</span>
+    }
+
+    public String getEmail() {
+<span class="nc" id="L83">        return email;</span>
+    }
+
+    public String getDisplayName() {
+<span class="nc" id="L87">        return displayName;</span>
+    }
+
+    public String getTimezone() {
+<span class="fc" id="L91">        return timezone;</span>
+    }
+
+    public String getLocale() {
+<span class="nc" id="L95">        return locale;</span>
+    }
+
+    public Instant getUpdatedAt() {
+<span class="nc" id="L99">        return updatedAt;</span>
+    }
+}
+
+
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.12.202403310830</span></div></body></html>

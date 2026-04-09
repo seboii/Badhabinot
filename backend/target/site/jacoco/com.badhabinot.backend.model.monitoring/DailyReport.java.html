@@ -1,0 +1,170 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>DailyReport.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">BADHABINOT Backend</a> &gt; <a href="index.source.html" class="el_package">com.badhabinot.backend.model.monitoring</a> &gt; <span class="el_source">DailyReport.java</span></div><h1>DailyReport.java</h1><pre class="source lang-java linenums">package com.badhabinot.backend.model.monitoring;
+
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.Id;
+import jakarta.persistence.PrePersist;
+import jakarta.persistence.PreUpdate;
+import jakarta.persistence.Table;
+import java.math.BigDecimal;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.util.UUID;
+
+@Entity
+@Table(name = &quot;daily_reports&quot;)
+public class DailyReport {
+
+    @Id
+    private UUID id;
+
+    @Column(name = &quot;user_id&quot;, nullable = false)
+    private UUID userId;
+
+    @Column(name = &quot;report_date&quot;, nullable = false)
+    private LocalDate reportDate;
+
+    @Column(name = &quot;analyses_completed&quot;, nullable = false)
+    private int analysesCompleted;
+
+    @Column(name = &quot;posture_alert_count&quot;, nullable = false)
+    private int postureAlertCount;
+
+    @Column(name = &quot;hand_movement_count&quot;, nullable = false)
+    private int handMovementCount;
+
+    @Column(name = &quot;smoking_like_count&quot;, nullable = false)
+    private int smokingLikeCount;
+
+    @Column(name = &quot;reminder_count&quot;, nullable = false)
+    private int reminderCount;
+
+    @Column(name = &quot;hydration_progress_ml&quot;, nullable = false)
+    private int hydrationProgressMl;
+
+    @Column(name = &quot;water_goal_ml&quot;, nullable = false)
+    private int waterGoalMl;
+
+    @Column(name = &quot;poor_posture_ratio&quot;, nullable = false, precision = 6, scale = 4)
+    private BigDecimal poorPostureRatio;
+
+    @Column(nullable = false, columnDefinition = &quot;TEXT&quot;)
+    private String summary;
+
+    @Column(name = &quot;recommendations_json&quot;, nullable = false, columnDefinition = &quot;TEXT&quot;)
+    private String recommendationsJson;
+
+    @Column(name = &quot;generated_at&quot;, nullable = false)
+    private Instant generatedAt;
+
+    @Column(name = &quot;created_at&quot;, nullable = false)
+    private Instant createdAt;
+
+    @Column(name = &quot;updated_at&quot;, nullable = false)
+    private Instant updatedAt;
+
+<span class="nc" id="L66">    protected DailyReport() {</span>
+<span class="nc" id="L67">    }</span>
+
+<span class="fc" id="L69">    private DailyReport(UUID id, UUID userId, LocalDate reportDate) {</span>
+<span class="fc" id="L70">        this.id = id;</span>
+<span class="fc" id="L71">        this.userId = userId;</span>
+<span class="fc" id="L72">        this.reportDate = reportDate;</span>
+<span class="fc" id="L73">    }</span>
+
+    public static DailyReport create(UUID userId, LocalDate reportDate) {
+<span class="fc" id="L76">        return new DailyReport(UUID.randomUUID(), userId, reportDate);</span>
+    }
+
+    public void refresh(
+            int analysesCompleted,
+            int postureAlertCount,
+            int handMovementCount,
+            int smokingLikeCount,
+            int reminderCount,
+            int hydrationProgressMl,
+            int waterGoalMl,
+            double poorPostureRatio,
+            String summary,
+            String recommendationsJson,
+            Instant generatedAt
+    ) {
+<span class="fc" id="L92">        this.analysesCompleted = analysesCompleted;</span>
+<span class="fc" id="L93">        this.postureAlertCount = postureAlertCount;</span>
+<span class="fc" id="L94">        this.handMovementCount = handMovementCount;</span>
+<span class="fc" id="L95">        this.smokingLikeCount = smokingLikeCount;</span>
+<span class="fc" id="L96">        this.reminderCount = reminderCount;</span>
+<span class="fc" id="L97">        this.hydrationProgressMl = hydrationProgressMl;</span>
+<span class="fc" id="L98">        this.waterGoalMl = waterGoalMl;</span>
+<span class="fc" id="L99">        this.poorPostureRatio = BigDecimal.valueOf(poorPostureRatio);</span>
+<span class="fc" id="L100">        this.summary = summary;</span>
+<span class="fc" id="L101">        this.recommendationsJson = recommendationsJson;</span>
+<span class="fc" id="L102">        this.generatedAt = generatedAt;</span>
+<span class="fc" id="L103">    }</span>
+
+    @PrePersist
+    void onCreate() {
+<span class="nc" id="L107">        Instant now = Instant.now();</span>
+<span class="nc" id="L108">        createdAt = now;</span>
+<span class="nc" id="L109">        updatedAt = now;</span>
+<span class="nc" id="L110">    }</span>
+
+    @PreUpdate
+    void onUpdate() {
+<span class="nc" id="L114">        updatedAt = Instant.now();</span>
+<span class="nc" id="L115">    }</span>
+
+    public UUID getId() {
+<span class="fc" id="L118">        return id;</span>
+    }
+
+    public LocalDate getReportDate() {
+<span class="nc" id="L122">        return reportDate;</span>
+    }
+
+    public int getAnalysesCompleted() {
+<span class="nc" id="L126">        return analysesCompleted;</span>
+    }
+
+    public int getPostureAlertCount() {
+<span class="nc" id="L130">        return postureAlertCount;</span>
+    }
+
+    public int getHandMovementCount() {
+<span class="nc" id="L134">        return handMovementCount;</span>
+    }
+
+    public int getSmokingLikeCount() {
+<span class="nc" id="L138">        return smokingLikeCount;</span>
+    }
+
+    public int getReminderCount() {
+<span class="nc" id="L142">        return reminderCount;</span>
+    }
+
+    public int getHydrationProgressMl() {
+<span class="nc" id="L146">        return hydrationProgressMl;</span>
+    }
+
+    public int getWaterGoalMl() {
+<span class="nc" id="L150">        return waterGoalMl;</span>
+    }
+
+    public BigDecimal getPoorPostureRatio() {
+<span class="nc" id="L154">        return poorPostureRatio;</span>
+    }
+
+    public String getSummary() {
+<span class="fc" id="L158">        return summary;</span>
+    }
+
+    public String getRecommendationsJson() {
+<span class="fc" id="L162">        return recommendationsJson;</span>
+    }
+
+    public Instant getGeneratedAt() {
+<span class="fc" id="L166">        return generatedAt;</span>
+    }
+}
+
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.12.202403310830</span></div></body></html>

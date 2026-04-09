@@ -1,0 +1,165 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>BehaviorEvent.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">BADHABINOT Backend</a> &gt; <a href="index.source.html" class="el_package">com.badhabinot.backend.model.monitoring</a> &gt; <span class="el_source">BehaviorEvent.java</span></div><h1>BehaviorEvent.java</h1><pre class="source lang-java linenums">package com.badhabinot.backend.model.monitoring;
+
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.Id;
+import jakarta.persistence.PrePersist;
+import jakarta.persistence.Table;
+import java.math.BigDecimal;
+import java.time.Instant;
+import java.util.UUID;
+
+@Entity
+@Table(name = &quot;behavior_events&quot;)
+public class BehaviorEvent {
+
+    @Id
+    private UUID id;
+
+    @Column(name = &quot;analysis_id&quot;)
+    private UUID analysisId;
+
+    @Column(name = &quot;user_id&quot;, nullable = false)
+    private UUID userId;
+
+    @Column(name = &quot;session_id&quot;)
+    private UUID sessionId;
+
+    @Column(name = &quot;event_type&quot;, nullable = false, length = 64)
+    private String eventType;
+
+    @Column(nullable = false, length = 64)
+    private String detector;
+
+    @Column(nullable = false, precision = 6, scale = 4)
+    private BigDecimal confidence;
+
+    @Column(nullable = false, length = 16)
+    private String severity;
+
+    @Column(nullable = false, length = 255)
+    private String interpretation;
+
+    @Column(name = &quot;recommendation_hint&quot;, nullable = false, length = 255)
+    private String recommendationHint;
+
+    @Column(name = &quot;evidence_json&quot;, nullable = false, columnDefinition = &quot;TEXT&quot;)
+    private String evidenceJson;
+
+    @Column(name = &quot;occurred_at&quot;, nullable = false)
+    private Instant occurredAt;
+
+    @Column(name = &quot;created_at&quot;, nullable = false)
+    private Instant createdAt;
+
+<span class="nc" id="L55">    protected BehaviorEvent() {</span>
+<span class="nc" id="L56">    }</span>
+
+    private BehaviorEvent(
+            UUID id,
+            UUID analysisId,
+            UUID userId,
+            UUID sessionId,
+            String eventType,
+            String detector,
+            double confidence,
+            String severity,
+            String interpretation,
+            String recommendationHint,
+            String evidenceJson,
+            Instant occurredAt
+<span class="fc" id="L71">    ) {</span>
+<span class="fc" id="L72">        this.id = id;</span>
+<span class="fc" id="L73">        this.analysisId = analysisId;</span>
+<span class="fc" id="L74">        this.userId = userId;</span>
+<span class="fc" id="L75">        this.sessionId = sessionId;</span>
+<span class="fc" id="L76">        this.eventType = eventType;</span>
+<span class="fc" id="L77">        this.detector = detector;</span>
+<span class="fc" id="L78">        this.confidence = BigDecimal.valueOf(confidence);</span>
+<span class="fc" id="L79">        this.severity = severity;</span>
+<span class="fc" id="L80">        this.interpretation = interpretation;</span>
+<span class="fc" id="L81">        this.recommendationHint = recommendationHint;</span>
+<span class="fc" id="L82">        this.evidenceJson = evidenceJson;</span>
+<span class="fc" id="L83">        this.occurredAt = occurredAt;</span>
+<span class="fc" id="L84">    }</span>
+
+    public static BehaviorEvent create(
+            UUID analysisId,
+            UUID userId,
+            UUID sessionId,
+            String eventType,
+            String detector,
+            double confidence,
+            String severity,
+            String interpretation,
+            String recommendationHint,
+            String evidenceJson,
+            Instant occurredAt
+    ) {
+<span class="fc" id="L99">        return new BehaviorEvent(</span>
+<span class="fc" id="L100">                UUID.randomUUID(),</span>
+                analysisId,
+                userId,
+                sessionId,
+                eventType,
+                detector,
+                confidence,
+                severity,
+                interpretation,
+                recommendationHint,
+                evidenceJson,
+                occurredAt
+        );
+    }
+
+    @PrePersist
+    void onCreate() {
+<span class="nc" id="L117">        createdAt = Instant.now();</span>
+<span class="nc" id="L118">    }</span>
+
+    public UUID getId() {
+<span class="fc" id="L121">        return id;</span>
+    }
+
+    public UUID getAnalysisId() {
+<span class="fc" id="L125">        return analysisId;</span>
+    }
+
+    public UUID getSessionId() {
+<span class="nc" id="L129">        return sessionId;</span>
+    }
+
+    public String getEventType() {
+<span class="fc" id="L133">        return eventType;</span>
+    }
+
+    public String getDetector() {
+<span class="nc" id="L137">        return detector;</span>
+    }
+
+    public BigDecimal getConfidence() {
+<span class="nc" id="L141">        return confidence;</span>
+    }
+
+    public String getSeverity() {
+<span class="nc" id="L145">        return severity;</span>
+    }
+
+    public String getInterpretation() {
+<span class="nc" id="L149">        return interpretation;</span>
+    }
+
+    public String getRecommendationHint() {
+<span class="nc" id="L153">        return recommendationHint;</span>
+    }
+
+    public String getEvidenceJson() {
+<span class="nc" id="L157">        return evidenceJson;</span>
+    }
+
+    public Instant getOccurredAt() {
+<span class="fc" id="L161">        return occurredAt;</span>
+    }
+}
+
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.12.202403310830</span></div></body></html>
