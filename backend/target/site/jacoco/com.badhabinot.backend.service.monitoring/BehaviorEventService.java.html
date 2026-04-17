@@ -1,0 +1,221 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>BehaviorEventService.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">BADHABINOT Backend</a> &gt; <a href="index.source.html" class="el_package">com.badhabinot.backend.service.monitoring</a> &gt; <span class="el_source">BehaviorEventService.java</span></div><h1>BehaviorEventService.java</h1><pre class="source lang-java linenums">package com.badhabinot.backend.service.monitoring;
+
+import com.badhabinot.backend.dto.monitoring.AiAnalysisResponse;
+import com.badhabinot.backend.dto.monitoring.BehaviorEventResponse;
+import com.badhabinot.backend.dto.monitoring.VisionAnalysisResponse;
+import com.badhabinot.backend.model.monitoring.ActivityCategory;
+import com.badhabinot.backend.model.monitoring.ActivityFeedItem;
+import com.badhabinot.backend.model.monitoring.BehaviorEvent;
+import com.badhabinot.backend.repository.monitoring.ActivityFeedRepository;
+import com.badhabinot.backend.repository.monitoring.BehaviorEventRepository;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+@Service
+public class BehaviorEventService {
+
+<span class="fc" id="L26">    private static final TypeReference&lt;Map&lt;String, Object&gt;&gt; MAP_TYPE = new TypeReference&lt;&gt;() {</span>
+    };
+
+    private final BehaviorEventRepository behaviorEventRepository;
+    private final ActivityFeedRepository activityFeedRepository;
+    private final ObjectMapper objectMapper;
+
+    public BehaviorEventService(
+            BehaviorEventRepository behaviorEventRepository,
+            ActivityFeedRepository activityFeedRepository,
+            ObjectMapper objectMapper
+<span class="nc" id="L37">    ) {</span>
+<span class="nc" id="L38">        this.behaviorEventRepository = behaviorEventRepository;</span>
+<span class="nc" id="L39">        this.activityFeedRepository = activityFeedRepository;</span>
+<span class="nc" id="L40">        this.objectMapper = objectMapper;</span>
+<span class="nc" id="L41">    }</span>
+
+    @Transactional(transactionManager = &quot;monitoringTransactionManager&quot;)
+    public List&lt;BehaviorEventResponse&gt; recordAnalysisEvents(
+            UUID userId,
+            UUID sessionId,
+            UUID analysisId,
+            Instant occurredAt,
+            VisionAnalysisResponse visionResponse,
+            AiAnalysisResponse aiResponse
+    ) {
+<span class="nc" id="L52">        Map&lt;String, PendingEvent&gt; eventByType = new LinkedHashMap&lt;&gt;();</span>
+<span class="nc bnc" id="L53" title="All 2 branches missed.">        for (VisionAnalysisResponse.Detection detection : visionResponse.detections()) {</span>
+<span class="nc" id="L54">            eventByType.put(</span>
+<span class="nc" id="L55">                    detection.eventType(),</span>
+                    new PendingEvent(
+<span class="nc" id="L57">                            detection.eventType(),</span>
+<span class="nc" id="L58">                            detectorFor(detection.eventType()),</span>
+<span class="nc" id="L59">                            detection.confidence(),</span>
+<span class="nc" id="L60">                            detection.severity(),</span>
+<span class="nc" id="L61">                            interpretationFor(detection.eventType(), detection.confidence()),</span>
+<span class="nc" id="L62">                            detection.recommendationHint(),</span>
+<span class="nc" id="L63">                            objectMapper.convertValue(detection.evidence(), MAP_TYPE)</span>
+                    )
+            );
+<span class="nc" id="L66">        }</span>
+
+<span class="nc bnc" id="L68" title="All 4 branches missed.">        if (aiResponse.behaviorType() != null &amp;&amp; !&quot;none&quot;.equalsIgnoreCase(aiResponse.behaviorType())) {</span>
+<span class="nc" id="L69">            eventByType.putIfAbsent(</span>
+<span class="nc" id="L70">                    aiResponse.behaviorType(),</span>
+                    new PendingEvent(
+<span class="nc" id="L72">                            aiResponse.behaviorType(),</span>
+                            &quot;ai.behavior&quot;,
+<span class="nc" id="L74">                            aiResponse.confidence(),</span>
+<span class="nc" id="L75">                            severityFor(aiResponse.confidence()),</span>
+<span class="nc" id="L76">                            interpretationFor(aiResponse.behaviorType(), aiResponse.confidence()),</span>
+<span class="nc" id="L77">                            aiResponse.recommendation(),</span>
+<span class="nc" id="L78">                            Map.of(</span>
+<span class="nc bnc" id="L79" title="All 2 branches missed.">                                    &quot;grounded_facts&quot;, aiResponse.groundedFacts() == null ? List.of() : aiResponse.groundedFacts(),</span>
+<span class="nc" id="L80">                                    &quot;scores&quot;, aiResponse.scores()</span>
+                            )
+                    )
+            );
+        }
+
+<span class="nc" id="L86">        List&lt;BehaviorEventResponse&gt; responses = new ArrayList&lt;&gt;();</span>
+<span class="nc bnc" id="L87" title="All 2 branches missed.">        for (PendingEvent pendingEvent : eventByType.values()) {</span>
+<span class="nc bnc" id="L88" title="All 2 branches missed.">            if (pendingEvent.confidence() &lt; 0.45) {</span>
+<span class="nc" id="L89">                continue;</span>
+            }
+
+<span class="nc" id="L92">            String evidenceJson = writeJson(pendingEvent.evidence());</span>
+<span class="nc" id="L93">            BehaviorEvent event = behaviorEventRepository.save(BehaviorEvent.create(</span>
+                    analysisId,
+                    userId,
+                    sessionId,
+<span class="nc" id="L97">                    pendingEvent.eventType(),</span>
+<span class="nc" id="L98">                    pendingEvent.detector(),</span>
+<span class="nc" id="L99">                    pendingEvent.confidence(),</span>
+<span class="nc" id="L100">                    pendingEvent.severity(),</span>
+<span class="nc" id="L101">                    pendingEvent.interpretation(),</span>
+<span class="nc" id="L102">                    pendingEvent.recommendationHint(),</span>
+                    evidenceJson,
+                    occurredAt
+            ));
+
+<span class="nc" id="L107">            activityFeedRepository.save(ActivityFeedItem.create(</span>
+                    userId,
+                    sessionId,
+<span class="nc" id="L110">                    pendingEvent.eventType(),</span>
+                    ActivityCategory.ALERT,
+<span class="nc" id="L112">                    titleFor(pendingEvent.eventType()),</span>
+<span class="nc" id="L113">                    pendingEvent.interpretation(),</span>
+<span class="nc" id="L114">                    pendingEvent.confidence(),</span>
+                    occurredAt
+            ));
+
+<span class="nc" id="L118">            responses.add(toResponse(event));</span>
+<span class="nc" id="L119">        }</span>
+<span class="nc" id="L120">        return responses;</span>
+    }
+
+    @Transactional(transactionManager = &quot;monitoringTransactionManager&quot;, readOnly = true)
+    public List&lt;BehaviorEventResponse&gt; getRecentEvents(UUID userId, int limit) {
+<span class="nc" id="L125">        return behaviorEventRepository.findByUserIdOrderByOccurredAtDesc(userId, PageRequest.of(0, Math.max(1, Math.min(limit, 25))))</span>
+<span class="nc" id="L126">                .stream()</span>
+<span class="nc" id="L127">                .map(this::toResponse)</span>
+<span class="nc" id="L128">                .toList();</span>
+    }
+
+    public BehaviorEventResponse toResponse(BehaviorEvent event) {
+<span class="nc" id="L132">        return new BehaviorEventResponse(</span>
+<span class="nc" id="L133">                event.getId(),</span>
+<span class="nc" id="L134">                event.getAnalysisId(),</span>
+<span class="nc bnc" id="L135" title="All 2 branches missed.">                event.getSessionId() == null ? null : event.getSessionId().toString(),</span>
+<span class="nc" id="L136">                event.getEventType(),</span>
+<span class="nc" id="L137">                event.getDetector(),</span>
+<span class="nc" id="L138">                event.getConfidence().doubleValue(),</span>
+<span class="nc" id="L139">                event.getSeverity(),</span>
+<span class="nc" id="L140">                event.getInterpretation(),</span>
+<span class="nc" id="L141">                event.getRecommendationHint(),</span>
+<span class="nc" id="L142">                readJson(event.getEvidenceJson()),</span>
+<span class="nc" id="L143">                event.getOccurredAt()</span>
+        );
+    }
+
+    private String detectorFor(String eventType) {
+<span class="nc bnc" id="L148" title="All 4 branches missed.">        return switch (eventType) {</span>
+<span class="nc" id="L149">            case &quot;poor_posture&quot; -&gt; &quot;vision.posture&quot;;</span>
+<span class="nc" id="L150">            case &quot;hand_movement_pattern&quot; -&gt; &quot;vision.hand&quot;;</span>
+<span class="nc" id="L151">            case &quot;smoking_like_gesture&quot; -&gt; &quot;vision.smoking&quot;;</span>
+<span class="nc" id="L152">            default -&gt; &quot;vision.generic&quot;;</span>
+        };
+    }
+
+    private String interpretationFor(String eventType, double confidence) {
+<span class="nc bnc" id="L157" title="All 4 branches missed.">        return switch (eventType) {</span>
+<span class="nc" id="L158">            case &quot;poor_posture&quot; -&gt; String.format(</span>
+                    &quot;Posture drift was detected with %.0f%% confidence. A quick posture reset is recommended.&quot;,
+<span class="nc" id="L160">                    confidence * 100</span>
+            );
+<span class="nc" id="L162">            case &quot;hand_movement_pattern&quot; -&gt; String.format(</span>
+                    &quot;A repetitive hand movement pattern appeared with %.0f%% confidence.&quot;,
+<span class="nc" id="L164">                    confidence * 100</span>
+            );
+<span class="nc" id="L166">            case &quot;smoking_like_gesture&quot; -&gt; String.format(</span>
+                    &quot;A smoking-like hand-to-mouth gesture appeared with %.0f%% confidence. Treat it as a cue, not certainty.&quot;,
+<span class="nc" id="L168">                    confidence * 100</span>
+            );
+<span class="nc" id="L170">            default -&gt; &quot;Behavior activity was detected.&quot;;</span>
+        };
+    }
+
+    private String titleFor(String eventType) {
+<span class="nc bnc" id="L175" title="All 4 branches missed.">        return switch (eventType) {</span>
+<span class="nc" id="L176">            case &quot;poor_posture&quot; -&gt; &quot;Posture alert&quot;;</span>
+<span class="nc" id="L177">            case &quot;hand_movement_pattern&quot; -&gt; &quot;Hand movement alert&quot;;</span>
+<span class="nc" id="L178">            case &quot;smoking_like_gesture&quot; -&gt; &quot;Smoking-like gesture alert&quot;;</span>
+<span class="nc" id="L179">            default -&gt; &quot;Behavior alert&quot;;</span>
+        };
+    }
+
+    private String severityFor(double confidence) {
+<span class="nc bnc" id="L184" title="All 2 branches missed.">        if (confidence &gt;= 0.80) {</span>
+<span class="nc" id="L185">            return &quot;high&quot;;</span>
+        }
+<span class="nc bnc" id="L187" title="All 2 branches missed.">        if (confidence &gt;= 0.62) {</span>
+<span class="nc" id="L188">            return &quot;medium&quot;;</span>
+        }
+<span class="nc" id="L190">        return &quot;low&quot;;</span>
+    }
+
+    private String writeJson(Map&lt;String, Object&gt; payload) {
+        try {
+<span class="nc" id="L195">            return objectMapper.writeValueAsString(payload);</span>
+<span class="nc" id="L196">        } catch (Exception exception) {</span>
+<span class="nc" id="L197">            return &quot;{}&quot;;</span>
+        }
+    }
+
+    private Map&lt;String, Object&gt; readJson(String payload) {
+        try {
+<span class="nc" id="L203">            return objectMapper.readValue(payload, MAP_TYPE);</span>
+<span class="nc" id="L204">        } catch (Exception exception) {</span>
+<span class="nc" id="L205">            return Map.of();</span>
+        }
+    }
+
+<span class="nc" id="L209">    private record PendingEvent(</span>
+            String eventType,
+            String detector,
+            double confidence,
+            String severity,
+            String interpretation,
+            String recommendationHint,
+            Map&lt;String, Object&gt; evidence
+    ) {
+    }
+}
+
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.12.202403310830</span></div></body></html>

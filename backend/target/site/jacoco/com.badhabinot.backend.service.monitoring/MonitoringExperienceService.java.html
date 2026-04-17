@@ -1,0 +1,280 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>MonitoringExperienceService.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">BADHABINOT Backend</a> &gt; <a href="index.source.html" class="el_package">com.badhabinot.backend.service.monitoring</a> &gt; <span class="el_source">MonitoringExperienceService.java</span></div><h1>MonitoringExperienceService.java</h1><pre class="source lang-java linenums">package com.badhabinot.backend.service.monitoring;
+
+import com.badhabinot.backend.dto.monitoring.ActivityItemResponse;
+import com.badhabinot.backend.dto.monitoring.DashboardResponse;
+import com.badhabinot.backend.dto.monitoring.HydrationLogRequest;
+import com.badhabinot.backend.dto.monitoring.HydrationLogResponse;
+import com.badhabinot.backend.dto.monitoring.InternalUserAnalysisContext;
+import com.badhabinot.backend.dto.monitoring.ReminderTriggerRequest;
+import com.badhabinot.backend.dto.monitoring.SessionStartRequest;
+import com.badhabinot.backend.dto.monitoring.SessionStartResponse;
+import com.badhabinot.backend.dto.monitoring.SessionStopResponse;
+import com.badhabinot.backend.dto.monitoring.WeeklyTrendPointResponse;
+import com.badhabinot.backend.dto.monitoring.WeeklyTrendResponse;
+import com.badhabinot.backend.model.monitoring.ActivityCategory;
+import com.badhabinot.backend.model.monitoring.ActivityFeedItem;
+import com.badhabinot.backend.model.monitoring.HydrationLog;
+import com.badhabinot.backend.model.monitoring.MonitoringSession;
+import com.badhabinot.backend.model.monitoring.MonitoringSessionStatus;
+import com.badhabinot.backend.repository.monitoring.ActivityFeedRepository;
+import com.badhabinot.backend.repository.monitoring.HydrationLogRepository;
+import com.badhabinot.backend.repository.monitoring.MonitoringSessionRepository;
+import com.badhabinot.backend.service.user.UserContextService;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneId;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+import java.util.stream.Collectors;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+@Service
+public class MonitoringExperienceService {
+
+    private final MonitoringSessionRepository monitoringSessionRepository;
+    private final ActivityFeedRepository activityFeedRepository;
+    private final HydrationLogRepository hydrationLogRepository;
+    private final UserContextService userContextService;
+    private final ReminderEngineService reminderEngineService;
+
+    public MonitoringExperienceService(
+            MonitoringSessionRepository monitoringSessionRepository,
+            ActivityFeedRepository activityFeedRepository,
+            HydrationLogRepository hydrationLogRepository,
+            UserContextService userContextService,
+            ReminderEngineService reminderEngineService
+<span class="fc" id="L52">    ) {</span>
+<span class="fc" id="L53">        this.monitoringSessionRepository = monitoringSessionRepository;</span>
+<span class="fc" id="L54">        this.activityFeedRepository = activityFeedRepository;</span>
+<span class="fc" id="L55">        this.hydrationLogRepository = hydrationLogRepository;</span>
+<span class="fc" id="L56">        this.userContextService = userContextService;</span>
+<span class="fc" id="L57">        this.reminderEngineService = reminderEngineService;</span>
+<span class="fc" id="L58">    }</span>
+
+    @Transactional(transactionManager = &quot;monitoringTransactionManager&quot;)
+    public SessionStartResponse startSession(Jwt jwt, SessionStartRequest request) {
+<span class="fc" id="L62">        UUID userId = UUID.fromString(jwt.getSubject());</span>
+<span class="fc" id="L63">        monitoringSessionRepository.findFirstByUserIdAndStatusOrderByStartedAtDesc(userId, MonitoringSessionStatus.ACTIVE)</span>
+<span class="fc" id="L64">                .ifPresent(existing -&gt; {</span>
+<span class="fc" id="L65">                    existing.stop();</span>
+<span class="fc" id="L66">                    monitoringSessionRepository.save(existing);</span>
+<span class="fc" id="L67">                });</span>
+
+<span class="fc" id="L69">        MonitoringSession session = monitoringSessionRepository.save(MonitoringSession.start(userId, request.clientSurface(), request.deviceType()));</span>
+<span class="fc" id="L70">        activityFeedRepository.save(ActivityFeedItem.create(</span>
+                userId,
+<span class="fc" id="L72">                session.getId(),</span>
+                &quot;monitoring_started&quot;,
+                ActivityCategory.SYSTEM,
+                &quot;Oturum Basladi&quot;,
+<span class="fc" id="L76">                request.clientSurface() + &quot; istemcisi uzerinden izleme basladi.&quot;,</span>
+                null,
+<span class="fc" id="L78">                session.getStartedAt()</span>
+        ));
+<span class="fc" id="L80">        return new SessionStartResponse(session.getId().toString(), session.getStatus().name(), session.getStartedAt());</span>
+    }
+
+    @Transactional(transactionManager = &quot;monitoringTransactionManager&quot;)
+    public SessionStopResponse stopSession(Jwt jwt, String sessionId) {
+<span class="nc" id="L85">        UUID userId = UUID.fromString(jwt.getSubject());</span>
+<span class="nc" id="L86">        MonitoringSession session = monitoringSessionRepository.findById(parseSessionId(sessionId))</span>
+<span class="nc" id="L87">                .filter(candidate -&gt; candidate.getUserId().equals(userId))</span>
+<span class="nc" id="L88">                .orElseThrow(() -&gt; new IllegalArgumentException(&quot;Monitoring session not found&quot;));</span>
+<span class="nc" id="L89">        session.stop();</span>
+<span class="nc" id="L90">        monitoringSessionRepository.save(session);</span>
+<span class="nc" id="L91">        activityFeedRepository.save(ActivityFeedItem.create(</span>
+                userId,
+<span class="nc" id="L93">                session.getId(),</span>
+                &quot;monitoring_stopped&quot;,
+                ActivityCategory.SYSTEM,
+                &quot;Oturum Sonlandi&quot;,
+                &quot;Canli izleme oturumu durduruldu.&quot;,
+                null,
+<span class="nc" id="L99">                session.getEndedAt()</span>
+        ));
+<span class="nc" id="L101">        return new SessionStopResponse(session.getId().toString(), session.getStatus().name(), session.getEndedAt());</span>
+    }
+
+    @Transactional(transactionManager = &quot;monitoringTransactionManager&quot;, readOnly = true)
+    public DashboardResponse getDashboard(Jwt jwt) {
+<span class="fc" id="L106">        UUID userId = UUID.fromString(jwt.getSubject());</span>
+<span class="fc" id="L107">        InternalUserAnalysisContext context = userContextService.getMonitoringAnalysisContext(userId);</span>
+<span class="fc" id="L108">        ZoneId zoneId = zoneId(context.timezone());</span>
+<span class="fc" id="L109">        Instant now = Instant.now();</span>
+<span class="fc" id="L110">        LocalDate today = LocalDate.now(zoneId);</span>
+<span class="fc" id="L111">        Instant dayStart = today.atStartOfDay(zoneId).toInstant();</span>
+<span class="fc" id="L112">        Instant dayEnd = today.plusDays(1).atStartOfDay(zoneId).toInstant();</span>
+
+<span class="fc" id="L114">        var activeSession = monitoringSessionRepository.findFirstByUserIdAndStatusOrderByStartedAtDesc(userId, MonitoringSessionStatus.ACTIVE);</span>
+<span class="fc" id="L115">        List&lt;ActivityFeedItem&gt; todayActivities = activityFeedRepository.findByUserIdAndOccurredAtBetweenOrderByOccurredAtAsc(userId, dayStart, dayEnd);</span>
+<span class="fc" id="L116">        List&lt;ActivityFeedItem&gt; recent = activityFeedRepository.findByUserIdOrderByOccurredAtDesc(userId, PageRequest.of(0, 5));</span>
+<span class="fc" id="L117">        List&lt;HydrationLog&gt; hydrationToday = hydrationLogRepository.findByUserIdAndOccurredAtBetweenOrderByOccurredAtAsc(userId, dayStart, dayEnd);</span>
+
+<span class="fc bfc" id="L119" title="All 2 branches covered.">        int alertCount = (int) todayActivities.stream().filter(item -&gt; item.getCategory() == ActivityCategory.ALERT).count();</span>
+<span class="fc bfc" id="L120" title="All 2 branches covered.">        int reminderCount = (int) todayActivities.stream().filter(item -&gt; item.getCategory() == ActivityCategory.REMINDER).count();</span>
+<span class="fc" id="L121">        int waterProgressMl = hydrationToday.stream().mapToInt(HydrationLog::getAmountMl).sum();</span>
+
+<span class="pc bpc" id="L123" title="1 of 2 branches missed.">        ActivityItemResponse latest = recent.isEmpty() ? null : toActivityResponse(recent.getFirst());</span>
+<span class="pc bpc" id="L124" title="2 of 4 branches missed.">        boolean analysisEnabled = context.cameraMonitoringAccepted() &amp;&amp; context.remoteInferenceAccepted();</span>
+<span class="pc bpc" id="L125" title="1 of 2 branches missed.">        String privacyMode = analysisEnabled ? &quot;API_CONSENTED&quot; : &quot;CONSENT_REQUIRED&quot;;</span>
+
+<span class="fc" id="L127">        return new DashboardResponse(</span>
+<span class="fc" id="L128">                activeSession.isPresent(),</span>
+<span class="fc" id="L129">                activeSession.map(session -&gt; session.getId().toString()).orElse(null),</span>
+<span class="fc" id="L130">                context.modelMode(),</span>
+                privacyMode,
+                analysisEnabled,
+<span class="fc" id="L133">                computeStreakDays(userId, zoneId, today),</span>
+                alertCount,
+                reminderCount,
+                waterProgressMl,
+<span class="fc" id="L137">                context.waterGoalMl(),</span>
+                latest,
+<span class="fc" id="L139">                recent.stream().map(this::toActivityResponse).toList(),</span>
+                now
+        );
+    }
+
+    @Transactional(transactionManager = &quot;monitoringTransactionManager&quot;, readOnly = true)
+    public List&lt;ActivityItemResponse&gt; getRecentActivities(Jwt jwt, int limit) {
+<span class="nc" id="L146">        UUID userId = UUID.fromString(jwt.getSubject());</span>
+<span class="nc" id="L147">        return activityFeedRepository.findByUserIdOrderByOccurredAtDesc(userId, PageRequest.of(0, Math.max(1, Math.min(limit, 20))))</span>
+<span class="nc" id="L148">                .stream()</span>
+<span class="nc" id="L149">                .map(this::toActivityResponse)</span>
+<span class="nc" id="L150">                .toList();</span>
+    }
+
+    @Transactional(transactionManager = &quot;monitoringTransactionManager&quot;, readOnly = true)
+    public WeeklyTrendResponse getWeeklyTrend(Jwt jwt, LocalDate from) {
+<span class="nc" id="L155">        UUID userId = UUID.fromString(jwt.getSubject());</span>
+<span class="nc" id="L156">        InternalUserAnalysisContext context = userContextService.getMonitoringAnalysisContext(userId);</span>
+<span class="nc" id="L157">        ZoneId zoneId = zoneId(context.timezone());</span>
+<span class="nc bnc" id="L158" title="All 2 branches missed.">        LocalDate startDate = from == null ? LocalDate.now(zoneId).minusDays(6) : from;</span>
+<span class="nc" id="L159">        LocalDate endDate = startDate.plusDays(6);</span>
+<span class="nc" id="L160">        Instant fromInstant = startDate.atStartOfDay(zoneId).toInstant();</span>
+<span class="nc" id="L161">        Instant toInstant = endDate.plusDays(1).atStartOfDay(zoneId).toInstant();</span>
+
+<span class="nc" id="L163">        List&lt;ActivityFeedItem&gt; activities = activityFeedRepository.findByUserIdAndOccurredAtBetweenOrderByOccurredAtAsc(userId, fromInstant, toInstant);</span>
+<span class="nc" id="L164">        List&lt;HydrationLog&gt; hydrationLogs = hydrationLogRepository.findByUserIdAndOccurredAtBetweenOrderByOccurredAtAsc(userId, fromInstant, toInstant);</span>
+
+<span class="nc" id="L166">        Map&lt;LocalDate, List&lt;ActivityFeedItem&gt;&gt; activitiesByDay = activities.stream()</span>
+<span class="nc" id="L167">                .collect(Collectors.groupingBy(item -&gt; item.getOccurredAt().atZone(zoneId).toLocalDate()));</span>
+<span class="nc" id="L168">        Map&lt;LocalDate, Long&gt; hydrationCounts = hydrationLogs.stream()</span>
+<span class="nc" id="L169">                .collect(Collectors.groupingBy(log -&gt; log.getOccurredAt().atZone(zoneId).toLocalDate(), Collectors.counting()));</span>
+
+<span class="nc" id="L171">        List&lt;WeeklyTrendPointResponse&gt; points = new ArrayList&lt;&gt;();</span>
+<span class="nc bnc" id="L172" title="All 2 branches missed.">        for (LocalDate current = startDate; !current.isAfter(endDate); current = current.plusDays(1)) {</span>
+<span class="nc" id="L173">            List&lt;ActivityFeedItem&gt; dayActivities = activitiesByDay.getOrDefault(current, List.of());</span>
+<span class="nc bnc" id="L174" title="All 2 branches missed.">            int alertCount = (int) dayActivities.stream().filter(item -&gt; item.getCategory() == ActivityCategory.ALERT).count();</span>
+<span class="nc bnc" id="L175" title="All 2 branches missed.">            int reminderCount = (int) dayActivities.stream().filter(item -&gt; item.getCategory() == ActivityCategory.REMINDER).count();</span>
+<span class="nc" id="L176">            int hydrationCount = hydrationCounts.getOrDefault(current, 0L).intValue();</span>
+<span class="nc" id="L177">            points.add(new WeeklyTrendPointResponse(current, alertCount, reminderCount, hydrationCount));</span>
+        }
+
+<span class="nc" id="L180">        return new WeeklyTrendResponse(startDate, endDate, points);</span>
+    }
+
+    @Transactional(transactionManager = &quot;monitoringTransactionManager&quot;)
+    public HydrationLogResponse logHydration(Jwt jwt, HydrationLogRequest request) {
+<span class="nc" id="L185">        UUID userId = UUID.fromString(jwt.getSubject());</span>
+<span class="nc" id="L186">        UUID sessionId = nullableSessionId(request.sessionId());</span>
+<span class="nc bnc" id="L187" title="All 2 branches missed.">        Instant occurredAt = request.occurredAt() == null ? Instant.now() : request.occurredAt();</span>
+
+<span class="nc" id="L189">        HydrationLog log = hydrationLogRepository.save(HydrationLog.create(userId, sessionId, request.amountMl(), request.source(), occurredAt));</span>
+<span class="nc" id="L190">        activityFeedRepository.save(ActivityFeedItem.create(</span>
+                userId,
+                sessionId,
+                &quot;water_logged&quot;,
+                ActivityCategory.MANUAL,
+                &quot;Su Icildi&quot;,
+<span class="nc" id="L196">                request.amountMl() + &quot; ml su girisi kaydedildi.&quot;,</span>
+                null,
+                occurredAt
+        ));
+<span class="nc" id="L200">        return new HydrationLogResponse(log.getId(), request.amountMl(), request.source(), occurredAt);</span>
+    }
+
+    @Transactional(transactionManager = &quot;monitoringTransactionManager&quot;)
+    public ActivityItemResponse triggerReminder(Jwt jwt, ReminderTriggerRequest request) {
+<span class="nc" id="L205">        UUID userId = UUID.fromString(jwt.getSubject());</span>
+<span class="nc" id="L206">        UUID sessionId = nullableSessionId(request.sessionId());</span>
+<span class="nc bnc" id="L207" title="All 2 branches missed.">        Instant occurredAt = request.occurredAt() == null ? Instant.now() : request.occurredAt();</span>
+<span class="nc" id="L208">        var reminder = reminderEngineService.recordManualReminder(userId, sessionId, request.reminderType(), request.message(), occurredAt);</span>
+<span class="nc" id="L209">        return new ActivityItemResponse(</span>
+<span class="nc" id="L210">                reminder.reminderId(),</span>
+<span class="nc" id="L211">                reminder.reminderType(),</span>
+<span class="nc" id="L212">                ActivityCategory.REMINDER.name(),</span>
+<span class="nc" id="L213">                reminder.reminderType().replace('_', ' '),</span>
+<span class="nc" id="L214">                reminder.message(),</span>
+                null,
+<span class="nc" id="L216">                reminder.occurredAt()</span>
+        );
+    }
+
+    private ActivityItemResponse toActivityResponse(ActivityFeedItem item) {
+<span class="fc" id="L221">        return new ActivityItemResponse(</span>
+<span class="fc" id="L222">                item.getId(),</span>
+<span class="fc" id="L223">                item.getActivityType(),</span>
+<span class="fc" id="L224">                item.getCategory().name(),</span>
+<span class="fc" id="L225">                item.getTitle(),</span>
+<span class="fc" id="L226">                item.getMessage(),</span>
+<span class="fc bfc" id="L227" title="All 2 branches covered.">                item.getConfidence() == null ? null : item.getConfidence().doubleValue(),</span>
+<span class="fc" id="L228">                item.getOccurredAt()</span>
+        );
+    }
+
+    private int computeStreakDays(UUID userId, ZoneId zoneId, LocalDate today) {
+<span class="fc" id="L233">        List&lt;ActivityFeedItem&gt; recentActivities = activityFeedRepository.findByUserIdOrderByOccurredAtDesc(userId, PageRequest.of(0, 64));</span>
+<span class="fc" id="L234">        List&lt;HydrationLog&gt; hydrationLogs = hydrationLogRepository.findByUserIdAndOccurredAtBetweenOrderByOccurredAtAsc(</span>
+                userId,
+<span class="fc" id="L236">                today.minusDays(30).atStartOfDay(zoneId).toInstant(),</span>
+<span class="fc" id="L237">                today.plusDays(1).atStartOfDay(zoneId).toInstant()</span>
+        );
+
+<span class="fc" id="L240">        List&lt;LocalDate&gt; activeDates = new ArrayList&lt;&gt;();</span>
+<span class="fc" id="L241">        activeDates.addAll(recentActivities.stream().map(item -&gt; item.getOccurredAt().atZone(zoneId).toLocalDate()).toList());</span>
+<span class="fc" id="L242">        activeDates.addAll(hydrationLogs.stream().map(log -&gt; log.getOccurredAt().atZone(zoneId).toLocalDate()).toList());</span>
+
+<span class="fc" id="L244">        List&lt;LocalDate&gt; distinct = activeDates.stream().distinct().sorted(Comparator.reverseOrder()).toList();</span>
+<span class="fc" id="L245">        int streak = 0;</span>
+<span class="fc" id="L246">        LocalDate cursor = today;</span>
+<span class="fc bfc" id="L247" title="All 2 branches covered.">        for (LocalDate date : distinct) {</span>
+<span class="pc bpc" id="L248" title="1 of 2 branches missed.">            if (date.equals(cursor)) {</span>
+<span class="fc" id="L249">                streak++;</span>
+<span class="fc" id="L250">                cursor = cursor.minusDays(1);</span>
+            }
+<span class="fc" id="L252">        }</span>
+<span class="fc" id="L253">        return streak;</span>
+    }
+
+    private UUID parseSessionId(String sessionId) {
+        try {
+<span class="nc" id="L258">            return UUID.fromString(sessionId);</span>
+<span class="nc" id="L259">        } catch (RuntimeException exception) {</span>
+<span class="nc" id="L260">            throw new IllegalArgumentException(&quot;Invalid session identifier&quot;);</span>
+        }
+    }
+
+    private UUID nullableSessionId(String sessionId) {
+<span class="nc bnc" id="L265" title="All 4 branches missed.">        if (sessionId == null || sessionId.isBlank()) {</span>
+<span class="nc" id="L266">            return null;</span>
+        }
+<span class="nc" id="L268">        return parseSessionId(sessionId);</span>
+    }
+
+    private ZoneId zoneId(String timezone) {
+        try {
+<span class="fc" id="L273">            return ZoneId.of(timezone);</span>
+<span class="nc" id="L274">        } catch (RuntimeException exception) {</span>
+<span class="nc" id="L275">            return ZoneId.of(&quot;UTC&quot;);</span>
+        }
+    }
+}
+
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.12.202403310830</span></div></body></html>

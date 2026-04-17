@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>TokenIssuer.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">BADHABINOT Backend</a> &gt; <a href="index.source.html" class="el_package">com.badhabinot.backend.service.auth</a> &gt; <span class="el_source">TokenIssuer.java</span></div><h1>TokenIssuer.java</h1><pre class="source lang-java linenums">package com.badhabinot.backend.service.auth;
+
+import com.badhabinot.backend.model.auth.AuthUser;
+import com.badhabinot.backend.config.JwtProperties;
+import java.time.Instant;
+import java.util.List;
+import org.springframework.security.oauth2.jose.jws.MacAlgorithm;
+import org.springframework.security.oauth2.jwt.JwsHeader;
+import org.springframework.security.oauth2.jwt.JwtClaimsSet;
+import org.springframework.security.oauth2.jwt.JwtEncoder;
+import org.springframework.security.oauth2.jwt.JwtEncoderParameters;
+import org.springframework.stereotype.Component;
+
+@Component
+public class TokenIssuer {
+
+    private final JwtEncoder jwtEncoder;
+    private final JwtProperties jwtProperties;
+
+<span class="nc" id="L20">    public TokenIssuer(JwtEncoder jwtEncoder, JwtProperties jwtProperties) {</span>
+<span class="nc" id="L21">        this.jwtEncoder = jwtEncoder;</span>
+<span class="nc" id="L22">        this.jwtProperties = jwtProperties;</span>
+<span class="nc" id="L23">    }</span>
+
+    public IssuedAccessToken issueAccessToken(AuthUser user) {
+<span class="nc" id="L26">        Instant issuedAt = Instant.now();</span>
+<span class="nc" id="L27">        Instant expiresAt = issuedAt.plus(jwtProperties.accessTokenTtl());</span>
+
+<span class="nc" id="L29">        JwtClaimsSet claimsSet = JwtClaimsSet.builder()</span>
+<span class="nc" id="L30">                .issuer(jwtProperties.issuer())</span>
+<span class="nc" id="L31">                .issuedAt(issuedAt)</span>
+<span class="nc" id="L32">                .expiresAt(expiresAt)</span>
+<span class="nc" id="L33">                .subject(user.getId().toString())</span>
+<span class="nc" id="L34">                .claim(&quot;email&quot;, user.getEmail())</span>
+<span class="nc" id="L35">                .claim(&quot;roles&quot;, List.of(user.getRole().name()))</span>
+<span class="nc" id="L36">                .claim(&quot;token_type&quot;, &quot;access&quot;)</span>
+<span class="nc" id="L37">                .build();</span>
+
+<span class="nc" id="L39">        String tokenValue = jwtEncoder.encode(JwtEncoderParameters.from(</span>
+<span class="nc" id="L40">                JwsHeader.with(MacAlgorithm.HS256).build(),</span>
+                claimsSet
+<span class="nc" id="L42">        )).getTokenValue();</span>
+
+<span class="nc" id="L44">        return new IssuedAccessToken(tokenValue, expiresAt);</span>
+    }
+
+<span class="fc" id="L47">    public record IssuedAccessToken(</span>
+            String tokenValue,
+            Instant expiresAt
+    ) {
+    }
+}
+
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.12.202403310830</span></div></body></html>

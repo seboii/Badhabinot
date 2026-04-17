@@ -1,0 +1,1 @@
+import{t as e}from"./client-gUlU8bhE.js";var t={async register(t){return(await e.post(`/api/v1/auth/register`,t)).data},async login(t){return(await e.post(`/api/v1/auth/login`,t)).data},async me(){return(await e.get(`/api/v1/auth/me`)).data},async logout(t){await e.post(`/api/v1/auth/logout`,t)}};export{t};

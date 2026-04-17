@@ -1,0 +1,5 @@
+com/badhabinot/backend/service/monitoring/DailyReportServiceTest.class
+com/badhabinot/backend/service/monitoring/GroundedChatServiceTest.class
+com/badhabinot/backend/integration/python/AiAnalysisClientTest.class
+com/badhabinot/backend/integration/python/AiChatClientTest.class
+com/badhabinot/backend/integration/python/VisionServiceClientTest.class
