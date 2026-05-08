@@ -16,6 +16,13 @@ export type AnalyzeFrameRequest = {
   image_content_type: string
 }
 
+export type VisionBehaviorEvent = {
+  event_type: string
+  severity: 'low' | 'medium' | 'high'
+  confidence: number
+  detail: string
+}
+
 export type AnalyzeFrameResponse = {
   analysis_id: string
   session_id: string
@@ -45,6 +52,28 @@ export type AnalyzeFrameResponse = {
     name: string
     mode: string
   }
+  // Phase 8 — vision overlay fields (present when render_overlay was requested)
+  annotated_frame_base64?: string | null
+  vision_behavior_events?: VisionBehaviorEvent[]
+  // Module A — face authentication result (null when no profile registered)
+  face_auth?: {
+    enabled: boolean
+    authenticated: boolean
+    confidence: number
+    frames_enrolled: number
+  } | null
+}
+
+export type FaceRegisterRequest = {
+  image_base64: string
+  image_content_type?: string
+}
+
+export type FaceRegisterResponse = {
+  user_id: string
+  success: boolean
+  frames_enrolled: number
+  message: string
 }
 
 export type BehaviorEventResponse = {

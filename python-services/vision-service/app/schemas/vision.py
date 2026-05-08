@@ -4,6 +4,10 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 
+# ══════════════════════════════════════════════════════════════════
+# Existing / legacy schemas (unchanged — kept for backward compat)
+# ══════════════════════════════════════════════════════════════════
+
 class VisionAnalysisRequest(BaseModel):
     model_config = ConfigDict(protected_namespaces=())
 
@@ -69,9 +73,169 @@ class ProcessingDetails(BaseModel):
     vision_latency_ms: int = Field(ge=0)
 
 
+# ══════════════════════════════════════════════════════════════════
+# New schemas — Module A: Face Authentication
+# ══════════════════════════════════════════════════════════════════
+
+class FaceAuthStatus(BaseModel):
+    model_config = ConfigDict(protected_namespaces=())
+
+    enabled: bool             # True if user has a stored face profile
+    authenticated: bool       # True if live face matches stored profile
+    confidence: float = Field(ge=0.0, le=1.0)
+    frames_enrolled: int = Field(ge=0)
+    error: str | None = None
+
+
+# ══════════════════════════════════════════════════════════════════
+# New schemas — Module C: Face Mesh
+# ══════════════════════════════════════════════════════════════════
+
+class FaceMeshData(BaseModel):
+    """Normalized (x, y, z) landmark positions for frontend overlay rendering.
+
+    Frontend multiplies x/y by canvas width/height to get pixel coords.
+    """
+    model_config = ConfigDict(protected_namespaces=())
+
+    # 468 landmarks as flat list of [x, y, z] triples — kept compact for JSON
+    landmarks: list[list[float]] = Field(default_factory=list)
+
+    ear: float = Field(default=0.0, ge=0.0)      # Eye Aspect Ratio
+    mar: float = Field(default=0.0, ge=0.0)      # Mouth Aspect Ratio
+    is_drowsy: bool = False
+    is_yawning: bool = False
+
+    yaw: float = 0.0      # head pose degrees
+    pitch: float = 0.0
+    roll: float = 0.0
+
+    gaze_off_screen: bool = False
+
+
+# ══════════════════════════════════════════════════════════════════
+# New schemas — Module D: Hand Tracking
+# ══════════════════════════════════════════════════════════════════
+
+class HandData(BaseModel):
+    """Single hand tracking result."""
+    model_config = ConfigDict(protected_namespaces=())
+
+    # 21 landmarks as flat list of [x, y, z] triples
+    landmarks: list[list[float]] = Field(default_factory=list)
+    handedness: str = "Unknown"
+    center_x: float = 0.0
+    center_y: float = 0.0
+    near_face: bool = False
+    near_mouth: bool = False
+
+
+class HandTrackingData(BaseModel):
+    model_config = ConfigDict(protected_namespaces=())
+
+    hands: list[HandData] = Field(default_factory=list)
+    face_touch_detected: bool = False
+    mouth_touch_detected: bool = False
+
+
+# ══════════════════════════════════════════════════════════════════
+# New schemas — Module E: Pose Estimation
+# ══════════════════════════════════════════════════════════════════
+
+class PoseKeypointData(BaseModel):
+    model_config = ConfigDict(protected_namespaces=())
+
+    x: float
+    y: float
+    confidence: float
+
+
+class PoseData(BaseModel):
+    model_config = ConfigDict(protected_namespaces=())
+
+    # Up to 17 COCO keypoints (None = not detected)
+    keypoints: list[PoseKeypointData | None] = Field(default_factory=list)
+    spine_tilt_angle: float = 0.0
+    shoulder_tilt_angle: float = 0.0
+    posture_score: int = Field(default=100, ge=0, le=100)
+    is_slouching: bool = False
+    # Normalized person bounding box (x1, y1, x2, y2)
+    person_bbox: list[float] | None = None
+
+
+# ══════════════════════════════════════════════════════════════════
+# New schemas — YOLO detections
+# ══════════════════════════════════════════════════════════════════
+
+class ObjectDetectionData(BaseModel):
+    model_config = ConfigDict(protected_namespaces=())
+
+    class_id: int
+    class_name: str
+    confidence: float = Field(ge=0.0, le=1.0)
+    # Normalized (x1, y1, x2, y2)
+    bbox_norm: list[float]
+
+
+class YoloDetectionData(BaseModel):
+    model_config = ConfigDict(protected_namespaces=())
+
+    detections: list[ObjectDetectionData] = Field(default_factory=list)
+    bottle_near_mouth: bool = False
+    cup_near_mouth: bool = False
+    phone_detected: bool = False
+
+
+# ══════════════════════════════════════════════════════════════════
+# New schemas — Module F: Behavioral Events
+# ══════════════════════════════════════════════════════════════════
+
+class BehaviorEventData(BaseModel):
+    model_config = ConfigDict(protected_namespaces=())
+
+    event_type: str
+    severity: Literal["low", "medium", "high"]
+    confidence: float = Field(ge=0.0, le=1.0)
+    detail: str = ""
+
+
+# ══════════════════════════════════════════════════════════════════
+# Face registration endpoints schemas
+# ══════════════════════════════════════════════════════════════════
+
+class FaceRegisterRequest(BaseModel):
+    model_config = ConfigDict(protected_namespaces=())
+
+    user_id: str
+    image_base64: str
+    image_content_type: str = "image/jpeg"
+
+
+class FaceRegisterResponse(BaseModel):
+    model_config = ConfigDict(protected_namespaces=())
+
+    user_id: str
+    success: bool
+    frames_enrolled: int
+    message: str
+
+
+class FaceDeleteResponse(BaseModel):
+    model_config = ConfigDict(protected_namespaces=())
+
+    user_id: str
+    deleted: bool
+
+
+# ══════════════════════════════════════════════════════════════════
+# Extended VisionAnalysisResponse (backward-compatible)
+# All new fields are Optional so existing callers are unaffected.
+# ══════════════════════════════════════════════════════════════════
+
 class VisionAnalysisResponse(BaseModel):
     model_config = ConfigDict(protected_namespaces=())
 
+    # ── Existing fields (unchanged) ─────────────────────────────
     request_id: str
     subject_present: bool
     posture_state: Literal["good", "poor", "unknown"]
@@ -79,3 +243,15 @@ class VisionAnalysisResponse(BaseModel):
     detections: list[VisionDetection]
     signals: VisionSignals
     processing: ProcessingDetails
+
+    # ── New fields (all Optional for backward compat) ───────────
+    auth: FaceAuthStatus | None = None                # Module A
+    face_mesh: FaceMeshData | None = None             # Module C
+    hands: HandTrackingData | None = None             # Module D
+    pose: PoseData | None = None                      # Module E
+    objects: YoloDetectionData | None = None          # Step 3
+    behavior_events: list[BehaviorEventData] = Field(default_factory=list)  # Module F
+
+    # Phase 8 — server-rendered annotated frame (base64 JPEG, no data: prefix)
+    # Set only when `render_overlay=True` is passed to the analyze endpoint.
+    annotated_frame_base64: str | None = None

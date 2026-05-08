@@ -9,6 +9,8 @@ import type {
   ChatResponse,
   DashboardResponse,
   DailyReportResponse,
+  FaceRegisterRequest,
+  FaceRegisterResponse,
   HydrationLogRequest,
   HydrationLogResponse,
   ReminderTriggerRequest,
@@ -92,5 +94,21 @@ export const monitoringApi = {
       },
     })
     return response.data
+  },
+
+  async registerFace(payload: FaceRegisterRequest) {
+    const response = await apiClient.post<FaceRegisterResponse>('/api/v1/monitoring/face/register', payload, {
+      timeout: 20_000,
+    })
+    return response.data
+  },
+
+  async faceStatus() {
+    const response = await apiClient.get<FaceRegisterResponse>('/api/v1/monitoring/face/status')
+    return response.data
+  },
+
+  async deleteFaceProfile() {
+    await apiClient.delete('/api/v1/monitoring/face')
   },
 }

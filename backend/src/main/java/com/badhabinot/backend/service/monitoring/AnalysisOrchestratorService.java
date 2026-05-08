@@ -111,6 +111,23 @@ public class AnalysisOrchestratorService {
 
             job = analysisJobRepository.saveAndFlush(job);
 
+            // Map vision behavior events to frontend DTO (null-safe)
+            List<AnalyzeFrameResponse.VisionBehaviorEventDetail> visionBehaviorEvents =
+                    visionResponse.behaviorEvents() != null
+                            ? visionResponse.behaviorEvents().stream()
+                                    .map(e -> new AnalyzeFrameResponse.VisionBehaviorEventDetail(
+                                            e.eventType(), e.severity(), e.confidence(), e.detail()))
+                                    .toList()
+                            : java.util.List.of();
+
+            // Map face auth result (null-safe)
+            AnalyzeFrameResponse.FaceAuthDetail faceAuth = null;
+            if (visionResponse.auth() != null) {
+                VisionAnalysisResponse.AuthStatus a = visionResponse.auth();
+                faceAuth = new AnalyzeFrameResponse.FaceAuthDetail(
+                        a.enabled(), a.authenticated(), a.confidence(), a.framesEnrolled());
+            }
+
             AnalyzeFrameResponse response = new AnalyzeFrameResponse(
                     job.getId(),
                     request.sessionId(),
@@ -139,7 +156,10 @@ public class AnalysisOrchestratorService {
                             aiResponse.model().provider(),
                             aiResponse.model().name(),
                             aiResponse.model().mode()
-                    )
+                    ),
+                    visionResponse.annotatedFrameBase64(),
+                    visionBehaviorEvents,
+                    faceAuth
             );
             analysisJobStateStore.markCompleted(job, response);
             return response;

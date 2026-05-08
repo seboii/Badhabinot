@@ -1,5 +1,5 @@
 import type { RefObject } from 'react'
-import { Camera, Play, ScanFace, Square, VideoOff } from 'lucide-react'
+import { Camera, Play, ScanFace, Square, UserRound, VideoOff } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -7,6 +7,7 @@ import { Switch } from '@/components/ui/switch'
 import type { CameraPermissionState } from '@/hooks/use-camera'
 import { useLanguage } from '@/i18n/language-provider'
 import type { AnalyzeFrameResponse } from '@/types/monitoring'
+import { VisionOverlayPanel } from './VisionOverlayPanel'
 
 type LiveMonitorPanelProps = {
   videoRef: RefObject<HTMLVideoElement | null>
@@ -22,11 +23,14 @@ type LiveMonitorPanelProps = {
   isStarting: boolean
   isStopping: boolean
   isAnalyzing: boolean
+  showOverlay: boolean
   onRequestCamera: () => void
   onStartMonitoring: () => void
   onStopMonitoring: () => void
   onAnalyzeNow: () => void
   onToggleAutoScan: (checked: boolean) => void
+  onToggleOverlay: (checked: boolean) => void
+  onOpenFaceRegistration: () => void
 }
 
 export function LiveMonitorPanel({
@@ -43,11 +47,14 @@ export function LiveMonitorPanel({
   isStarting,
   isStopping,
   isAnalyzing,
+  showOverlay,
   onRequestCamera,
   onStartMonitoring,
   onStopMonitoring,
   onAnalyzeNow,
   onToggleAutoScan,
+  onToggleOverlay,
+  onOpenFaceRegistration,
 }: LiveMonitorPanelProps) {
   const { isTurkish } = useLanguage()
   const canAnalyze = monitoringLive && streamReady && analysisEnabled
@@ -79,6 +86,7 @@ export function LiveMonitorPanel({
             muted
             playsInline
           />
+          <VisionOverlayPanel analysis={latestAnalysis} visible={showOverlay} />
           {streamReady ? <div className="pointer-events-none absolute inset-x-0 top-0 h-0.5 bg-[var(--primary)] shadow-[0_0_24px_var(--primary)] animate-[pulse_2.6s_ease-in-out_infinite]" /> : null}
           {!streamReady ? (
             <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 text-center">
@@ -141,6 +149,14 @@ export function LiveMonitorPanel({
           >
             {isTurkish ? 'Simdi analiz et' : 'Analyze now'}
           </Button>
+
+          <Button
+            variant="ghost"
+            iconLeft={<UserRound className="size-4" />}
+            onClick={onOpenFaceRegistration}
+          >
+            {isTurkish ? 'Yüz kaydı' : 'Face registration'}
+          </Button>
         </div>
 
         {!analysisEnabled ? (
@@ -151,16 +167,30 @@ export function LiveMonitorPanel({
           </p>
         ) : null}
 
-        <div className="grid gap-3 rounded-[28px] border border-[var(--line-soft)] bg-[rgba(255,255,255,0.03)] p-4 md:grid-cols-[1fr_auto] md:items-center">
-          <div>
-            <p className="text-sm font-semibold text-white">{isTurkish ? 'Surekli tarama' : 'Continuous scan'}</p>
-            <p className="mt-1 text-sm leading-6 text-[var(--text-muted)]">
-              {isTurkish
-                ? 'Oturum aktifken canli akis her 12 saniyede bir taranir.'
-                : 'Poll the live feed every 12 seconds while the session is active.'}
-            </p>
+        <div className="space-y-3">
+          <div className="grid gap-3 rounded-[28px] border border-[var(--line-soft)] bg-[rgba(255,255,255,0.03)] p-4 md:grid-cols-[1fr_auto] md:items-center">
+            <div>
+              <p className="text-sm font-semibold text-white">{isTurkish ? 'Surekli tarama' : 'Continuous scan'}</p>
+              <p className="mt-1 text-sm leading-6 text-[var(--text-muted)]">
+                {isTurkish
+                  ? 'Oturum aktifken canli akis her 3 saniyede bir taranir.'
+                  : 'Poll the live feed every 3 seconds while the session is active.'}
+              </p>
+            </div>
+            <Switch checked={autoScan} onCheckedChange={onToggleAutoScan} />
           </div>
-          <Switch checked={autoScan} onCheckedChange={onToggleAutoScan} />
+
+          <div className="grid gap-3 rounded-[28px] border border-[var(--line-soft)] bg-[rgba(255,255,255,0.03)] p-4 md:grid-cols-[1fr_auto] md:items-center">
+            <div>
+              <p className="text-sm font-semibold text-white">{isTurkish ? 'Goruntu katmani' : 'Vision overlay'}</p>
+              <p className="mt-1 text-sm leading-6 text-[var(--text-muted)]">
+                {isTurkish
+                  ? 'Son analizin aciklamali karesini kamera onizlemesinin uzerine bindiriri.'
+                  : 'Render the annotated frame from the latest analysis on top of the camera preview.'}
+              </p>
+            </div>
+            <Switch checked={showOverlay} onCheckedChange={onToggleOverlay} />
+          </div>
         </div>
 
         <div className="grid gap-3 md:grid-cols-3">

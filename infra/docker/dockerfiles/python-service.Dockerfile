@@ -7,8 +7,36 @@ WORKDIR /workspace
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
 
+# System libraries required by opencv-python-headless, mediapipe, ultralytics, and deepface.
+# libgl1 provides libGL.so.1 which these packages link against even in headless mode.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libglib2.0-0 \
+    libgomp1 \
+    libgl1 \
+    libsm6 \
+    libxext6 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Use a virtual environment so the runtime stage gets a clean, portable copy.
+RUN python -m venv /venv
+ENV PATH="/venv/bin:$PATH"
+
 COPY python-services python-services
-RUN --mount=type=cache,target=/root/.cache/pip pip install --prefix /install --no-cache-dir -r ${SERVICE_PATH}/requirements.txt
+
+# vision-service ships heavy ML dependencies (torch via ultralytics, tensorflow via deepface).
+# Pre-installing CPU-only variants here prevents pip's resolver from selecting the default
+# CUDA-enabled wheels on Linux (~2 GB of torch+CUDA + nvidia_cudnn + nvidia_cusparselt, etc.).
+# For ai-service this block is skipped — its requirements are lightweight.
+RUN --mount=type=cache,target=/root/.cache/pip \
+    if [ "${SERVICE_PATH}" = "python-services/vision-service" ]; then \
+        pip install \
+            --index-url https://download.pytorch.org/whl/cpu \
+            torch torchvision && \
+        pip install tensorflow-cpu; \
+    fi
+
+RUN --mount=type=cache,target=/root/.cache/pip pip install \
+    -r ${SERVICE_PATH}/requirements.txt
 
 FROM python:3.11-slim AS runtime
 ARG SERVICE_PATH
@@ -18,10 +46,25 @@ WORKDIR /app
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     UVICORN_HOST=0.0.0.0 \
-    UVICORN_PORT=${APP_PORT}
+    UVICORN_PORT=${APP_PORT} \
+    PATH="/venv/bin:$PATH" \
+    HOME="/app"
 
-COPY --from=build /install /usr/local
+# Same runtime system libraries
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libglib2.0-0 \
+    libgomp1 \
+    libgl1 \
+    libsm6 \
+    libxext6 \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY --from=build /venv /venv
 COPY --from=build /workspace/${SERVICE_PATH}/app ./app
+
+# Create writable directories for face profiles and session logs (vision-service only)
+# Harmless for ai-service (directories simply stay empty)
+RUN mkdir -p /app/data/users /app/logs/sessions
 
 RUN addgroup --system app \
     && adduser --system --ingroup app app \

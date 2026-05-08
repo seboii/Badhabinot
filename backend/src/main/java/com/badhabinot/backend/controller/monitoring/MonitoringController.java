@@ -2,6 +2,9 @@ package com.badhabinot.backend.controller.monitoring;
 
 import com.badhabinot.backend.dto.monitoring.AnalyzeFrameRequest;
 import com.badhabinot.backend.dto.monitoring.AnalyzeFrameResponse;
+import com.badhabinot.backend.dto.monitoring.FaceRegisterRequest;
+import com.badhabinot.backend.dto.monitoring.FaceRegisterResponse;
+import com.badhabinot.backend.integration.python.VisionServiceClient;
 import com.badhabinot.backend.dto.monitoring.AnalysisJobStatusResponse;
 import com.badhabinot.backend.dto.monitoring.ActivityItemResponse;
 import com.badhabinot.backend.dto.monitoring.DashboardResponse;
@@ -49,19 +52,22 @@ public class MonitoringController {
     private final BehaviorEventService behaviorEventService;
     private final DailyReportService dailyReportService;
     private final GroundedChatService groundedChatService;
+    private final VisionServiceClient visionServiceClient;
 
     public MonitoringController(
             AnalysisOrchestratorService analysisOrchestratorService,
             MonitoringExperienceService monitoringExperienceService,
             BehaviorEventService behaviorEventService,
             DailyReportService dailyReportService,
-            GroundedChatService groundedChatService
+            GroundedChatService groundedChatService,
+            VisionServiceClient visionServiceClient
     ) {
         this.analysisOrchestratorService = analysisOrchestratorService;
         this.monitoringExperienceService = monitoringExperienceService;
         this.behaviorEventService = behaviorEventService;
         this.dailyReportService = dailyReportService;
         this.groundedChatService = groundedChatService;
+        this.visionServiceClient = visionServiceClient;
     }
 
     @PostMapping("/sessions/start")
@@ -158,6 +164,32 @@ public class MonitoringController {
             @RequestParam(name = "limit", defaultValue = "40") int limit
     ) {
         return groundedChatService.history(jwt, conversationId, limit);
+    }
+
+    // ── Phase 2 — Face Registration endpoints ─────────────────────────────
+
+    @PostMapping("/face/register")
+    @Operation(summary = "Submit a camera frame to enrol the authenticated user's face", security = @SecurityRequirement(name = "bearerAuth"))
+    public FaceRegisterResponse registerFace(
+            @AuthenticationPrincipal Jwt jwt,
+            @Valid @RequestBody FaceRegisterRequest request
+    ) {
+        String userId = jwt.getSubject();
+        return visionServiceClient.registerFace(userId, request);
+    }
+
+    @GetMapping("/face/status")
+    @Operation(summary = "Return face enrolment status for the authenticated user", security = @SecurityRequirement(name = "bearerAuth"))
+    public FaceRegisterResponse faceStatus(@AuthenticationPrincipal Jwt jwt) {
+        String userId = jwt.getSubject();
+        return visionServiceClient.faceStatus(userId);
+    }
+
+    @org.springframework.web.bind.annotation.DeleteMapping("/face")
+    @Operation(summary = "Delete the authenticated user's stored face profile", security = @SecurityRequirement(name = "bearerAuth"))
+    public void deleteFaceProfile(@AuthenticationPrincipal Jwt jwt) {
+        String userId = jwt.getSubject();
+        visionServiceClient.deleteFaceProfile(userId);
     }
 }
 

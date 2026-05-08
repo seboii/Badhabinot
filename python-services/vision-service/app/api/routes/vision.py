@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 
 from app.core.security import require_internal_api_key
 from app.schemas.vision import VisionAnalysisRequest, VisionAnalysisResponse
@@ -11,6 +11,7 @@ service = VisionAnalysisService()
 @router.post("/analyze", response_model=VisionAnalysisResponse)
 async def analyze(
     request: VisionAnalysisRequest,
+    render_overlay: bool = Query(default=False, description="Return server-rendered annotated frame as base64 JPEG"),
     _: None = Depends(require_internal_api_key),
 ) -> VisionAnalysisResponse:
-    return await service.analyze(request)
+    return await service.analyze(request, render_overlay=render_overlay)

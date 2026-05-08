@@ -9,7 +9,12 @@ public record VisionAnalysisResponse(
         double postureConfidence,
         List<Detection> detections,
         Signals signals,
-        Processing processing
+        Processing processing,
+        // Phase 8 — new optional fields (null when not requested or deps unavailable)
+        String annotatedFrameBase64,
+        List<VisionBehaviorEvent> behaviorEvents,
+        // Module A — face authentication result (null when no profile registered)
+        AuthStatus auth
 ) {
     public record Detection(
             String eventType,
@@ -59,5 +64,23 @@ public record VisionAnalysisResponse(
             long visionLatencyMs
     ) {
     }
-}
 
+    /** Mirrors the Python BehaviorEventData schema. */
+    public record VisionBehaviorEvent(
+            String eventType,
+            String severity,
+            double confidence,
+            String detail
+    ) {
+    }
+
+    /** Mirrors the Python FaceAuthStatus schema (Module A). */
+    public record AuthStatus(
+            boolean enabled,
+            boolean authenticated,
+            double confidence,
+            int framesEnrolled,
+            String error
+    ) {
+    }
+}

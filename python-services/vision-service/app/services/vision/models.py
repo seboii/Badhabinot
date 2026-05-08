@@ -4,6 +4,11 @@ from dataclasses import dataclass, field
 from math import hypot
 from typing import Any
 
+# NOTE: New vision module result types are defined in their own files
+# (vision_face_auth.py, vision_face_mesh.py, vision_hand_tracker.py,
+#  vision_pose_estimator.py, vision_yolo_detector.py, behavior_engine.py)
+# to keep this file focused on the core legacy pipeline models.
+
 
 @dataclass(frozen=True)
 class Region:
