@@ -38,7 +38,7 @@ export default defineConfig(({ mode }) => {
     },
     optimizeDeps: {
       // @mediapipe/tasks-vision ships WASM — esbuild pre-bundling breaks it.
-      exclude: ['@mediapipe/tasks-vision'],
+      exclude: ['@mediapipe/tasks-vision', 'onnxruntime-web'],
     },
   }
 })
