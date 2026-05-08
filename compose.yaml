@@ -49,3 +49,5 @@ networks:
 
 volumes:
   postgres-data:
+  vision-face-data:
+  vision-session-logs:

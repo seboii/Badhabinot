@@ -137,7 +137,10 @@ class AnalysisOrchestratorServiceTest {
                 0.0,
                 List.of(),
                 new VisionAnalysisResponse.Signals(0.1, 0.2, 0.1, 0.0, 0.0, 0.0, 0.7, 0.0, 0.0, 0.0, 0.0, 0.0, 0.2),
-                new VisionAnalysisResponse.Processing(1280, 720, 0.1, 0.2, 0.7, 45L)
+                new VisionAnalysisResponse.Processing(1280, 720, 0.1, 0.2, 0.7, 45L),
+                null,
+                List.of(),
+                null
         ));
         when(behaviorEventService.recordAnalysisEvents(eq(userId), eq(sessionId), any(), any(), any(), any()))
                 .thenReturn(List.of());

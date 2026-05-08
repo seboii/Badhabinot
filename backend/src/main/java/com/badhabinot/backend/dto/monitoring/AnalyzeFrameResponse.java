@@ -19,7 +19,12 @@ public record AnalyzeFrameResponse(
         List<BehaviorEventResponse> events,
         List<ReminderEventResponse> generatedReminders,
         ProcessingDetails processing,
-        ModelDetails model
+        ModelDetails model,
+        // Phase 8 — vision overlay pass-through fields (null when not requested)
+        String annotatedFrameBase64,
+        List<VisionBehaviorEventDetail> visionBehaviorEvents,
+        // Module A — face authentication result (null when no profile registered)
+        FaceAuthDetail faceAuth
 ) {
     public record ProcessingDetails(
             int frameWidth,
@@ -40,5 +45,22 @@ public record AnalyzeFrameResponse(
             String mode
     ) {
     }
-}
 
+    /** Mirrors VisionAnalysisResponse.VisionBehaviorEvent for frontend consumption. */
+    public record VisionBehaviorEventDetail(
+            String eventType,
+            String severity,
+            double confidence,
+            String detail
+    ) {
+    }
+
+    /** Face authentication result passed through from vision-service Module A. */
+    public record FaceAuthDetail(
+            boolean enabled,
+            boolean authenticated,
+            double confidence,
+            int framesEnrolled
+    ) {
+    }
+}

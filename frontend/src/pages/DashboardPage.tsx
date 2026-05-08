@@ -5,6 +5,7 @@ import { toast } from 'sonner'
 import { monitoringApi } from '@/api/monitoring'
 import { toErrorMessage } from '@/api/client'
 import { ActivityFeedCard } from '@/features/dashboard/components/ActivityFeedCard'
+import { FaceRegistrationModal } from '@/features/dashboard/components/FaceRegistrationModal'
 import { InsightPanel } from '@/features/dashboard/components/InsightPanel'
 import { LiveMonitorPanel } from '@/features/dashboard/components/LiveMonitorPanel'
 import { QuickActionsCard } from '@/features/dashboard/components/QuickActionsCard'
@@ -54,6 +55,8 @@ export function DashboardPage() {
   const { videoRef, permissionState, errorMessage, streamReady, requestCamera, stopCamera, captureFrame } = useCamera()
   const [latestAnalysis, setLatestAnalysis] = useState<AnalyzeFrameResponse | null>(null)
   const [autoScan, setAutoScan] = useState(true)
+  const [showOverlay, setShowOverlay] = useState(true)
+  const [faceRegOpen, setFaceRegOpen] = useState(false)
   const [pendingAction, setPendingAction] = useState<'water' | 'water_reminder' | 'break' | undefined>(undefined)
   const inFlightRef = useRef(false)
 
@@ -284,7 +287,7 @@ export function DashboardPage() {
 
       inFlightRef.current = true
       analyzeMutation.mutate(sessionId)
-    }, 12_000)
+    }, 3_000)
 
     return () => window.clearInterval(interval)
   }, [analyzeMutation, autoScan, dashboardQuery.data?.active_session_id, dashboardQuery.data?.monitoring_active, streamReady])
@@ -323,11 +326,14 @@ export function DashboardPage() {
           isStarting={startSessionMutation.isPending}
           isStopping={stopSessionMutation.isPending}
           isAnalyzing={analyzeMutation.isPending}
+          showOverlay={showOverlay}
           onRequestCamera={requestCamera}
           onStartMonitoring={handleStartMonitoring}
           onStopMonitoring={() => dashboard.active_session_id && stopSessionMutation.mutate(dashboard.active_session_id)}
           onAnalyzeNow={handleAnalyze}
           onToggleAutoScan={setAutoScan}
+          onToggleOverlay={setShowOverlay}
+          onOpenFaceRegistration={() => setFaceRegOpen(true)}
         />
         <InsightPanel dashboard={dashboard} latestAnalysis={latestAnalysis} />
       </div>
@@ -427,6 +433,8 @@ export function DashboardPage() {
           events={eventsQuery.data ?? []}
         />
       )}
+
+      {faceRegOpen ? <FaceRegistrationModal onClose={() => setFaceRegOpen(false)} /> : null}
     </div>
   )
 }

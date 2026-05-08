@@ -142,6 +142,13 @@ services:
       INTERNAL_API_KEY: ${INTERNAL_API_KEY:-change-me-in-real-environments}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
       UVICORN_PORT: 8091
+      # Paths for face profiles and session logs inside the container
+      FACE_DATA_DIR: /app/data/users
+      SESSION_LOG_DIR: /app/logs/sessions
+    volumes:
+      # Persist face embeddings and session logs across container restarts
+      - vision-face-data:/app/data/users
+      - vision-session-logs:/app/logs/sessions
     expose:
       - "8091"
     networks:
@@ -182,3 +189,5 @@ networks:
 
 volumes:
   postgres-data:
+  vision-face-data:
+  vision-session-logs:

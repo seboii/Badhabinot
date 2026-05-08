@@ -1,7 +1,27 @@
+# ── Existing dependencies (pinned versions preserved) ─────────────────────
 fastapi==0.115.0
 uvicorn[standard]==0.30.6
 pydantic==2.9.2
 opencv-python-headless==4.10.0.84
-numpy==2.1.1
+numpy>=1.24,<2.0
 python-dotenv==1.0.1
-httpx
+httpx==0.27.2
+
+# ── New dependencies (Modules A–H, Step 3–4) ─────────────────────────────
+# Module C, D — MediaPipe face mesh + hand tracking
+# Pinned to last version that exposes the mp.solutions API (0.10.21).
+# Versions >= 0.10.22 removed mp.solutions in favour of mp.tasks.
+mediapipe==0.10.21
+
+# Module E, Step 3 — YOLOv8 pose + object detection
+ultralytics>=8.0
+
+# Module A — Face embedding extraction (DeepFace, no dlib compile required)
+deepface>=0.0.93
+tf-keras>=2.16          # DeepFace backend (TensorFlow-Keras bridge)
+
+# Module H — Session export
+reportlab>=4.0          # PDF export
+
+# Utility
+scipy>=1.11             # signal processing helpers

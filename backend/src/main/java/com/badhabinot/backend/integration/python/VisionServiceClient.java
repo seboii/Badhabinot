@@ -1,5 +1,7 @@
 package com.badhabinot.backend.integration.python;
 
+import com.badhabinot.backend.dto.monitoring.FaceRegisterRequest;
+import com.badhabinot.backend.dto.monitoring.FaceRegisterResponse;
 import com.badhabinot.backend.dto.monitoring.VisionAnalysisRequest;
 import com.badhabinot.backend.dto.monitoring.VisionAnalysisResponse;
 import com.badhabinot.backend.common.exception.monitoring.DownstreamServiceException;
@@ -22,9 +24,21 @@ public class VisionServiceClient {
     }
 
     public VisionAnalysisResponse analyze(VisionAnalysisRequest request) {
+        return analyze(request, true);
+    }
+
+    /**
+     * @param renderOverlay when true, the vision service will render all CV2 overlays
+     *                      onto the frame and return the result as annotatedFrameBase64.
+     *                      Set to false for lightweight analysis calls (e.g., health checks).
+     */
+    public VisionAnalysisResponse analyze(VisionAnalysisRequest request, boolean renderOverlay) {
         try {
             return webClient.post()
-                    .uri("/v1/vision/analyze")
+                    .uri(uriBuilder -> uriBuilder
+                            .path("/v1/vision/analyze")
+                            .queryParam("render_overlay", renderOverlay)
+                            .build())
                     .bodyValue(request)
                     .retrieve()
                     .onStatus(HttpStatusCode::isError, response -> response.bodyToMono(String.class)
@@ -41,6 +55,72 @@ public class VisionServiceClient {
             throw new DownstreamServiceException("vision_service_unavailable", "Unable to reach vision-service");
         } catch (Exception exception) {
             throw new DownstreamServiceException("vision_service_unavailable", "Unexpected failure while calling vision-service");
+        }
+    }
+
+    /** Register one face frame for a user (Phase 2 — face enrolment). */
+    public FaceRegisterResponse registerFace(String userId, FaceRegisterRequest request) {
+        try {
+            var visionRequest = new java.util.HashMap<String, String>();
+            visionRequest.put("user_id", userId);
+            visionRequest.put("image_base64", request.imageBase64());
+            visionRequest.put("image_content_type",
+                    request.imageContentType() != null ? request.imageContentType() : "image/jpeg");
+
+            return webClient.post()
+                    .uri("/v1/vision/face/register")
+                    .bodyValue(visionRequest)
+                    .retrieve()
+                    .onStatus(HttpStatusCode::isError, response -> response.bodyToMono(String.class)
+                            .defaultIfEmpty("face-registration error")
+                            .flatMap(body -> Mono.error(new DownstreamServiceException("vision_face_error", body))))
+                    .bodyToMono(FaceRegisterResponse.class)
+                    .block(Duration.ofSeconds(15));
+        } catch (DownstreamServiceException exception) {
+            throw exception;
+        } catch (WebClientRequestException exception) {
+            if (isTimeout(exception)) {
+                throw new DownstreamTimeoutException("vision_face_timeout", "Timed out during face registration");
+            }
+            throw new DownstreamServiceException("vision_service_unavailable", "Unable to reach vision-service");
+        } catch (Exception exception) {
+            throw new DownstreamServiceException("vision_service_unavailable", "Unexpected failure during face registration");
+        }
+    }
+
+    /** Delete stored face profile for a user. */
+    public void deleteFaceProfile(String userId) {
+        try {
+            webClient.delete()
+                    .uri("/v1/vision/face/{userId}", userId)
+                    .retrieve()
+                    .onStatus(HttpStatusCode::isError, response -> response.bodyToMono(String.class)
+                            .defaultIfEmpty("face-delete error")
+                            .flatMap(body -> Mono.error(new DownstreamServiceException("vision_face_error", body))))
+                    .bodyToMono(Void.class)
+                    .block(Duration.ofSeconds(10));
+        } catch (DownstreamServiceException exception) {
+            throw exception;
+        } catch (Exception exception) {
+            throw new DownstreamServiceException("vision_service_unavailable", "Unexpected failure during face profile deletion");
+        }
+    }
+
+    /** Return enrolment status for a user. */
+    public FaceRegisterResponse faceStatus(String userId) {
+        try {
+            return webClient.get()
+                    .uri("/v1/vision/face/{userId}/status", userId)
+                    .retrieve()
+                    .onStatus(HttpStatusCode::isError, response -> response.bodyToMono(String.class)
+                            .defaultIfEmpty("face-status error")
+                            .flatMap(body -> Mono.error(new DownstreamServiceException("vision_face_error", body))))
+                    .bodyToMono(FaceRegisterResponse.class)
+                    .block(Duration.ofSeconds(10));
+        } catch (DownstreamServiceException exception) {
+            throw exception;
+        } catch (Exception exception) {
+            throw new DownstreamServiceException("vision_service_unavailable", "Unexpected failure while checking face status");
         }
     }
 
