@@ -74,8 +74,6 @@ export function useMediaPipeLive(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const modelsRef = useRef<any>(null)
   const rafRef = useRef<number>(0)
-  const activeRef = useRef(active)
-  activeRef.current = active
 
   // Load models once when first activated
   useEffect(() => {
@@ -103,7 +101,7 @@ export function useMediaPipeLive(
 
   // rAF detection + drawing loop
   useEffect(() => {
-    if (!state.ready) return
+    if (!state.ready || !active) return
 
     const models = modelsRef.current!
 
@@ -113,19 +111,10 @@ export function useMediaPipeLive(
     let lastCtx: CanvasRenderingContext2D | null = null
 
     function loop() {
+      rafRef.current = requestAnimationFrame(loop)
+
       const video = videoRef.current
       const canvas = canvasRef.current
-
-      if (!activeRef.current) {
-        if (canvas) {
-          const ctx = canvas.getContext('2d')
-          ctx?.clearRect(0, 0, canvas.width, canvas.height)
-        }
-        // Don't schedule next frame — restarted by the effect when active flips.
-        return
-      }
-
-      rafRef.current = requestAnimationFrame(loop)
 
       if (!video || video.readyState < 2 || video.videoWidth === 0 || !canvas) return
 
@@ -225,7 +214,7 @@ export function useMediaPipeLive(
         ctx?.clearRect(0, 0, canvas.width, canvas.height)
       }
     }
-  }, [state.ready, canvasRef, videoRef])
+  }, [state.ready, active, canvasRef, videoRef])
 
   return state
 }
