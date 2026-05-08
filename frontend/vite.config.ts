@@ -36,5 +36,9 @@ export default defineConfig(({ mode }) => {
       host: '0.0.0.0',
       port: 4173,
     },
+    optimizeDeps: {
+      // @mediapipe/tasks-vision ships WASM — esbuild pre-bundling breaks it.
+      exclude: ['@mediapipe/tasks-vision'],
+    },
   }
 })

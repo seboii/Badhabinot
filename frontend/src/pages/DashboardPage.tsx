@@ -271,7 +271,7 @@ export function DashboardPage() {
 
   useEffect(() => {
     const sessionLive = Boolean(dashboardQuery.data?.monitoring_active && dashboardQuery.data?.active_session_id && streamReady)
-    if (!sessionLive || !autoScan || analyzeMutation.isPending) {
+    if (!sessionLive || !autoScan) {
       return
     }
 
@@ -280,17 +280,43 @@ export function DashboardPage() {
       return
     }
 
-    const interval = window.setInterval(() => {
-      if (inFlightRef.current) {
-        return
+    let running = true
+
+    async function loop() {
+      while (running) {
+        if (!inFlightRef.current) {
+          inFlightRef.current = true
+          try {
+            const frame = captureFrame()
+            if (frame) {
+              const result = await monitoringApi.analyze({
+                session_id: sessionId!,
+                frame_id: `web-${Date.now()}`,
+                captured_at: new Date().toISOString(),
+                image_base64: frame.image_base64,
+                image_content_type: frame.image_content_type,
+              })
+              setLatestAnalysis(result)
+            }
+          } catch {
+            // network errors are non-fatal — keep looping
+          } finally {
+            inFlightRef.current = false
+          }
+        }
+        // Minimum gap between requests so we don't flood the server.
+        // The server parallel pipeline completes in ~300-500 ms, so
+        // the effective rate is roughly 1-2 analyses per second.
+        await new Promise<void>(resolve => setTimeout(resolve, 300))
       }
+    }
 
-      inFlightRef.current = true
-      analyzeMutation.mutate(sessionId)
-    }, 3_000)
+    void loop()
 
-    return () => window.clearInterval(interval)
-  }, [analyzeMutation, autoScan, dashboardQuery.data?.active_session_id, dashboardQuery.data?.monitoring_active, streamReady])
+    return () => {
+      running = false
+    }
+  }, [autoScan, captureFrame, dashboardQuery.data?.active_session_id, dashboardQuery.data?.monitoring_active, streamReady])
 
   const dashboard = dashboardQuery.data
   const activities = activitiesQuery.data ?? dashboard?.recent_activities ?? []
