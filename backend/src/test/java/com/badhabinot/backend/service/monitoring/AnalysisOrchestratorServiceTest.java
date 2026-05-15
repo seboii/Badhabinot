@@ -82,7 +82,9 @@ class AnalysisOrchestratorServiceTest {
                 false,
                 "22:00",
                 "08:00",
-                false
+                false,
+                "llama3.2:3b",
+                "http://localhost:11434"
         ));
 
         AnalyzeFrameRequest request = new AnalyzeFrameRequest(
@@ -120,7 +122,9 @@ class AnalysisOrchestratorServiceTest {
                 false,
                 "22:00",
                 "08:00",
-                true
+                true,
+                "llama3.2:3b",
+                "http://localhost:11434"
         ));
         when(analysisJobRepository.saveAndFlush(any(AnalysisJob.class))).thenAnswer(invocation -> {
             AnalysisJob job = invocation.getArgument(0);
