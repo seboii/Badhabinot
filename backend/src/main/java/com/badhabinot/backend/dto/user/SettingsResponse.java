@@ -16,6 +16,8 @@ public record SettingsResponse(
         @JsonFormat(pattern = "HH:mm") LocalTime quietHoursEnd,
         ModelMode modelMode,
         boolean notificationsEnabled,
+        String localModelName,
+        String ollamaBaseUrl,
         Instant updatedAt
 ) {
 }

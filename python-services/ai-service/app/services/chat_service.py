@@ -7,6 +7,7 @@ from app.schemas.chat import ChatRequest, ChatResponse
 from app.services.providers import (
     ChatProviderResult,
     MockProvider,
+    OllamaProvider,
     OpenAiCompatibleProvider,
     ProviderConfig,
     ProviderConfigurationError,
@@ -19,8 +20,9 @@ class ChatService:
         self.provider = provider
 
     async def respond(self, request: ChatRequest) -> ChatResponse:
+        provider = self._resolve_provider(request)
         try:
-            result: ChatProviderResult = await self._provider().respond_chat(request)
+            result: ChatProviderResult = await provider.respond_chat(request)
         except ProviderConfigurationError as exc:
             raise HTTPException(status_code=503, detail=str(exc)) from exc
         except ProviderInvocationError as exc:
@@ -38,7 +40,15 @@ class ChatService:
             },
         )
 
-    def _provider(self) -> MockProvider | OpenAiCompatibleProvider:
+    def _resolve_provider(
+        self, request: ChatRequest
+    ) -> MockProvider | OpenAiCompatibleProvider | OllamaProvider:
+        if request.ai_mode == "LOCAL" and request.ollama_base_url and request.local_model_name:
+            return OllamaProvider(
+                base_url=request.ollama_base_url,
+                model_name=request.local_model_name,
+                timeout_seconds=60.0,
+            )
         if self.provider is None:
             self.provider = _build_provider()
         return self.provider

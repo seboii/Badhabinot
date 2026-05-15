@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
-import { useMutation, useQuery } from '@tanstack/react-query'
-import { AlertTriangle, MessageSquare, RefreshCcw, Send, Sparkles } from 'lucide-react'
+import { useQuery } from '@tanstack/react-query'
+import { AlertTriangle, MessageSquare, RefreshCcw, Send, Sparkles, Cpu, Cloud } from 'lucide-react'
 import { toast } from 'sonner'
 import { monitoringApi } from '@/api/monitoring'
+import { userApi } from '@/api/user'
 import { toErrorMessage } from '@/api/client'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { EmptyState } from '@/components/ui/empty-state'
@@ -64,12 +65,24 @@ export function ChatPage() {
   const [followUps, setFollowUps] = useState<string[]>(starters)
   const [sendError, setSendError] = useState<string | null>(null)
   const [lastFailedMessage, setLastFailedMessage] = useState<string | null>(null)
+  const [isStreaming, setIsStreaming] = useState(false)
+  const [streamingContent, setStreamingContent] = useState('')
   const historyContainerRef = useRef<HTMLDivElement | null>(null)
+  const abortControllerRef = useRef<AbortController | null>(null)
 
   const reportQuery = useQuery({
     queryKey: ['daily-report-chat-preview'],
     queryFn: () => monitoringApi.getDailyReport(),
   })
+
+  const settingsQuery = useQuery({
+    queryKey: ['user-settings-chat'],
+    queryFn: userApi.getSettings,
+    staleTime: 60_000,
+  })
+
+  const modelMode = settingsQuery.data?.model_mode ?? 'API'
+  const localModelName = settingsQuery.data?.local_model_name
 
   const historyQuery = useQuery({
     queryKey: ['chat-history-initial'],
@@ -108,47 +121,23 @@ export function ChatPage() {
     container.scrollTop = container.scrollHeight
   }, [messages.length])
 
-  const chatMutation = useMutation({
-    mutationFn: (payload: { message: string; optimisticId: string }) =>
-      monitoringApi.chat({
-        conversation_id: conversationId,
-        message: payload.message,
-      }),
-    onSuccess(response) {
-      setConversationId(response.conversation_id)
-      storeConversationId(response.conversation_id)
-      setMessages(response.recent_messages)
-      setGroundedFacts(response.grounded_facts)
-      setFollowUps(response.follow_up_suggestions.length > 0 ? response.follow_up_suggestions : starters)
-      setSendError(null)
-      setLastFailedMessage(null)
-    },
-    onError(error, payload) {
-      setMessages((previous) => previous.filter((message) => message.message_id !== payload.optimisticId))
-      setDraft((previous) => (previous.length > 0 ? previous : payload.message))
-      setLastFailedMessage(payload.message)
-      setSendError(
-        toErrorMessage(
-          error,
-          isTurkish ? 'Veriye dayali sohbet istegi gonderilemedi.' : 'Unable to send the grounded chat request.',
-        ),
-      )
-      toast.error(
-        toErrorMessage(
-          error,
-          isTurkish ? 'Veriye dayali sohbet istegi gonderilemedi.' : 'Unable to send the grounded chat request.',
-        ),
-      )
-    },
-  })
+  // Scroll during streaming as tokens arrive.
+  useEffect(() => {
+    const container = historyContainerRef.current
+    if (!container || !isStreaming) {
+      return
+    }
+    container.scrollTop = container.scrollHeight
+  }, [streamingContent, isStreaming])
 
-  const sendMessage = (message: string) => {
+  const sendMessage = async (message: string) => {
     const trimmed = message.trim()
-    if (!trimmed || chatMutation.isPending) {
+    if (!trimmed || isStreaming) {
       return
     }
     setDraft('')
     setSendError(null)
+    setLastFailedMessage(null)
 
     const optimisticId = `temp-${Date.now()}`
     const optimisticMessage: ChatMessageResponse = {
@@ -160,15 +149,100 @@ export function ChatPage() {
       metadata: {},
     }
     setMessages((previous) => [...previous, optimisticMessage])
-    chatMutation.mutate({ message: trimmed, optimisticId })
+    setIsStreaming(true)
+
+    const controller = new AbortController()
+    abortControllerRef.current = controller
+
+    let accumulated = ''
+    let streamStarted = false
+
+    try {
+      await monitoringApi.chatStream(
+        { conversation_id: conversationId, message: trimmed },
+        (token) => {
+          streamStarted = true
+          accumulated += token
+          setStreamingContent(accumulated)
+        },
+        (result) => {
+          const assistantMsg: ChatMessageResponse = {
+            message_id: `assistant-${Date.now()}`,
+            conversation_id: result.conversationId,
+            role: 'assistant',
+            content: accumulated,
+            created_at: new Date().toISOString(),
+            metadata: {
+              grounded_facts: result.groundedFacts,
+            },
+          }
+          setStreamingContent('')
+          setConversationId(result.conversationId)
+          storeConversationId(result.conversationId)
+          setMessages((previous) => [...previous, assistantMsg])
+          setGroundedFacts(result.groundedFacts)
+          setFollowUps(result.followUpSuggestions.length > 0 ? result.followUpSuggestions : starters)
+          setSendError(null)
+          setLastFailedMessage(null)
+        },
+        controller.signal,
+      )
+    } catch (error) {
+      if (controller.signal.aborted) {
+        setMessages((previous) => previous.filter((m) => m.message_id !== optimisticId))
+        setStreamingContent('')
+      } else if (!streamStarted) {
+        // SSE failed before any token — fall back to non-streaming POST.
+        setStreamingContent('')
+        try {
+          const response = await monitoringApi.chat({
+            conversation_id: conversationId,
+            message: trimmed,
+          })
+          setConversationId(response.conversation_id)
+          storeConversationId(response.conversation_id)
+          setMessages(response.recent_messages)
+          setGroundedFacts(response.grounded_facts)
+          setFollowUps(response.follow_up_suggestions.length > 0 ? response.follow_up_suggestions : starters)
+          setSendError(null)
+          setLastFailedMessage(null)
+        } catch (fallbackError) {
+          setMessages((previous) => previous.filter((m) => m.message_id !== optimisticId))
+          setDraft((previous) => (previous.length > 0 ? previous : trimmed))
+          setLastFailedMessage(trimmed)
+          const errorMsg = toErrorMessage(
+            fallbackError,
+            isTurkish ? 'Veriye dayali sohbet istegi gonderilemedi.' : 'Unable to send the grounded chat request.',
+          )
+          setSendError(errorMsg)
+          toast.error(errorMsg)
+        }
+      } else {
+        // Mid-stream failure.
+        setStreamingContent('')
+        setMessages((previous) => previous.filter((m) => m.message_id !== optimisticId))
+        setDraft((previous) => (previous.length > 0 ? previous : trimmed))
+        setLastFailedMessage(trimmed)
+        const errorMsg = toErrorMessage(
+          error,
+          isTurkish ? 'Veriye dayali sohbet istegi gonderilemedi.' : 'Unable to send the grounded chat request.',
+        )
+        setSendError(errorMsg)
+        toast.error(errorMsg)
+      }
+    } finally {
+      setIsStreaming(false)
+      abortControllerRef.current = null
+    }
   }
 
   const handleSubmit = (event: FormEvent) => {
     event.preventDefault()
-    sendMessage(draft)
+    void sendMessage(draft)
   }
 
   const resetConversation = () => {
+    abortControllerRef.current?.abort()
     setConversationId(null)
     setMessages([])
     setGroundedFacts([])
@@ -176,6 +250,7 @@ export function ChatPage() {
     setSendError(null)
     setLastFailedMessage(null)
     setDraft('')
+    setStreamingContent('')
     storeConversationId(null)
     initialConversationIdRef.current = null
   }
@@ -192,7 +267,20 @@ export function ChatPage() {
         <CardHeader>
           <div className="flex items-start justify-between gap-3">
             <div>
-              <CardTitle>{isTurkish ? 'Davranis sohbeti' : 'Behavior chat'}</CardTitle>
+              <div className="flex items-center gap-2">
+                <CardTitle>{isTurkish ? 'Davranis sohbeti' : 'Behavior chat'}</CardTitle>
+                {modelMode === 'LOCAL' ? (
+                  <span className="inline-flex items-center gap-1 rounded-full border border-[rgba(139,92,246,0.4)] bg-[rgba(139,92,246,0.1)] px-2 py-0.5 text-xs text-purple-300">
+                    <Cpu className="h-3 w-3" />
+                    {localModelName ?? 'Local AI'}
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1 rounded-full border border-[var(--line-soft)] bg-[rgba(255,255,255,0.04)] px-2 py-0.5 text-xs text-[var(--text-muted)]">
+                    <Cloud className="h-3 w-3" />
+                    Cloud API
+                  </span>
+                )}
+              </div>
               <CardDescription className="mt-2">
                 {isTurkish
                   ? 'Yanitlar sadece kendi kayitli davranis, rapor, hatirlatici ve seans verine dayanir.'
@@ -204,9 +292,9 @@ export function ChatPage() {
               variant="ghost"
               iconLeft={<RefreshCcw className="size-4" />}
               onClick={resetConversation}
-              disabled={chatMutation.isPending}
+              disabled={isStreaming}
             >
-              {isTurkish ? 'Yeni sohbet' : 'New chat'}
+              {isTurkish ? 'Konusmayi Sifirla' : 'Reset'}
             </Button>
           </div>
         </CardHeader>
@@ -236,7 +324,7 @@ export function ChatPage() {
             ref={historyContainerRef}
             className="flex-1 space-y-3 overflow-y-auto rounded-[24px] border border-[var(--line-soft)] bg-[rgba(255,255,255,0.03)] p-4"
           >
-            {messages.length === 0 ? (
+            {messages.length === 0 && !isStreaming ? (
               <EmptyState
                 icon={MessageSquare}
                 title={isTurkish ? 'Henuz konusma yok' : 'No conversation yet'}
@@ -261,7 +349,7 @@ export function ChatPage() {
                 </div>
               ))
             )}
-            {chatMutation.isPending ? (
+            {isStreaming && streamingContent.length === 0 ? (
               <div className="flex items-center gap-2 rounded-[16px] border border-[var(--line-soft)] bg-[rgba(255,255,255,0.03)] px-3 py-2 text-xs text-[var(--text-muted)]">
                 <Sparkles className="size-3.5 animate-pulse" />
                 {isTurkish
@@ -269,18 +357,38 @@ export function ChatPage() {
                   : 'Assistant is analyzing your stored behavior data...'}
               </div>
             ) : null}
+            {isStreaming && streamingContent.length > 0 ? (
+              <div className="rounded-[20px] border border-[var(--line-soft)] bg-[rgba(255,255,255,0.04)] p-4">
+                <p className="whitespace-pre-wrap text-sm leading-6">
+                  {streamingContent}
+                  <span className="animate-pulse text-[var(--primary)]">&#9611;</span>
+                </p>
+              </div>
+            ) : null}
           </div>
 
           {sendError ? (
             <div className="rounded-[20px] border border-[rgba(239,68,68,0.4)] bg-[rgba(239,68,68,0.08)] p-3 text-sm text-[var(--text-muted)]">
               <p>{sendError}</p>
+              {modelMode === 'LOCAL' && (sendError.toLowerCase().includes('timeout') || sendError.toLowerCase().includes('unreachable') || sendError.toLowerCase().includes('unavailable')) && (
+                <div className="mt-2 rounded-[12px] border border-[rgba(139,92,246,0.3)] bg-[rgba(139,92,246,0.05)] p-3 text-xs">
+                  <p className="font-medium text-purple-300">
+                    {isTurkish ? 'Yerel AI (Ollama) erişilemiyor' : 'Local AI (Ollama) unreachable'}
+                  </p>
+                  <p className="mt-1 text-[var(--text-muted)]">
+                    {isTurkish
+                      ? `Ollama çalışıyor mu kontrol edin. Model yüklü değilse: ollama pull ${localModelName ?? 'llama3.2:3b'}`
+                      : `Make sure Ollama is running. If the model is not installed: ollama pull ${localModelName ?? 'llama3.2:3b'}`}
+                  </p>
+                </div>
+              )}
               <div className="mt-3 flex justify-end gap-2">
                 {lastFailedMessage ? (
                   <Button
                     type="button"
                     variant="ghost"
                     iconLeft={<RefreshCcw className="size-4" />}
-                    onClick={() => sendMessage(lastFailedMessage)}
+                    onClick={() => void sendMessage(lastFailedMessage)}
                   >
                     {isTurkish ? 'Son soruyu tekrar gonder' : 'Retry last question'}
                   </Button>
@@ -299,10 +407,10 @@ export function ChatPage() {
               }
               value={draft}
               onChange={(event) => setDraft(event.target.value)}
-              disabled={chatMutation.isPending}
+              disabled={isStreaming}
             />
             <div className="flex justify-end">
-              <Button type="submit" loading={chatMutation.isPending} iconLeft={<Send className="size-4" />}>
+              <Button type="submit" loading={isStreaming} iconLeft={<Send className="size-4" />}>
                 {isTurkish ? 'Soruyu gonder' : 'Send question'}
               </Button>
             </div>
@@ -359,7 +467,8 @@ export function ChatPage() {
               <button
                 key={suggestion}
                 type="button"
-                className="w-full rounded-[20px] border border-[var(--line-soft)] bg-[rgba(255,255,255,0.03)] px-4 py-3 text-left text-sm text-[var(--text-muted)] transition hover:border-[var(--primary)] hover:text-white"
+                className="w-full rounded-[20px] border border-[var(--line-soft)] bg-[rgba(255,255,255,0.03)] px-4 py-3 text-left text-sm text-[var(--text-muted)] transition hover:border-[var(--primary)] hover:text-white disabled:pointer-events-none disabled:opacity-50"
+                disabled={isStreaming}
                 onClick={() => setDraft(suggestion)}
               >
                 {suggestion}

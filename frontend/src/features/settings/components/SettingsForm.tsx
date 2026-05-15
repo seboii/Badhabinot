@@ -17,7 +17,6 @@ const settingsSchema = z.object({
   quiet_hours_enabled: z.boolean(),
   quiet_hours_start: z.string().min(1),
   quiet_hours_end: z.string().min(1),
-  model_mode: z.literal('API'),
   notifications_enabled: z.boolean(),
 })
 
@@ -62,7 +61,6 @@ export function SettingsForm({
       </CardHeader>
       <CardContent>
         <form className="grid gap-4 md:grid-cols-2" onSubmit={handleSubmit(onSubmit)}>
-          <input type="hidden" {...register('model_mode')} value="API" />
 
           <label className="flex flex-col gap-2">
             <span className="text-sm font-medium text-white">{isTurkish ? 'Hassasiyet' : 'Sensitivity'}</span>
@@ -75,16 +73,6 @@ export function SettingsForm({
               <option value="HIGH">{isTurkish ? 'Yuksek' : 'High'}</option>
             </select>
           </label>
-
-          <div className="rounded-[24px] border border-[var(--line-soft)] bg-[rgba(255,255,255,0.03)] p-4">
-            <p className="text-sm font-semibold text-white">{isTurkish ? 'Analiz modu' : 'Analysis mode'}</p>
-            <p className="mt-2 text-sm text-[var(--text-muted)]">
-              {isTurkish
-                ? 'Ust seviye analiz artik harici AI bagdastirici servisinden calisir.'
-                : 'Higher-level analysis now runs through the external AI adapter service.'}
-            </p>
-            <p className="mt-4 text-lg font-semibold text-white">API</p>
-          </div>
 
           <Input
             label={isTurkish ? 'Gunluk su hedefi (ml)' : 'Daily water goal (ml)'}

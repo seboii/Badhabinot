@@ -19,7 +19,9 @@ public record InternalUserAnalysisContextResponse(
         boolean quietHoursEnabled,
         @JsonFormat(pattern = "HH:mm") LocalTime quietHoursStart,
         @JsonFormat(pattern = "HH:mm") LocalTime quietHoursEnd,
-        boolean remoteInferenceAccepted
+        boolean remoteInferenceAccepted,
+        String localModelName,
+        String ollamaBaseUrl
 ) {
 }
 

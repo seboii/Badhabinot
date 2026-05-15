@@ -13,7 +13,9 @@ public record InternalUserAnalysisContext(
         boolean quietHoursEnabled,
         String quietHoursStart,
         String quietHoursEnd,
-        boolean remoteInferenceAccepted
+        boolean remoteInferenceAccepted,
+        String localModelName,
+        String ollamaBaseUrl
 ) {
 }
 

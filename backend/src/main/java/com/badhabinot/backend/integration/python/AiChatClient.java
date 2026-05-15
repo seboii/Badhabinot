@@ -5,7 +5,9 @@ import com.badhabinot.backend.dto.monitoring.AiChatResponse;
 import com.badhabinot.backend.common.exception.monitoring.DownstreamServiceException;
 import com.badhabinot.backend.common.exception.monitoring.DownstreamTimeoutException;
 import java.time.Duration;
+import java.util.Map;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
@@ -31,7 +33,7 @@ public class AiChatClient {
                             .defaultIfEmpty("ai-service chat error")
                             .flatMap(body -> Mono.error(new DownstreamServiceException("ai_chat_service_error", body))))
                     .bodyToMono(AiChatResponse.class)
-                    .block(Duration.ofSeconds(20));
+                    .block("LOCAL".equals(request.aiMode()) ? Duration.ofSeconds(60) : Duration.ofSeconds(20));
         } catch (DownstreamServiceException exception) {
             throw exception;
         } catch (WebClientRequestException exception) {
@@ -41,6 +43,32 @@ public class AiChatClient {
             throw new DownstreamServiceException("ai_chat_service_unavailable", "Unable to reach ai-service chat endpoint");
         } catch (Exception exception) {
             throw new DownstreamServiceException("ai_chat_service_unavailable", "Unexpected failure while calling ai-service chat");
+        }
+    }
+
+    public Map<String, Object> ollamaHealth(String baseUrl, String modelName) {
+        try {
+            return webClient.get()
+                    .uri(uriBuilder -> uriBuilder
+                            .path("/health/ollama")
+                            .queryParam("base_url", baseUrl)
+                            .queryParam("model_name", modelName)
+                            .build())
+                    .retrieve()
+                    .onStatus(HttpStatusCode::isError, clientResponse -> clientResponse.bodyToMono(String.class)
+                            .defaultIfEmpty("ai-service ollama health error")
+                            .flatMap(body -> Mono.error(new DownstreamServiceException("ollama_health_error", body))))
+                    .bodyToMono(new ParameterizedTypeReference<Map<String, Object>>() {})
+                    .block(Duration.ofSeconds(10));
+        } catch (DownstreamServiceException exception) {
+            throw exception;
+        } catch (WebClientRequestException exception) {
+            if (isTimeout(exception)) {
+                throw new DownstreamTimeoutException("ollama_health_timeout", "Timed out while checking Ollama health");
+            }
+            throw new DownstreamServiceException("ollama_health_unavailable", "Unable to reach ai-service Ollama health endpoint");
+        } catch (Exception exception) {
+            throw new DownstreamServiceException("ollama_health_unavailable", "Unexpected failure while checking Ollama health");
         }
     }
 

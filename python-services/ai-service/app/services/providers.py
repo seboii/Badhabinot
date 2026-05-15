@@ -392,6 +392,135 @@ class OpenAiCompatibleProvider:
         return max(0.0, min(1.0, round(numeric, 4)))
 
 
+class OllamaProvider:
+    """Calls Ollama's native /api/chat endpoint directly (not OpenAI-compatible)."""
+
+    def __init__(self, base_url: str, model_name: str, timeout_seconds: float = 60.0) -> None:
+        self.base_url = base_url.rstrip("/")
+        self.model_name = model_name
+        self.timeout_seconds = timeout_seconds
+
+    async def analyze(self, request: AnalysisRequest) -> ProviderResult:
+        raise ProviderInvocationError("OllamaProvider does not support frame analysis", status_code=501)
+
+    async def respond_chat(self, request: ChatRequest) -> ChatProviderResult:
+        import json as _json
+        messages = self._build_messages(request)
+        payload = {
+            "model": self.model_name,
+            "messages": messages,
+            "stream": False,
+            "options": {"temperature": 0.15},
+        }
+        try:
+            async with httpx.AsyncClient(timeout=httpx.Timeout(self.timeout_seconds)) as client:
+                response = await client.post(f"{self.base_url}/api/chat", json=payload)
+                response.raise_for_status()
+                data = response.json()
+        except httpx.TimeoutException as exc:
+            raise ProviderInvocationError("Ollama timed out — model may still be loading", status_code=504) from exc
+        except httpx.HTTPStatusError as exc:
+            raise ProviderInvocationError(
+                f"Ollama returned HTTP {exc.response.status_code}", status_code=502
+            ) from exc
+        except httpx.HTTPError as exc:
+            raise ProviderInvocationError("Ollama is unreachable — is it running?", status_code=502) from exc
+
+        raw_content = (data.get("message") or {}).get("content") or ""
+        # Ollama may or may not wrap the reply in JSON; try to parse, fall back to raw text.
+        try:
+            parsed = _json.loads(raw_content)
+            answer = str(parsed.get("answer") or "").strip() or raw_content.strip()
+            grounded_facts = [str(f).strip() for f in parsed.get("grounded_facts", []) if str(f).strip()][:5]
+            follow_up_suggestions = [str(s).strip() for s in parsed.get("follow_up_suggestions", []) if str(s).strip()][:3]
+        except (_json.JSONDecodeError, AttributeError):
+            answer = raw_content.strip()
+            grounded_facts = []
+            follow_up_suggestions = []
+
+        if not answer:
+            answer = "Ollama returned an empty response. Please try again."
+        if not grounded_facts:
+            grounded_facts = [
+                f"Hydration: {request.context.hydration_progress_ml}/{request.context.water_goal_ml} ml.",
+                f"Posture alerts: {request.context.posture_alert_count}.",
+                f"Smoking-like cues: {request.context.smoking_like_count}.",
+            ]
+        if not follow_up_suggestions:
+            follow_up_suggestions = [
+                "Which trend should I prioritize tomorrow?",
+                "Show the main risk pattern for this report date.",
+                "Compare hydration and posture against the previous day.",
+            ]
+
+        return ChatProviderResult(
+            answer=answer,
+            grounded_facts=grounded_facts,
+            follow_up_suggestions=follow_up_suggestions,
+            provider="ollama",
+            model_name=self.model_name,
+            model_mode="local_ollama",
+        )
+
+    async def readiness(self) -> ProviderReadiness:
+        try:
+            async with httpx.AsyncClient(timeout=httpx.Timeout(5.0)) as client:
+                response = await client.get(f"{self.base_url}/api/tags")
+                response.raise_for_status()
+                data = response.json()
+            installed_models = [m.get("name", "") for m in data.get("models", [])]
+            model_installed = any(self.model_name in name for name in installed_models)
+            return ProviderReadiness(
+                True,
+                {
+                    "provider": "ollama",
+                    "model": self.model_name,
+                    "mode": "local_ollama",
+                    "provider_status": "reachable",
+                    "model_installed": model_installed,
+                    "installed_models": installed_models,
+                },
+            )
+        except Exception as exc:
+            return ProviderReadiness(
+                False,
+                {
+                    "provider": "ollama",
+                    "model": self.model_name,
+                    "mode": "local_ollama",
+                    "provider_status": "unreachable",
+                    "reason": str(exc),
+                },
+            )
+
+    def _build_messages(self, request: ChatRequest) -> list[dict[str, Any]]:
+        import json as _json
+        context = request.context.model_dump(mode="json")
+        history_lines = [{"role": item.role, "content": item.content} for item in request.history[-10:]]
+        return [
+            {
+                "role": "system",
+                "content": (
+                    "You are a behavior-insights assistant for one user. "
+                    "Use only the supplied structured monitoring context and chat history. "
+                    "Never invent counts, events, times, or trends. "
+                    "Return JSON with keys answer, grounded_facts (array), follow_up_suggestions (array). "
+                    "grounded_facts must contain short verifiable points from context values."
+                ),
+            },
+            *history_lines,
+            {
+                "role": "user",
+                "content": (
+                    f"User timezone: {request.timezone or 'UTC'}\n"
+                    f"Report date: {request.report_date.isoformat()}\n"
+                    f"Grounding context:\n{_json.dumps(context, ensure_ascii=True)}\n"
+                    f"Question: {request.message}"
+                ),
+            },
+        ]
+
+
 class MockProvider:
     def __init__(self, config: ProviderConfig) -> None:
         self.config = config

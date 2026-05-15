@@ -12,7 +12,10 @@ public record AiChatRequest(
         LocalDate reportDate,
         String message,
         List<Message> history,
-        Context context
+        Context context,
+        String aiMode,
+        String localModelName,
+        String ollamaBaseUrl
 ) {
     public record Message(
             String role,

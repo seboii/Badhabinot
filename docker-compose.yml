@@ -1,10 +1,14 @@
 name: badhabinot-platform
 
+# Root-level convenience compose — paths adjusted so `docker compose up`
+# works from the project root. The authoritative copy is kept in sync at
+# infra/docker/compose/docker-compose.yml for teams who prefer to run from there.
+
 x-runtime-defaults: &runtime-defaults
   restart: unless-stopped
   init: true
   env_file:
-    - ../../../.env
+    - .env
 
 services:
   postgres:
@@ -18,7 +22,7 @@ services:
       - "5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
-      - ../../db/postgres/init:/docker-entrypoint-initdb.d:ro
+      - ./infra/db/postgres/init:/docker-entrypoint-initdb.d:ro
     networks:
       - platform
     stop_grace_period: 30s
@@ -36,7 +40,7 @@ services:
     expose:
       - "6379"
     volumes:
-      - ../../redis/redis.conf:/usr/local/etc/redis/redis.conf:ro
+      - ./infra/redis/redis.conf:/usr/local/etc/redis/redis.conf:ro
     networks:
       - platform
     stop_grace_period: 20s
@@ -50,7 +54,7 @@ services:
   backend:
     <<: *runtime-defaults
     build:
-      context: ../../..
+      context: .
       dockerfile: infra/docker/dockerfiles/spring-service.Dockerfile
     environment:
       AUTH_DATASOURCE_URL: jdbc:postgresql://postgres:5432/badhabinot_auth
@@ -99,12 +103,12 @@ services:
       interval: 15s
       timeout: 5s
       retries: 12
-      start_period: 45s
+      start_period: 60s
 
   ai-service:
     <<: *runtime-defaults
     build:
-      context: ../../..
+      context: .
       dockerfile: infra/docker/dockerfiles/python-service.Dockerfile
       args:
         SERVICE_PATH: python-services/ai-service
@@ -136,7 +140,7 @@ services:
   vision-service:
     <<: *runtime-defaults
     build:
-      context: ../../..
+      context: .
       dockerfile: infra/docker/dockerfiles/python-service.Dockerfile
       args:
         SERVICE_PATH: python-services/vision-service
@@ -145,11 +149,9 @@ services:
       INTERNAL_API_KEY: ${INTERNAL_API_KEY:-change-me-in-real-environments}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
       UVICORN_PORT: 8091
-      # Paths for face profiles and session logs inside the container
       FACE_DATA_DIR: /app/data/users
       SESSION_LOG_DIR: /app/logs/sessions
     volumes:
-      # Persist face embeddings and session logs across container restarts
       - vision-face-data:/app/data/users
       - vision-session-logs:/app/logs/sessions
     expose:
@@ -162,12 +164,15 @@ services:
       interval: 10s
       timeout: 5s
       retries: 10
-      start_period: 10s
+      # Give the vision service extra startup time — ML model first-download
+      # (YOLOv8n-pose, DeepFace Facenet) happens on first inference request,
+      # not at import time, so the /ready endpoint becomes available quickly.
+      start_period: 30s
 
   frontend-app:
     <<: *runtime-defaults
     build:
-      context: ../../..
+      context: .
       dockerfile: infra/docker/dockerfiles/frontend-app.Dockerfile
       args:
         VITE_API_BASE_URL: ${VITE_API_BASE_URL:-}
@@ -187,9 +192,10 @@ services:
       start_period: 10s
 
 # ── Optional: Local AI via Ollama ─────────────────────────────────────────────
-# Uncomment to run Ollama inside the Docker network. After starting:
-#   docker compose exec ollama ollama pull llama3.2:3b
-# Then in Settings → AI mode set URL to http://ollama:11434.
+# To use Ollama inside the Docker network instead of the host, uncomment the
+# service below and update OLLAMA_BASE_URL or the user's settings to point to
+# http://ollama:11434. You also need to update the backend's VISION_SERVICE_URL
+# env to http://ollama:11434 if needed.
 #
 #  ollama:
 #    <<: *runtime-defaults
@@ -201,6 +207,15 @@ services:
 #    networks:
 #      - platform
 #    stop_grace_period: 30s
+#    healthcheck:
+#      test: ["CMD-SHELL", "curl --fail --silent http://localhost:11434/api/tags > /dev/null || exit 1"]
+#      interval: 15s
+#      timeout: 5s
+#      retries: 10
+#      start_period: 60s
+#
+# After starting, pull a model: docker compose exec ollama ollama pull llama3.2:3b
+# Then in Settings → AI mode, set URL to http://ollama:11434 and select the model.
 
 networks:
   platform:
@@ -210,4 +225,4 @@ volumes:
   postgres-data:
   vision-face-data:
   vision-session-logs:
-  # ollama-models:
+  # ollama-models:  # uncomment when using the Ollama service above

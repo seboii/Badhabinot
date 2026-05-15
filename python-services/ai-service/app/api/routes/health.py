@@ -1,8 +1,9 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Query
 from fastapi.responses import JSONResponse
 
 from app.core.config import settings
 from app.services.analysis_service import get_analysis_service
+from app.services.providers import OllamaProvider
 
 router = APIRouter()
 
@@ -33,3 +34,14 @@ async def ready() -> JSONResponse:
         **readiness,
     }
     return JSONResponse(status_code=200, content=body)
+
+
+@router.get("/health/ollama", tags=["health"])
+async def ollama_health(
+    base_url: str = Query(default="http://localhost:11434"),
+    model_name: str = Query(default="llama3.2:3b"),
+) -> dict:
+    """Check whether Ollama is reachable and whether the requested model is installed."""
+    provider = OllamaProvider(base_url=base_url, model_name=model_name)
+    readiness = await provider.readiness()
+    return readiness.details

@@ -102,6 +102,9 @@ class ChatRequest(BaseModel):
     message: str
     history: list[ChatMessage]
     context: ChatContext
+    ai_mode: Literal["API", "LOCAL"] = "API"
+    local_model_name: str | None = None
+    ollama_base_url: str | None = None
 
 
 class ChatModelDescriptor(BaseModel):
@@ -109,7 +112,7 @@ class ChatModelDescriptor(BaseModel):
 
     provider: str
     name: str
-    mode: Literal["external_api", "mock"]
+    mode: Literal["external_api", "mock", "local_ollama"]
 
 
 class ChatResponse(BaseModel):
