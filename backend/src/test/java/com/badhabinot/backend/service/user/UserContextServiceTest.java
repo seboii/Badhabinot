@@ -55,7 +55,9 @@ class UserContextServiceTest {
                 LocalTime.of(22, 30),
                 LocalTime.of(7, 15),
                 ModelMode.API,
-                true
+                true,
+                "llama3.2:3b",
+                "http://localhost:11434"
         );
         UserConsent consent = UserConsent.createDefault(userId);
         consent.update(true, true, true);

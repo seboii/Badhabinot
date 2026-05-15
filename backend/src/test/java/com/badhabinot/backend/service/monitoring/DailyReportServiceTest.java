@@ -258,7 +258,9 @@ class DailyReportServiceTest {
                 false,
                 "22:00",
                 "08:00",
-                true
+                true,
+                "llama3.2:3b",
+                "http://localhost:11434"
         );
     }
 }
