@@ -49,7 +49,7 @@ export function AiModeForm({
     defaultValues: {
       model_mode: settings.model_mode,
       local_model_name: settings.local_model_name || 'llama3.2:3b',
-      ollama_base_url: settings.ollama_base_url || 'http://localhost:11434',
+      ollama_base_url: settings.ollama_base_url || 'http://host.docker.internal:11434',
     },
   })
 
@@ -126,7 +126,7 @@ export function AiModeForm({
                   <input
                     className="h-12 rounded-2xl border border-[var(--line-soft)] bg-[rgba(255,255,255,0.03)] px-4 text-sm text-white outline-none focus:border-[var(--primary)]"
                     {...register('ollama_base_url')}
-                    placeholder="http://localhost:11434"
+                    placeholder="http://host.docker.internal:11434"
                   />
                   {errors.ollama_base_url && (
                     <span className="text-xs text-[var(--danger)]">{errors.ollama_base_url.message}</span>
