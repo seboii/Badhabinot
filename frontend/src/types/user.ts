@@ -1,5 +1,15 @@
 export type Sensitivity = 'LOW' | 'MEDIUM' | 'HIGH'
-export type ModelMode = 'API'
+export type ModelMode = 'API' | 'LOCAL'
+
+export type OllamaHealthResponse = {
+  provider: string
+  model: string
+  mode: string
+  provider_status: 'reachable' | 'unreachable'
+  model_installed?: boolean
+  installed_models?: string[]
+  reason?: string
+}
 
 export type ConsentResponse = {
   privacy_policy_accepted: boolean
@@ -19,6 +29,8 @@ export type SettingsResponse = {
   quiet_hours_end: string
   model_mode: ModelMode
   notifications_enabled: boolean
+  local_model_name: string
+  ollama_base_url: string
   updated_at: string
 }
 
@@ -57,10 +69,21 @@ export type UpdateSettingsRequest = {
   quiet_hours_end: string
   model_mode: ModelMode
   notifications_enabled: boolean
+  local_model_name: string
+  ollama_base_url: string
 }
 
 export type UpdateConsentsRequest = {
   privacy_policy_accepted: boolean
   camera_monitoring_accepted: boolean
   remote_inference_accepted: boolean
+}
+
+export type ChangePasswordDto = {
+  current_password: string
+  new_password: string
+}
+
+export type DeleteAccountDto = {
+  password: string
 }

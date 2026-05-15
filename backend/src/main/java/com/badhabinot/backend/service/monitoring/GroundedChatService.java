@@ -14,6 +14,7 @@ import com.badhabinot.backend.integration.python.AiChatClient;
 import com.badhabinot.backend.service.user.UserContextService;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.io.IOException;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.LinkedHashMap;
@@ -24,6 +25,9 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 @Service
 public class GroundedChatService {
@@ -96,7 +100,10 @@ public class GroundedChatService {
                 report.reportDate(),
                 request.message(),
                 historyItems,
-                aiContext
+                aiContext,
+                context.modelMode(),
+                context.localModelName(),
+                context.ollamaBaseUrl()
         ));
 
         Map<String, Object> metadata = new LinkedHashMap<>();
@@ -133,6 +140,102 @@ public class GroundedChatService {
                         aiResponse.model().mode()
                 )
         );
+    }
+
+    @Transactional(transactionManager = "monitoringTransactionManager")
+    public SseEmitter chatStream(Jwt jwt, ChatRequest request) {
+        UUID userId = UUID.fromString(jwt.getSubject());
+        InternalUserAnalysisContext context = userContextService.getMonitoringAnalysisContext(userId);
+        LocalDate reportDate = LocalDate.now(zoneId(context.timezone()));
+        DailyReportResponse report = dailyReportService.getDailyReport(userId, reportDate, context);
+
+        UUID conversationId = resolveConversationIdForChat(userId, request.conversationId());
+
+        ChatMessage userMessage = chatMessageRepository.save(ChatMessage.create(conversationId, userId, "user", request.message()));
+        List<AiChatRequest.Message> historyItems = loadConversationMessages(userId, conversationId, AI_HISTORY_LIMIT + 1).stream()
+                .filter(message -> !message.getId().equals(userMessage.getId()))
+                .map(message -> new AiChatRequest.Message(message.getRole(), message.getContent(), message.getCreatedAt()))
+                .toList();
+
+        AiChatRequest.Context aiContext = chatContextBuilderService.build(userId, context, reportDate, report);
+
+        AiChatResponse aiResponse = aiChatClient.respond(new AiChatRequest(
+                conversationId.toString(),
+                userId.toString(),
+                context.timezone(),
+                report.reportDate(),
+                request.message(),
+                historyItems,
+                aiContext,
+                context.modelMode(),
+                context.localModelName(),
+                context.ollamaBaseUrl()
+        ));
+
+        Map<String, Object> metadata = new LinkedHashMap<>();
+        metadata.put("grounded_facts", safeList(aiResponse.groundedFacts()));
+        metadata.put("follow_up_suggestions", safeList(aiResponse.followUpSuggestions()));
+        Map<String, Object> modelMetadata = new LinkedHashMap<>();
+        modelMetadata.put("provider", aiResponse.model().provider());
+        modelMetadata.put("name", aiResponse.model().name());
+        modelMetadata.put("mode", aiResponse.model().mode());
+        metadata.put("model", modelMetadata);
+
+        chatMessageRepository.save(ChatMessage.create(
+                conversationId,
+                userId,
+                "assistant",
+                aiResponse.answer(),
+                writeJson(metadata)
+        ));
+
+        // Capture final values before the transaction commits so the streaming
+        // thread (which runs outside the transaction) can safely read them.
+        final String answerToStream = aiResponse.answer();
+        final List<String> finalGroundedFacts = safeList(aiResponse.groundedFacts());
+        final List<String> finalFollowUpSuggestions = safeList(aiResponse.followUpSuggestions());
+        final String finalConversationId = conversationId.toString();
+
+        SseEmitter emitter = new SseEmitter(120_000L);
+        emitter.onTimeout(emitter::complete);
+
+        // Start the virtual streaming thread only after the TX commits so
+        // the saved messages are visible to any subsequent history queries.
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                Thread.ofVirtual().start(() -> {
+                    try {
+                        // Stream the answer two characters at a time to simulate token delivery.
+                        for (int i = 0; i < answerToStream.length(); i += 2) {
+                            String chunk = answerToStream.substring(i, Math.min(i + 2, answerToStream.length()));
+                            emitter.send(SseEmitter.event()
+                                    .data(objectMapper.writeValueAsString(Map.of("token", chunk))));
+                            Thread.sleep(15);
+                        }
+                        // Final event carries metadata so the frontend can finalise the message.
+                        emitter.send(SseEmitter.event()
+                                .data(objectMapper.writeValueAsString(Map.of(
+                                        "done", true,
+                                        "conversationId", finalConversationId,
+                                        "followUpSuggestions", finalFollowUpSuggestions,
+                                        "groundedFacts", finalGroundedFacts
+                                ))));
+                        emitter.complete();
+                    } catch (IOException ex) {
+                        // Client disconnected mid-stream — normal for SSE.
+                        emitter.completeWithError(ex);
+                    } catch (InterruptedException ex) {
+                        Thread.currentThread().interrupt();
+                        emitter.completeWithError(ex);
+                    } catch (Exception ex) {
+                        emitter.completeWithError(ex);
+                    }
+                });
+            }
+        });
+
+        return emitter;
     }
 
     private ChatMessageResponse toResponse(ChatMessage message) {

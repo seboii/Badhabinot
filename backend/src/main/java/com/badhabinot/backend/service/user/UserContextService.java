@@ -90,7 +90,9 @@ public class UserContextService {
                 request.quietHoursStart(),
                 request.quietHoursEnd(),
                 request.modelMode(),
-                request.notificationsEnabled()
+                request.notificationsEnabled(),
+                request.localModelName(),
+                request.ollamaBaseUrl()
         );
         return toSettingsResponse(userSettingsRepository.save(settings));
     }
@@ -174,7 +176,9 @@ public class UserContextService {
                 settings.isQuietHoursEnabled(),
                 settings.getQuietHoursStart(),
                 settings.getQuietHoursEnd(),
-                consent.isRemoteInferenceAccepted()
+                consent.isRemoteInferenceAccepted(),
+                settings.getLocalModelName(),
+                settings.getOllamaBaseUrl()
         );
     }
 
@@ -194,7 +198,9 @@ public class UserContextService {
                 context.quietHoursEnabled(),
                 context.quietHoursStart().toString(),
                 context.quietHoursEnd().toString(),
-                context.remoteInferenceAccepted()
+                context.remoteInferenceAccepted(),
+                context.localModelName(),
+                context.ollamaBaseUrl()
         );
     }
 
@@ -258,6 +264,8 @@ public class UserContextService {
                 settings.getQuietHoursEnd(),
                 settings.getModelMode(),
                 settings.isNotificationsEnabled(),
+                settings.getLocalModelName(),
+                settings.getOllamaBaseUrl(),
                 settings.getUpdatedAt()
         );
     }

@@ -49,6 +49,12 @@ public class UserSettings {
     @Column(name = "notifications_enabled", nullable = false)
     private boolean notificationsEnabled;
 
+    @Column(name = "local_model_name", nullable = false, length = 100)
+    private String localModelName;
+
+    @Column(name = "ollama_base_url", nullable = false, length = 255)
+    private String ollamaBaseUrl;
+
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
@@ -69,6 +75,8 @@ public class UserSettings {
         this.quietHoursEnd = LocalTime.of(8, 0);
         this.modelMode = ModelMode.API;
         this.notificationsEnabled = true;
+        this.localModelName = "llama3.2:3b";
+        this.ollamaBaseUrl = "http://localhost:11434";
     }
 
     public static UserSettings createDefault(UUID userId) {
@@ -96,7 +104,9 @@ public class UserSettings {
             LocalTime quietHoursStart,
             LocalTime quietHoursEnd,
             ModelMode modelMode,
-            boolean notificationsEnabled
+            boolean notificationsEnabled,
+            String localModelName,
+            String ollamaBaseUrl
     ) {
         this.sensitivity = sensitivity;
         this.waterGoalMl = waterGoalMl;
@@ -107,6 +117,8 @@ public class UserSettings {
         this.quietHoursEnd = quietHoursEnd;
         this.modelMode = modelMode;
         this.notificationsEnabled = notificationsEnabled;
+        this.localModelName = localModelName;
+        this.ollamaBaseUrl = ollamaBaseUrl;
     }
 
     public UUID getUserId() {
@@ -147,6 +159,14 @@ public class UserSettings {
 
     public boolean isNotificationsEnabled() {
         return notificationsEnabled;
+    }
+
+    public String getLocalModelName() {
+        return localModelName;
+    }
+
+    public String getOllamaBaseUrl() {
+        return ollamaBaseUrl;
     }
 
     public Instant getUpdatedAt() {

@@ -1,6 +1,9 @@
 import { apiClient } from '@/api/client'
 import type {
+  ChangePasswordDto,
   ConsentResponse,
+  DeleteAccountDto,
+  OllamaHealthResponse,
   SettingsResponse,
   UpdateConsentsRequest,
   UpdateProfileRequest,
@@ -37,6 +40,19 @@ export const userApi = {
 
   async updateConsents(payload: UpdateConsentsRequest) {
     const response = await apiClient.put<ConsentResponse>('/api/v1/users/me/consents', payload)
+    return response.data
+  },
+
+  async changePassword(payload: ChangePasswordDto) {
+    await apiClient.post('/api/v1/user/change-password', payload)
+  },
+
+  async deleteAccount(payload: DeleteAccountDto) {
+    await apiClient.delete('/api/v1/user/account', { data: payload })
+  },
+
+  async ollamaHealth() {
+    const response = await apiClient.get<OllamaHealthResponse>('/api/v1/monitoring/ai/ollama/health')
     return response.data
   },
 }

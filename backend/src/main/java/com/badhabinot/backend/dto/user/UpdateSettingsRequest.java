@@ -5,7 +5,9 @@ import com.badhabinot.backend.model.user.Sensitivity;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 import java.time.LocalTime;
 
 public record UpdateSettingsRequest(
@@ -17,7 +19,9 @@ public record UpdateSettingsRequest(
         @NotNull @JsonFormat(pattern = "HH:mm") LocalTime quietHoursStart,
         @NotNull @JsonFormat(pattern = "HH:mm") LocalTime quietHoursEnd,
         @NotNull ModelMode modelMode,
-        @NotNull Boolean notificationsEnabled
+        @NotNull Boolean notificationsEnabled,
+        @NotBlank @Size(max = 100) String localModelName,
+        @NotBlank @Size(max = 255) String ollamaBaseUrl
 ) {
 }
 

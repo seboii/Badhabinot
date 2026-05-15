@@ -20,11 +20,13 @@ import com.badhabinot.backend.dto.monitoring.BehaviorEventResponse;
 import com.badhabinot.backend.dto.monitoring.ChatHistoryResponse;
 import com.badhabinot.backend.dto.monitoring.ChatRequest;
 import com.badhabinot.backend.dto.monitoring.ChatResponse;
+import com.badhabinot.backend.integration.python.AiChatClient;
 import com.badhabinot.backend.service.monitoring.AnalysisOrchestratorService;
 import com.badhabinot.backend.service.monitoring.BehaviorEventService;
 import com.badhabinot.backend.service.monitoring.DailyReportService;
 import com.badhabinot.backend.service.monitoring.GroundedChatService;
 import com.badhabinot.backend.service.monitoring.MonitoringExperienceService;
+import com.badhabinot.backend.service.user.UserContextService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -32,6 +34,7 @@ import jakarta.validation.Valid;
 import java.time.LocalDate;
 import java.util.List;
 import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.http.MediaType;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -41,6 +44,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 @RestController
 @RequestMapping("/api/v1/monitoring")
@@ -53,6 +57,8 @@ public class MonitoringController {
     private final DailyReportService dailyReportService;
     private final GroundedChatService groundedChatService;
     private final VisionServiceClient visionServiceClient;
+    private final AiChatClient aiChatClient;
+    private final UserContextService userContextService;
 
     public MonitoringController(
             AnalysisOrchestratorService analysisOrchestratorService,
@@ -60,7 +66,9 @@ public class MonitoringController {
             BehaviorEventService behaviorEventService,
             DailyReportService dailyReportService,
             GroundedChatService groundedChatService,
-            VisionServiceClient visionServiceClient
+            VisionServiceClient visionServiceClient,
+            AiChatClient aiChatClient,
+            UserContextService userContextService
     ) {
         this.analysisOrchestratorService = analysisOrchestratorService;
         this.monitoringExperienceService = monitoringExperienceService;
@@ -68,6 +76,8 @@ public class MonitoringController {
         this.dailyReportService = dailyReportService;
         this.groundedChatService = groundedChatService;
         this.visionServiceClient = visionServiceClient;
+        this.aiChatClient = aiChatClient;
+        this.userContextService = userContextService;
     }
 
     @PostMapping("/sessions/start")
@@ -101,21 +111,23 @@ public class MonitoringController {
     }
 
     @GetMapping("/activities")
-    @Operation(summary = "Return recent activity feed items", security = @SecurityRequirement(name = "bearerAuth"))
+    @Operation(summary = "Return paginated activity feed items", security = @SecurityRequirement(name = "bearerAuth"))
     public List<ActivityItemResponse> activities(
             @AuthenticationPrincipal Jwt jwt,
-            @RequestParam(name = "limit", defaultValue = "10") int limit
+            @RequestParam(name = "page", defaultValue = "0") int page,
+            @RequestParam(name = "size", defaultValue = "15") int size
     ) {
-        return monitoringExperienceService.getRecentActivities(jwt, limit);
+        return monitoringExperienceService.getRecentActivities(jwt, page, size);
     }
 
     @GetMapping("/events")
     @Operation(summary = "Return normalized behavior events", security = @SecurityRequirement(name = "bearerAuth"))
     public List<BehaviorEventResponse> events(
             @AuthenticationPrincipal Jwt jwt,
-            @RequestParam(name = "limit", defaultValue = "12") int limit
+            @RequestParam(name = "page", defaultValue = "0") int page,
+            @RequestParam(name = "size", defaultValue = "15") int size
     ) {
-        return behaviorEventService.getRecentEvents(java.util.UUID.fromString(jwt.getSubject()), limit);
+        return behaviorEventService.getRecentEvents(java.util.UUID.fromString(jwt.getSubject()), page, size);
     }
 
     @GetMapping("/history/weekly")
@@ -156,6 +168,12 @@ public class MonitoringController {
         return groundedChatService.chat(jwt, request);
     }
 
+    @PostMapping(value = "/chat/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    @Operation(summary = "Stream a grounded chat response as SSE tokens", security = @SecurityRequirement(name = "bearerAuth"))
+    public SseEmitter chatStream(@AuthenticationPrincipal Jwt jwt, @Valid @RequestBody ChatRequest request) {
+        return groundedChatService.chatStream(jwt, request);
+    }
+
     @GetMapping("/chat/history")
     @Operation(summary = "Return recent chat history for the latest or requested conversation", security = @SecurityRequirement(name = "bearerAuth"))
     public ChatHistoryResponse chatHistory(
@@ -190,6 +208,16 @@ public class MonitoringController {
     public void deleteFaceProfile(@AuthenticationPrincipal Jwt jwt) {
         String userId = jwt.getSubject();
         visionServiceClient.deleteFaceProfile(userId);
+    }
+
+    // ── Local AI ──────────────────────────────────────────────────────────────
+
+    @GetMapping("/ai/ollama/health")
+    @Operation(summary = "Proxy Ollama connectivity check through the ai-service using the user's saved settings", security = @SecurityRequirement(name = "bearerAuth"))
+    public java.util.Map<String, Object> ollamaHealth(@AuthenticationPrincipal Jwt jwt) {
+        java.util.UUID userId = java.util.UUID.fromString(jwt.getSubject());
+        com.badhabinot.backend.dto.monitoring.InternalUserAnalysisContext ctx = userContextService.getMonitoringAnalysisContext(userId);
+        return aiChatClient.ollamaHealth(ctx.ollamaBaseUrl(), ctx.localModelName());
     }
 }
 
