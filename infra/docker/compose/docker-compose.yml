@@ -123,6 +123,8 @@ services:
       UVICORN_PORT: 8092
     expose:
       - "8092"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     networks:
       - platform
     stop_grace_period: 20s

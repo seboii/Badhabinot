@@ -76,7 +76,7 @@ public class UserSettings {
         this.modelMode = ModelMode.API;
         this.notificationsEnabled = true;
         this.localModelName = "llama3.2:3b";
-        this.ollamaBaseUrl = "http://localhost:11434";
+        this.ollamaBaseUrl = "http://host.docker.internal:11434";
     }
 
     public static UserSettings createDefault(UUID userId) {
