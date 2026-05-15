@@ -29,6 +29,17 @@ spring:
     type: redis
   jackson:
     property-naming-strategy: SNAKE_CASE
+  mail:
+    host: ${MAIL_HOST:smtp.gmail.com}
+    port: ${MAIL_PORT:587}
+    username: ${MAIL_USERNAME:}
+    password: ${MAIL_PASSWORD:}
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
 
 management:
   endpoints:
@@ -78,6 +89,8 @@ app:
       url: ${MONITORING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/badhabinot_monitoring}
       username: ${MONITORING_DATASOURCE_USERNAME:${POSTGRES_USER:badhabinot}}
       password: ${MONITORING_DATASOURCE_PASSWORD:${POSTGRES_PASSWORD:badhabinot}}
+  password-reset:
+    reset-url-template: ${PASSWORD_RESET_URL_TEMPLATE:http://localhost:3000/reset-password?token={token}}
 
 integration:
   internal-api-key: ${INTERNAL_API_KEY:change-me-in-real-environments}
@@ -103,3 +116,4 @@ services:
   auth-service-uri: ${AUTH_SERVICE_URL:http://localhost:8080}
   user-service-uri: ${USER_SERVICE_URL:http://localhost:8080}
   monitoring-service-uri: ${MONITORING_SERVICE_URL:http://localhost:8080}
+
