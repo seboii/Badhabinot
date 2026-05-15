@@ -131,7 +131,10 @@ class AiChatClientTest {
                         120,
                         "Compared with 2026-04-07: posture alerts +2, hydration -300 ml, smoking-like cues +1.",
                         List.of()
-                )
+                ),
+                "API",
+                "llama3.2:3b",
+                "http://localhost:11434"
         );
     }
 }
