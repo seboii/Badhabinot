@@ -83,6 +83,7 @@ class AnalysisService:
 
 
 def _build_provider() -> AnalysisProvider:
+    effective = settings.effective_provider
     config = ProviderConfig(
         provider_name=settings.ai_provider,
         api_base_url=settings.ai_api_base_url,
@@ -94,10 +95,13 @@ def _build_provider() -> AnalysisProvider:
         temperature=settings.ai_temperature,
     )
 
-    if settings.ai_provider == "mock":
+    if effective == "mock":
         return MockProvider(config)
-    if settings.ai_provider == "openai-compatible":
+    if effective == "openai-compatible":
         return OpenAiCompatibleProvider(config)
+    # "ollama" provider does not support frame analysis — fall back to mock
+    if effective == "ollama":
+        return MockProvider(config)
 
     raise ProviderConfigurationError(f"Unsupported AI_PROVIDER value: {settings.ai_provider}")
 
