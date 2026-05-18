@@ -1,4 +1,5 @@
 import logging
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
@@ -10,10 +11,18 @@ logging.basicConfig(
     format="%(asctime)s %(levelname)s [%(name)s] %(message)s",
 )
 
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):  # noqa: ARG001
+    settings.log_startup()
+    yield
+
+
 app = FastAPI(
     title="BADHABINOT AI Service",
     version=settings.app_version,
     description="External AI provider adapter service for BADHABINOT",
+    lifespan=lifespan,
 )
 
 app.include_router(health.router)

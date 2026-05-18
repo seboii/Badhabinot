@@ -132,15 +132,17 @@ async def test_analysis_service_requires_remote_consent() -> None:
 
 
 @pytest.mark.asyncio
-async def test_analysis_service_readiness_stays_up_when_provider_is_misconfigured(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_analysis_service_readiness_falls_back_to_mock_when_api_key_missing(monkeypatch: pytest.MonkeyPatch) -> None:
+    # When openai-compatible is configured but API key is absent, the service
+    # auto-falls-back to mock so it stays functional (provider_ready: True).
     monkeypatch.setattr(settings, "ai_provider", "openai-compatible")
     monkeypatch.setattr(settings, "ai_api_key", "")
 
     readiness = await AnalysisService().readiness()
 
     assert readiness["ready"] is True
-    assert readiness["provider_ready"] is False
-    assert readiness["provider_status"] == "misconfigured"
+    assert readiness["provider_ready"] is True
+    assert readiness["provider"] == "mock"
 
 
 @pytest.mark.asyncio

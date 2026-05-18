@@ -16,7 +16,7 @@ from app.services.providers import (
 
 
 class ChatService:
-    def __init__(self, provider: MockProvider | OpenAiCompatibleProvider | None = None) -> None:
+    def __init__(self, provider: MockProvider | OpenAiCompatibleProvider | OllamaProvider | None = None) -> None:
         self.provider = provider
 
     async def respond(self, request: ChatRequest) -> ChatResponse:
@@ -43,6 +43,7 @@ class ChatService:
     def _resolve_provider(
         self, request: ChatRequest
     ) -> MockProvider | OpenAiCompatibleProvider | OllamaProvider:
+        # Per-request LOCAL mode (from user settings) takes highest priority
         if request.ai_mode == "LOCAL" and request.ollama_base_url and request.local_model_name:
             return OllamaProvider(
                 base_url=request.ollama_base_url,
@@ -54,8 +55,29 @@ class ChatService:
         return self.provider
 
 
-def _build_provider() -> MockProvider | OpenAiCompatibleProvider:
-    config = ProviderConfig(
+def _build_provider() -> MockProvider | OpenAiCompatibleProvider | OllamaProvider:
+    effective = settings.effective_provider
+
+    if effective == "mock":
+        config = _make_config()
+        return MockProvider(config)
+
+    if effective == "ollama":
+        return OllamaProvider(
+            base_url=settings.ollama_base_url,
+            model_name=settings.ollama_model_name,
+            timeout_seconds=settings.ai_timeout_seconds,
+        )
+
+    if effective == "openai-compatible":
+        config = _make_config()
+        return OpenAiCompatibleProvider(config)
+
+    raise ProviderConfigurationError(f"Unsupported AI_PROVIDER value: {settings.ai_provider}")
+
+
+def _make_config() -> ProviderConfig:
+    return ProviderConfig(
         provider_name=settings.ai_provider,
         api_base_url=settings.ai_api_base_url,
         api_key=settings.ai_api_key,
@@ -65,11 +87,6 @@ def _build_provider() -> MockProvider | OpenAiCompatibleProvider:
         max_retries=settings.ai_max_retries,
         temperature=settings.ai_temperature,
     )
-    if settings.ai_provider == "mock":
-        return MockProvider(config)
-    if settings.ai_provider == "openai-compatible":
-        return OpenAiCompatibleProvider(config)
-    raise ProviderConfigurationError(f"Unsupported AI_PROVIDER value: {settings.ai_provider}")
 
 
 @lru_cache(maxsize=1)
