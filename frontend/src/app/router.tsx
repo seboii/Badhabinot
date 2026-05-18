@@ -1,6 +1,7 @@
 import { Suspense, lazy, type ReactNode } from 'react'
 import { BrowserRouter, Navigate, Outlet, Route, Routes } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
+import { ErrorBoundary } from '@/components/ErrorBoundary'
 import { PublicOnlyRoute } from '@/components/layout/PublicOnlyRoute'
 import { ProtectedRoute } from '@/components/layout/ProtectedRoute'
 import { AppShell } from '@/components/layout/AppShell'
@@ -48,13 +49,32 @@ const RegisterPage = lazy(async () => {
   return { default: module.RegisterPage }
 })
 
+const ForgotPasswordPage = lazy(async () => {
+  const module = await import('@/pages/ForgotPasswordPage')
+  return { default: module.ForgotPasswordPage }
+})
+
+const ResetPasswordPage = lazy(async () => {
+  const module = await import('@/pages/ResetPasswordPage')
+  return { default: module.ResetPasswordPage }
+})
+
 const SettingsPage = lazy(async () => {
   const module = await import('@/pages/SettingsPage')
   return { default: module.SettingsPage }
 })
 
+const KvkkPage = lazy(async () => {
+  const module = await import('@/pages/KvkkPage')
+  return { default: module.KvkkPage }
+})
+
 function LazyRoute({ children, message }: { children: ReactNode; message: string }) {
-  return <Suspense fallback={<LoadingScreen message={message} />}>{children}</Suspense>
+  return (
+    <ErrorBoundary>
+      <Suspense fallback={<LoadingScreen message={message} />}>{children}</Suspense>
+    </ErrorBoundary>
+  )
 }
 
 function HomeRedirect() {
@@ -92,6 +112,8 @@ export function AppRouter() {
         <Route element={<PublicOnlyRoute />}>
           <Route path="/login" element={<LazyRoute message={loadingMessage}><LoginPage /></LazyRoute>} />
           <Route path="/register" element={<LazyRoute message={loadingMessage}><RegisterPage /></LazyRoute>} />
+          <Route path="/forgot-password" element={<LazyRoute message={loadingMessage}><ForgotPasswordPage /></LazyRoute>} />
+          <Route path="/reset-password" element={<LazyRoute message={loadingMessage}><ResetPasswordPage /></LazyRoute>} />
         </Route>
 
         <Route element={<ProtectedRoute />}>
@@ -106,6 +128,8 @@ export function AppRouter() {
           </Route>
         </Route>
 
+        <Route path="/kvkk" element={<LazyRoute message={loadingMessage}><KvkkPage /></LazyRoute>} />
+        <Route path="/privacy" element={<LazyRoute message={loadingMessage}><KvkkPage /></LazyRoute>} />
         <Route path="*" element={<LazyRoute message={loadingMessage}><NotFoundPage /></LazyRoute>} />
       </Routes>
     </BrowserRouter>

@@ -11,7 +11,7 @@ class AnalysisSettings(BaseModel):
     model_config = ConfigDict(protected_namespaces=())
 
     sensitivity: Literal["LOW", "MEDIUM", "HIGH"]
-    model_mode: Literal["API"] = "API"
+    model_mode: Literal["API", "LOCAL"] = "API"
     remote_inference_accepted: bool
 
 

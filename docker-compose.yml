@@ -18,8 +18,8 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-badhabinot}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-badhabinot}
       POSTGRES_DB: postgres
-    expose:
-      - "5432"
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
       - ./infra/db/postgres/init:/docker-entrypoint-initdb.d:ro
@@ -37,8 +37,8 @@ services:
     <<: *runtime-defaults
     image: redis:7.2-alpine
     command: ["redis-server", "/usr/local/etc/redis/redis.conf"]
-    expose:
-      - "6379"
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
     volumes:
       - ./infra/redis/redis.conf:/usr/local/etc/redis/redis.conf:ro
     networks:
@@ -84,8 +84,8 @@ services:
       VISION_SERVICE_READ_TIMEOUT: ${VISION_SERVICE_READ_TIMEOUT:-PT10S}
       AI_SERVICE_READ_TIMEOUT: ${AI_SERVICE_READ_TIMEOUT:-PT25S}
       JAVA_OPTS: ${BACKEND_JAVA_OPTS:-}
-    expose:
-      - "8080"
+    ports:
+      - "${BACKEND_PORT:-8080}:8080"
     depends_on:
       postgres:
         condition: service_healthy
@@ -125,8 +125,8 @@ services:
       AI_TEMPERATURE: ${AI_TEMPERATURE:-0.1}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
       UVICORN_PORT: 8092
-    expose:
-      - "8092"
+    ports:
+      - "${AI_SERVICE_PORT:-8092}:8092"
     # host.docker.internal → host machine (where Ollama runs on port 11434)
     extra_hosts:
       - "host.docker.internal:host-gateway"
@@ -157,8 +157,8 @@ services:
     volumes:
       - vision-face-data:/app/data/users
       - vision-session-logs:/app/logs/sessions
-    expose:
-      - "8091"
+    ports:
+      - "${VISION_SERVICE_PORT:-8091}:8091"
     networks:
       - platform
     stop_grace_period: 20s
@@ -179,8 +179,8 @@ services:
       dockerfile: infra/docker/dockerfiles/frontend-app.Dockerfile
       args:
         VITE_API_BASE_URL: ${VITE_API_BASE_URL:-}
-    expose:
-      - "80"
+    ports:
+      - "${FRONTEND_PORT:-3000}:80"
     depends_on:
       backend:
         condition: service_healthy
