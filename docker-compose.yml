@@ -1,9 +1,5 @@
 name: badhabinot-platform
 
-# Root-level convenience compose — paths adjusted so `docker compose up`
-# works from the project root. The authoritative copy is kept in sync at
-# infra/docker/compose/docker-compose.yml for teams who prefer to run from there.
-
 x-runtime-defaults: &runtime-defaults
   restart: unless-stopped
   init: true
@@ -51,6 +47,38 @@ services:
       retries: 10
       start_period: 5s
 
+  # ── Local LLM via Ollama ──────────────────────────────────────────────────
+  ollama:
+    image: ollama/ollama:latest
+    restart: unless-stopped
+    ports:
+      - "${OLLAMA_PORT:-11434}:11434"
+    volumes:
+      - ollama-models:/root/.ollama
+    networks:
+      - platform
+    stop_grace_period: 30s
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:11434/api/tags > /dev/null || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
+  # Pulls the default model once Ollama is healthy, then exits.
+  ollama-pull:
+    image: ollama/ollama:latest
+    restart: "no"
+    depends_on:
+      ollama:
+        condition: service_healthy
+    environment:
+      OLLAMA_HOST: http://ollama:11434
+    entrypoint: ["ollama", "pull"]
+    command: ["${OLLAMA_MODEL_NAME:-llama3.2:3b}"]
+    networks:
+      - platform
+
   backend:
     <<: *runtime-defaults
     build:
@@ -68,8 +96,6 @@ services:
       MONITORING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-badhabinot}
       SPRING_DATA_REDIS_HOST: redis
       SPRING_DATA_REDIS_PORT: 6379
-      # Let Hibernate create / update schema on first boot — avoids validate
-      # failure on a fresh database that has no tables yet.
       SPRING_JPA_HIBERNATE_DDL_AUTO: update
       SECURITY_JWT_SECRET: ${SECURITY_JWT_SECRET:-YmFkaGFiaW5vdC1kZXZlbG9wbWVudC1zZWNyZXQta2V5LTIwMjYtYmFkaGFiaW5vdA==}
       INTERNAL_API_KEY: ${INTERNAL_API_KEY:-change-me-in-real-environments}
@@ -82,7 +108,7 @@ services:
       VISION_SERVICE_URL: ${VISION_SERVICE_URL:-http://vision-service:8091}
       AI_SERVICE_URL: ${AI_SERVICE_URL:-http://ai-service:8092}
       VISION_SERVICE_READ_TIMEOUT: ${VISION_SERVICE_READ_TIMEOUT:-PT10S}
-      AI_SERVICE_READ_TIMEOUT: ${AI_SERVICE_READ_TIMEOUT:-PT25S}
+      AI_SERVICE_READ_TIMEOUT: ${AI_SERVICE_READ_TIMEOUT:-PT60S}
       JAVA_OPTS: ${BACKEND_JAVA_OPTS:-}
     ports:
       - "${BACKEND_PORT:-8080}:8080"
@@ -115,11 +141,15 @@ services:
         APP_PORT: 8092
     environment:
       INTERNAL_API_KEY: ${INTERNAL_API_KEY:-change-me-in-real-environments}
-      AI_PROVIDER: ${AI_PROVIDER:-openai-compatible}
+      # Use Ollama running in the Docker network as the default LLM provider
+      AI_PROVIDER: ${AI_PROVIDER:-ollama}
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://ollama:11434}
+      OLLAMA_MODEL_NAME: ${OLLAMA_MODEL_NAME:-llama3.2:3b}
+      # OpenAI-compatible fallback (used only if AI_PROVIDER=openai-compatible)
       AI_API_BASE_URL: ${AI_API_BASE_URL:-https://api.openai.com/v1}
       AI_API_KEY: ${AI_API_KEY:-}
       AI_MODEL_NAME: ${AI_MODEL_NAME:-gpt-4.1-mini}
-      AI_TIMEOUT_SECONDS: ${AI_TIMEOUT_SECONDS:-30}
+      AI_TIMEOUT_SECONDS: ${AI_TIMEOUT_SECONDS:-60}
       AI_READINESS_TIMEOUT_SECONDS: ${AI_READINESS_TIMEOUT_SECONDS:-10}
       AI_MAX_RETRIES: ${AI_MAX_RETRIES:-2}
       AI_TEMPERATURE: ${AI_TEMPERATURE:-0.1}
@@ -127,9 +157,9 @@ services:
       UVICORN_PORT: 8092
     ports:
       - "${AI_SERVICE_PORT:-8092}:8092"
-    # host.docker.internal → host machine (where Ollama runs on port 11434)
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
+    depends_on:
+      ollama:
+        condition: service_healthy
     networks:
       - platform
     stop_grace_period: 20s
@@ -138,7 +168,7 @@ services:
       interval: 10s
       timeout: 5s
       retries: 10
-      start_period: 10s
+      start_period: 15s
 
   vision-service:
     <<: *runtime-defaults
@@ -167,9 +197,6 @@ services:
       interval: 10s
       timeout: 5s
       retries: 10
-      # Give the vision service extra startup time — ML model first-download
-      # (YOLOv8n-pose, DeepFace Facenet) happens on first inference request,
-      # not at import time, so the /ready endpoint becomes available quickly.
       start_period: 30s
 
   frontend-app:
@@ -194,32 +221,6 @@ services:
       retries: 10
       start_period: 10s
 
-# ── Optional: Local AI via Ollama ─────────────────────────────────────────────
-# To use Ollama inside the Docker network instead of the host, uncomment the
-# service below and update OLLAMA_BASE_URL or the user's settings to point to
-# http://ollama:11434. You also need to update the backend's VISION_SERVICE_URL
-# env to http://ollama:11434 if needed.
-#
-#  ollama:
-#    <<: *runtime-defaults
-#    image: ollama/ollama:latest
-#    expose:
-#      - "11434"
-#    volumes:
-#      - ollama-models:/root/.ollama
-#    networks:
-#      - platform
-#    stop_grace_period: 30s
-#    healthcheck:
-#      test: ["CMD-SHELL", "curl --fail --silent http://localhost:11434/api/tags > /dev/null || exit 1"]
-#      interval: 15s
-#      timeout: 5s
-#      retries: 10
-#      start_period: 60s
-#
-# After starting, pull a model: docker compose exec ollama ollama pull llama3.2:3b
-# Then in Settings → AI mode, set URL to http://ollama:11434 and select the model.
-
 networks:
   platform:
     name: badhabinot-platform
@@ -228,4 +229,4 @@ volumes:
   postgres-data:
   vision-face-data:
   vision-session-logs:
-  # ollama-models:  # uncomment when using the Ollama service above
+  ollama-models:
