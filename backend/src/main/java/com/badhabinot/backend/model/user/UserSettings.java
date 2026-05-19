@@ -75,8 +75,8 @@ public class UserSettings {
         this.quietHoursEnd = LocalTime.of(8, 0);
         this.modelMode = ModelMode.API;
         this.notificationsEnabled = true;
-        this.localModelName = "llama3.2:3b";
-        this.ollamaBaseUrl = "http://host.docker.internal:11434";
+        this.localModelName = "badhabinot:latest";
+        this.ollamaBaseUrl = "http://ollama:11434";
     }
 
     public static UserSettings createDefault(UUID userId) {

@@ -416,7 +416,7 @@ class OllamaProvider:
             async with httpx.AsyncClient(timeout=httpx.Timeout(self.timeout_seconds)) as client:
                 response = await client.post(f"{self.base_url}/api/chat", json=payload)
                 response.raise_for_status()
-                data = response.json()
+                data = _json.loads(response.content.decode("utf-8"))
         except httpx.TimeoutException as exc:
             raise ProviderInvocationError("Ollama timed out — model may still be loading", status_code=504) from exc
         except httpx.HTTPStatusError as exc:
@@ -427,16 +427,41 @@ class OllamaProvider:
             raise ProviderInvocationError("Ollama is unreachable — is it running?", status_code=502) from exc
 
         raw_content = (data.get("message") or {}).get("content") or ""
-        # Ollama may or may not wrap the reply in JSON; try to parse, fall back to raw text.
-        try:
-            parsed = _json.loads(raw_content)
-            answer = str(parsed.get("answer") or "").strip() or raw_content.strip()
-            grounded_facts = [str(f).strip() for f in parsed.get("grounded_facts", []) if str(f).strip()][:5]
-            follow_up_suggestions = [str(s).strip() for s in parsed.get("follow_up_suggestions", []) if str(s).strip()][:3]
-        except (_json.JSONDecodeError, AttributeError):
-            answer = raw_content.strip()
-            grounded_facts = []
-            follow_up_suggestions = []
+        # Model may return plain text OR accidentally wrap in JSON — handle both.
+        stripped = raw_content.strip()
+        parsed_json = self._extract_json(stripped)
+        if parsed_json is not None and isinstance(parsed_json.get("answer"), str):
+            # Model returned JSON despite instructions — extract just the answer text
+            answer = parsed_json["answer"].strip()
+        else:
+            answer = stripped
+        if not answer:
+            answer = "Yanıt alınamadı. Lütfen tekrar deneyin."
+
+        # Server-side grounded facts from pre-computed scores (reliable, no LLM math needed)
+        ctx = request.context
+        posture_score = round((1.0 - ctx.poor_posture_ratio) * 100, 1)
+        hydration_pct = round((ctx.hydration_progress_ml / ctx.water_goal_ml * 100) if ctx.water_goal_ml > 0 else 0, 1)
+        cleanliness_score = max(0, round(100 - ctx.smoking_like_count * 20 - ctx.hand_movement_count * 5, 1))
+        grounded_facts = [
+            f"Duruş skoru: {posture_score}/100 (kötü duruş oranı: %{round(ctx.poor_posture_ratio * 100, 1)}, uyarı: {ctx.posture_alert_count})",
+            f"Hidrasyon: {ctx.hydration_progress_ml}/{ctx.water_goal_ml} ml (%{hydration_pct})",
+            f"Temizlik skoru: {cleanliness_score}/100 (sigara benzeri: {ctx.smoking_like_count}, el hareketi: {ctx.hand_movement_count})",
+        ]
+        if ctx.comparison_to_previous_day:
+            grounded_facts.append(f"Dünle karşılaştırma: {ctx.comparison_to_previous_day}")
+
+        # Server-side follow-up suggestions based on worst metrics
+        follow_up_suggestions = []
+        if ctx.poor_posture_ratio > 0.25:
+            follow_up_suggestions.append("Duruşumu günün geri kalanında nasıl düzeltebilirim?")
+        if hydration_pct < 60:
+            follow_up_suggestions.append("Su içmemi artırmak için nasıl bir plan yapmalıyım?")
+        if ctx.smoking_like_count >= 3:
+            follow_up_suggestions.append("El-yüz hareketlerimi azaltmak için ne yapabilirim?")
+        # Always add a comparison and trend question
+        follow_up_suggestions.append("Bu hafta genel trendim nasıl gidiyor?")
+        follow_up_suggestions = follow_up_suggestions[:3]
 
         if not answer:
             answer = "Ollama returned an empty response. Please try again."
@@ -495,30 +520,68 @@ class OllamaProvider:
 
     def _build_messages(self, request: ChatRequest) -> list[dict[str, Any]]:
         import json as _json
-        context = request.context.model_dump(mode="json")
+        ctx = request.context
         history_lines = [{"role": item.role, "content": item.content} for item in request.history[-10:]]
+
+        # Pre-compute behavioral scores so the model never has to do arithmetic
+        posture_score = round((1.0 - ctx.poor_posture_ratio) * 100, 1)
+        hydration_pct = round((ctx.hydration_progress_ml / ctx.water_goal_ml * 100) if ctx.water_goal_ml > 0 else 0, 1)
+        cleanliness_score = max(0, round(100 - ctx.smoking_like_count * 20 - ctx.hand_movement_count * 5, 1))
+        posture_status = "Mükemmel" if ctx.poor_posture_ratio < 0.10 else ("Dikkat" if ctx.poor_posture_ratio < 0.25 else "Kötü")
+        hydration_status = "Yeterli" if hydration_pct >= 90 else ("Orta" if hydration_pct >= 60 else "Yetersiz")
+        smoking_status = "Sorunsuz" if ctx.smoking_like_count == 0 else ("Uyarı" if ctx.smoking_like_count <= 2 else "Kötü")
+
+        summary_block = (
+            f"=== BUGÜNÜN PERFORMANS ÖZETİ ===\n"
+            f"Duruş skoru: {posture_score}/100 ({posture_status}) — poor_posture_ratio={ctx.poor_posture_ratio}, uyarı sayısı={ctx.posture_alert_count}\n"
+            f"Hidrasyon skoru: {hydration_pct}/100 ({hydration_status}) — {ctx.hydration_progress_ml}/{ctx.water_goal_ml} ml\n"
+            f"Temizlik skoru: {cleanliness_score}/100 ({smoking_status}) — sigara benzeri={ctx.smoking_like_count}, el hareketi={ctx.hand_movement_count}\n"
+            f"Tamamlanan analiz: {ctx.analyses_completed}\n"
+            f"Genel özet: {ctx.summary}\n"
+            f"Dünle karşılaştırma: {ctx.comparison_to_previous_day or 'Veri yok'}\n"
+            f"Öneriler: {', '.join(ctx.recommendations) if ctx.recommendations else 'Yok'}\n"
+        )
+
         return [
-            {
-                "role": "system",
-                "content": (
-                    "You are a behavior-insights assistant for one user. "
-                    "Use only the supplied structured monitoring context and chat history. "
-                    "Never invent counts, events, times, or trends. "
-                    "Return JSON with keys answer, grounded_facts (array), follow_up_suggestions (array). "
-                    "grounded_facts must contain short verifiable points from context values."
-                ),
-            },
             *history_lines,
             {
                 "role": "user",
                 "content": (
-                    f"User timezone: {request.timezone or 'UTC'}\n"
-                    f"Report date: {request.report_date.isoformat()}\n"
-                    f"Grounding context:\n{_json.dumps(context, ensure_ascii=True)}\n"
-                    f"Question: {request.message}"
+                    f"{summary_block}\n"
+                    f"Tarih: {request.report_date.isoformat()} | Saat dilimi: {request.timezone or 'UTC'}\n\n"
+                    f"Soru: {request.message}\n\n"
+                    'TÜRKÇE olarak, 2-4 cümleyle kısa ve doğrudan cevap ver. Sadece düz metin yaz, JSON veya kod bloğu kullanma.'
                 ),
             },
         ]
+
+    @staticmethod
+    def _extract_json(text: str) -> dict[str, Any] | None:
+        """Extract the first valid JSON object from model output, handling code fences."""
+        import re as _re
+        import json as _json
+        if not text:
+            return None
+        # Try direct parse first
+        try:
+            return _json.loads(text.strip())
+        except _json.JSONDecodeError:
+            pass
+        # Strip ```json ... ``` fences
+        fence_match = _re.search(r"```(?:json)?\s*(\{.*?\})\s*```", text, _re.DOTALL)
+        if fence_match:
+            try:
+                return _json.loads(fence_match.group(1))
+            except _json.JSONDecodeError:
+                pass
+        # Find the first { ... } block
+        brace_match = _re.search(r"\{[^{}]*(?:\{[^{}]*\}[^{}]*)?\}", text, _re.DOTALL)
+        if brace_match:
+            try:
+                return _json.loads(brace_match.group(0))
+            except _json.JSONDecodeError:
+                pass
+        return None
 
 
 class MockProvider:
