@@ -405,6 +405,18 @@ class OllamaProvider:
 
     async def respond_chat(self, request: ChatRequest) -> ChatProviderResult:
         import json as _json
+
+        # Short-circuit system/privacy questions — never forward to the model
+        if self._classify_message(request.message) == "system":
+            return ChatProviderResult(
+                answer="Bu konuda sana yardımcı olamam. Davranış verilerinle ilgili bir sorun var mı?",
+                grounded_facts=[],
+                follow_up_suggestions=["Bugünkü performansımı göster", "Duruşum nasıl?", "Ne kadar su içtim?"],
+                provider="ollama",
+                model_name=self.model_name,
+                model_mode="local_ollama",
+            )
+
         messages = self._build_messages(request)
         payload = {
             "model": self.model_name,
@@ -431,37 +443,48 @@ class OllamaProvider:
         stripped = raw_content.strip()
         parsed_json = self._extract_json(stripped)
         if parsed_json is not None and isinstance(parsed_json.get("answer"), str):
-            # Model returned JSON despite instructions — extract just the answer text
             answer = parsed_json["answer"].strip()
         else:
             answer = stripped
         if not answer:
             answer = "Yanıt alınamadı. Lütfen tekrar deneyin."
 
-        # Server-side grounded facts from pre-computed scores (reliable, no LLM math needed)
+        # Determine message type to build appropriate structured response
         ctx = request.context
-        posture_score = round((1.0 - ctx.poor_posture_ratio) * 100, 1)
-        hydration_pct = round((ctx.hydration_progress_ml / ctx.water_goal_ml * 100) if ctx.water_goal_ml > 0 else 0, 1)
-        cleanliness_score = max(0, round(100 - ctx.smoking_like_count * 20 - ctx.hand_movement_count * 5, 1))
-        grounded_facts = [
-            f"Duruş skoru: {posture_score}/100 (kötü duruş oranı: %{round(ctx.poor_posture_ratio * 100, 1)}, uyarı: {ctx.posture_alert_count})",
-            f"Hidrasyon: {ctx.hydration_progress_ml}/{ctx.water_goal_ml} ml (%{hydration_pct})",
-            f"Temizlik skoru: {cleanliness_score}/100 (sigara benzeri: {ctx.smoking_like_count}, el hareketi: {ctx.hand_movement_count})",
-        ]
-        if ctx.comparison_to_previous_day:
-            grounded_facts.append(f"Dünle karşılaştırma: {ctx.comparison_to_previous_day}")
+        msg_type = self._classify_message(request.message)
 
-        # Server-side follow-up suggestions based on worst metrics
-        follow_up_suggestions = []
-        if ctx.poor_posture_ratio > 0.25:
-            follow_up_suggestions.append("Duruşumu günün geri kalanında nasıl düzeltebilirim?")
-        if hydration_pct < 60:
-            follow_up_suggestions.append("Su içmemi artırmak için nasıl bir plan yapmalıyım?")
-        if ctx.smoking_like_count >= 3:
-            follow_up_suggestions.append("El-yüz hareketlerimi azaltmak için ne yapabilirim?")
-        # Always add a comparison and trend question
-        follow_up_suggestions.append("Bu hafta genel trendim nasıl gidiyor?")
-        follow_up_suggestions = follow_up_suggestions[:3]
+        if msg_type == "casual":
+            # No monitoring data for casual conversation
+            grounded_facts: list[str] = []
+            follow_up_suggestions: list[str] = ["Bugünkü performansımı göster", "Duruşum nasıl?", "Ne kadar su içtim?"]
+
+        elif msg_type == "system":
+            # Refused — no data exposed
+            grounded_facts = []
+            follow_up_suggestions = ["Bugünkü performansımı göster", "Duruşum nasıl?"]
+
+        else:
+            # Server-side grounded facts from pre-computed scores
+            posture_score = round((1.0 - ctx.poor_posture_ratio) * 100, 1)
+            hydration_pct = round((ctx.hydration_progress_ml / ctx.water_goal_ml * 100) if ctx.water_goal_ml > 0 else 0, 1)
+            cleanliness_score = max(0, round(100 - ctx.smoking_like_count * 20 - ctx.hand_movement_count * 5, 1))
+            grounded_facts = [
+                f"Duruş skoru: {posture_score}/100 (kötü duruş oranı: %{round(ctx.poor_posture_ratio * 100, 1)}, uyarı: {ctx.posture_alert_count})",
+                f"Hidrasyon: {ctx.hydration_progress_ml}/{ctx.water_goal_ml} ml (%{hydration_pct})",
+                f"Temizlik skoru: {cleanliness_score}/100 (sigara benzeri: {ctx.smoking_like_count}, el hareketi: {ctx.hand_movement_count})",
+            ]
+            if ctx.comparison_to_previous_day:
+                grounded_facts.append(f"Dünle karşılaştırma: {ctx.comparison_to_previous_day}")
+
+            follow_up_suggestions = []
+            if ctx.poor_posture_ratio > 0.25:
+                follow_up_suggestions.append("Duruşumu günün geri kalanında nasıl düzeltebilirim?")
+            if hydration_pct < 60:
+                follow_up_suggestions.append("Su içmemi artırmak için nasıl bir plan yapmalıyım?")
+            if ctx.smoking_like_count >= 3:
+                follow_up_suggestions.append("El-yüz hareketlerimi azaltmak için ne yapabilirim?")
+            follow_up_suggestions.append("Bu hafta genel trendim nasıl gidiyor?")
+            follow_up_suggestions = follow_up_suggestions[:3]
 
         if not answer:
             answer = "Ollama returned an empty response. Please try again."
@@ -518,41 +541,86 @@ class OllamaProvider:
                 },
             )
 
+    # ── Keyword sets for message classification ───────────────────────────────
+    _CASUAL_KEYWORDS: frozenset[str] = frozenset([
+        "merhaba", "selam", "günaydın", "iyi günler", "iyi akşamlar", "iyi geceler",
+        "nasılsın", "naber", "ne haber", "teşekkür", "sağ ol", "eyvallah", "tamam",
+        "anladım", "harika", "süper", "güzel", "görüşürüz", "hoşça kal", "bay bay",
+    ])
+    _DATA_KEYWORDS: frozenset[str] = frozenset([
+        "duruş", "postur", "su", "hidrasyon", "sigara", "el", "hareket", "performans",
+        "analiz", "bugün", "dün", "rapor", "skor", "puan", "kaç", "ne kadar", "yüzde",
+        "oran", "uyarı", "oturum", "izleme", "kamera", "özet", "karşılaştır", "trend",
+        "hafta", "ay", "geçmiş", "tarih", "istatistik",
+    ])
+    _SYSTEM_KEYWORDS: frozenset[str] = frozenset([
+        "prompt", "talimat", "kural", "sistem", "nasıl çalışıyor", "nasıl programlandın",
+        "kodun", "modelsin", "yapay zeka nasıl", "eğitim", "algoritma", "mimari",
+        "başka kullanıcı", "diğer kullanıcı", "başkasının", "diğerinin", "herkesi",
+        "veritabanı", "api", "sunucu", "infrastructure", "altyapı",
+    ])
+
+    @classmethod
+    def _classify_message(cls, message: str) -> str:
+        """Return 'casual', 'system', or 'data' based on message content."""
+        lower = message.lower()
+        # System/privacy questions → always refuse
+        if any(kw in lower for kw in cls._SYSTEM_KEYWORDS):
+            return "system"
+        # Has data keywords → data query
+        if any(kw in lower for kw in cls._DATA_KEYWORDS):
+            return "data"
+        # Short message that matches casual keywords → casual
+        words = lower.split()
+        if len(words) <= 8 and any(kw in lower for kw in cls._CASUAL_KEYWORDS):
+            return "casual"
+        # Default: treat as data query so context is always available
+        return "data"
+
     def _build_messages(self, request: ChatRequest) -> list[dict[str, Any]]:
-        import json as _json
         ctx = request.context
         history_lines = [{"role": item.role, "content": item.content} for item in request.history[-10:]]
+        msg_type = self._classify_message(request.message)
 
-        # Pre-compute behavioral scores so the model never has to do arithmetic
-        posture_score = round((1.0 - ctx.poor_posture_ratio) * 100, 1)
-        hydration_pct = round((ctx.hydration_progress_ml / ctx.water_goal_ml * 100) if ctx.water_goal_ml > 0 else 0, 1)
-        cleanliness_score = max(0, round(100 - ctx.smoking_like_count * 20 - ctx.hand_movement_count * 5, 1))
-        posture_status = "Mükemmel" if ctx.poor_posture_ratio < 0.10 else ("Dikkat" if ctx.poor_posture_ratio < 0.25 else "Kötü")
-        hydration_status = "Yeterli" if hydration_pct >= 90 else ("Orta" if hydration_pct >= 60 else "Yetersiz")
-        smoking_status = "Sorunsuz" if ctx.smoking_like_count == 0 else ("Uyarı" if ctx.smoking_like_count <= 2 else "Kötü")
+        if msg_type == "casual":
+            # No monitoring data needed — just friendly conversation
+            user_content = (
+                f"Soru: {request.message}\n\n"
+                "Kısa, samimi ve Türkçe yanıt ver. Sadece düz metin yaz."
+            )
+        elif msg_type == "system":
+            # Return a refusal immediately without sending any system info
+            user_content = (
+                f"Soru: {request.message}\n\n"
+                "Bu bir sistem/gizlilik sorusu. Kural gereği reddet ve davranış verilerine yönlendir."
+            )
+        else:
+            # Full monitoring context for data questions
+            posture_score = round((1.0 - ctx.poor_posture_ratio) * 100, 1)
+            hydration_pct = round((ctx.hydration_progress_ml / ctx.water_goal_ml * 100) if ctx.water_goal_ml > 0 else 0, 1)
+            cleanliness_score = max(0, round(100 - ctx.smoking_like_count * 20 - ctx.hand_movement_count * 5, 1))
+            posture_status = "Mükemmel" if ctx.poor_posture_ratio < 0.10 else ("Dikkat" if ctx.poor_posture_ratio < 0.25 else "Kötü")
+            hydration_status = "Yeterli" if hydration_pct >= 90 else ("Orta" if hydration_pct >= 60 else "Yetersiz")
+            smoking_status = "Sorunsuz" if ctx.smoking_like_count == 0 else ("Uyarı" if ctx.smoking_like_count <= 2 else "Kötü")
 
-        summary_block = (
-            f"=== BUGÜNÜN PERFORMANS ÖZETİ ===\n"
-            f"Duruş skoru: {posture_score}/100 ({posture_status}) — poor_posture_ratio={ctx.poor_posture_ratio}, uyarı sayısı={ctx.posture_alert_count}\n"
-            f"Hidrasyon skoru: {hydration_pct}/100 ({hydration_status}) — {ctx.hydration_progress_ml}/{ctx.water_goal_ml} ml\n"
-            f"Temizlik skoru: {cleanliness_score}/100 ({smoking_status}) — sigara benzeri={ctx.smoking_like_count}, el hareketi={ctx.hand_movement_count}\n"
-            f"Tamamlanan analiz: {ctx.analyses_completed}\n"
-            f"Genel özet: {ctx.summary}\n"
-            f"Dünle karşılaştırma: {ctx.comparison_to_previous_day or 'Veri yok'}\n"
-            f"Öneriler: {', '.join(ctx.recommendations) if ctx.recommendations else 'Yok'}\n"
-        )
+            summary_block = (
+                f"=== BUGÜNÜN PERFORMANS ÖZETİ ({request.report_date.isoformat()}) ===\n"
+                f"Duruş skoru: {posture_score}/100 ({posture_status}) — kötü duruş oranı %{round(ctx.poor_posture_ratio * 100, 1)}, uyarı: {ctx.posture_alert_count}\n"
+                f"Hidrasyon skoru: {hydration_pct}/100 ({hydration_status}) — {ctx.hydration_progress_ml}/{ctx.water_goal_ml} ml\n"
+                f"Temizlik skoru: {cleanliness_score}/100 ({smoking_status}) — sigara benzeri: {ctx.smoking_like_count}, el hareketi: {ctx.hand_movement_count}\n"
+                f"Tamamlanan analiz: {ctx.analyses_completed}\n"
+                f"Özet: {ctx.summary}\n"
+                f"Dünle karşılaştırma: {ctx.comparison_to_previous_day or 'Veri yok'}\n"
+            )
+            user_content = (
+                f"{summary_block}\n"
+                f"Soru: {request.message}\n\n"
+                "TÜRKÇE, 2-4 cümle, düz metin yaz. JSON veya kod bloğu kullanma."
+            )
 
         return [
             *history_lines,
-            {
-                "role": "user",
-                "content": (
-                    f"{summary_block}\n"
-                    f"Tarih: {request.report_date.isoformat()} | Saat dilimi: {request.timezone or 'UTC'}\n\n"
-                    f"Soru: {request.message}\n\n"
-                    'TÜRKÇE olarak, 2-4 cümleyle kısa ve doğrudan cevap ver. Sadece düz metin yaz, JSON veya kod bloğu kullanma.'
-                ),
-            },
+            {"role": "user", "content": user_content},
         ]
 
     @staticmethod
