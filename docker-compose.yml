@@ -59,11 +59,11 @@ services:
       - platform
     stop_grace_period: 30s
     healthcheck:
-      test: ["CMD-SHELL", "curl -sf http://localhost:11434/api/tags > /dev/null || exit 1"]
-      interval: 15s
-      timeout: 5s
+      test: ["CMD", "ollama", "list"]
+      interval: 10s
+      timeout: 10s
       retries: 12
-      start_period: 30s
+      start_period: 20s
 
   # Pulls the default model once Ollama is healthy, then exits.
   ollama-pull:
