@@ -2,7 +2,9 @@ package com.badhabinot.backend.common.exception;
 
 import com.badhabinot.backend.common.exception.auth.AuthenticationFailedException;
 import com.badhabinot.backend.common.exception.auth.DuplicateEmailException;
+import com.badhabinot.backend.common.exception.auth.InvalidPasswordResetTokenException;
 import com.badhabinot.backend.common.exception.auth.InvalidRefreshTokenException;
+import com.badhabinot.backend.common.exception.auth.TooManyLoginAttemptsException;
 import com.badhabinot.backend.common.exception.monitoring.DownstreamServiceException;
 import com.badhabinot.backend.common.exception.monitoring.DownstreamTimeoutException;
 import java.time.Instant;
@@ -25,6 +27,16 @@ public class GlobalApiExceptionHandler {
     @ExceptionHandler(DuplicateEmailException.class)
     public ResponseEntity<Map<String, Object>> handleDuplicateEmail(DuplicateEmailException exception) {
         return error(HttpStatus.CONFLICT, "duplicate_email", exception.getMessage());
+    }
+
+    @ExceptionHandler(TooManyLoginAttemptsException.class)
+    public ResponseEntity<Map<String, Object>> handleTooManyAttempts(TooManyLoginAttemptsException exception) {
+        return error(HttpStatus.TOO_MANY_REQUESTS, "too_many_login_attempts", exception.getMessage());
+    }
+
+    @ExceptionHandler(InvalidPasswordResetTokenException.class)
+    public ResponseEntity<Map<String, Object>> handleInvalidResetToken(InvalidPasswordResetTokenException exception) {
+        return error(HttpStatus.BAD_REQUEST, "invalid_reset_token", exception.getMessage());
     }
 
     @ExceptionHandler({

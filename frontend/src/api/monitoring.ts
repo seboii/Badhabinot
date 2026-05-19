@@ -1,4 +1,6 @@
 import { apiClient } from '@/api/client'
+import { useAuthStore } from '@/store/auth-store'
+import { env } from '@/lib/env'
 import type {
   ActivityItemResponse,
   AnalyzeFrameRequest,
@@ -7,6 +9,7 @@ import type {
   ChatRequest,
   ChatHistoryResponse,
   ChatResponse,
+  ChatStreamDoneEvent,
   DashboardResponse,
   DailyReportResponse,
   FaceRegisterRequest,
@@ -43,16 +46,16 @@ export const monitoringApi = {
     return response.data
   },
 
-  async getActivities(limit = 10) {
+  async getActivities(page = 0, size = 15) {
     const response = await apiClient.get<ActivityItemResponse[]>('/api/v1/monitoring/activities', {
-      params: { limit },
+      params: { page, size },
     })
     return response.data
   },
 
-  async getEvents(limit = 12) {
+  async getEvents(page = 0, size = 15) {
     const response = await apiClient.get<BehaviorEventResponse[]>('/api/v1/monitoring/events', {
-      params: { limit },
+      params: { page, size },
     })
     return response.data
   },
@@ -84,6 +87,87 @@ export const monitoringApi = {
   async chat(payload: ChatRequest) {
     const response = await apiClient.post<ChatResponse>('/api/v1/monitoring/chat', payload)
     return response.data
+  },
+
+  async chatStream(
+    payload: ChatRequest,
+    onToken: (token: string) => void,
+    onDone: (result: ChatStreamDoneEvent) => void,
+    signal: AbortSignal,
+  ): Promise<void> {
+    const accessToken = useAuthStore.getState().session?.access_token
+    const base = env.apiBaseUrl || ''
+
+    const response = await fetch(`${base}/api/v1/monitoring/chat/stream`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'text/event-stream',
+        ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+      },
+      body: JSON.stringify(payload),
+      signal,
+    })
+
+    if (!response.ok) {
+      throw new Error(`SSE request failed with status ${response.status}`)
+    }
+    if (!response.body) {
+      throw new Error('SSE response has no body')
+    }
+
+    const reader = response.body.getReader()
+    const decoder = new TextDecoder()
+    let buffer = ''
+    let receivedDone = false
+
+    try {
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+
+        buffer += decoder.decode(value, { stream: true })
+
+        // Process complete SSE events separated by double newline.
+        let eventEnd: number
+        while ((eventEnd = buffer.indexOf('\n\n')) !== -1) {
+          const eventBlock = buffer.slice(0, eventEnd)
+          buffer = buffer.slice(eventEnd + 2)
+
+          for (const line of eventBlock.split('\n')) {
+            if (!line.startsWith('data: ')) continue
+
+            let parsed: Record<string, unknown>
+            try {
+              parsed = JSON.parse(line.slice(6)) as Record<string, unknown>
+            } catch {
+              continue
+            }
+
+            if (parsed.done === true) {
+              receivedDone = true
+              onDone({
+                conversationId: parsed.conversationId as string,
+                groundedFacts: Array.isArray(parsed.groundedFacts)
+                  ? (parsed.groundedFacts as string[])
+                  : [],
+                followUpSuggestions: Array.isArray(parsed.followUpSuggestions)
+                  ? (parsed.followUpSuggestions as string[])
+                  : [],
+              })
+            } else if (typeof parsed.token === 'string') {
+              onToken(parsed.token)
+            }
+          }
+        }
+      }
+    } finally {
+      reader.cancel()
+    }
+
+    if (!receivedDone && !signal.aborted) {
+      throw new Error('SSE stream ended without a done event')
+    }
   },
 
   async getChatHistory(conversationId?: string | null, limit = 40) {

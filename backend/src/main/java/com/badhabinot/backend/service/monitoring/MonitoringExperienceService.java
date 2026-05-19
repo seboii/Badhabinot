@@ -142,9 +142,9 @@ public class MonitoringExperienceService {
     }
 
     @Transactional(transactionManager = "monitoringTransactionManager", readOnly = true)
-    public List<ActivityItemResponse> getRecentActivities(Jwt jwt, int limit) {
+    public List<ActivityItemResponse> getRecentActivities(Jwt jwt, int page, int size) {
         UUID userId = UUID.fromString(jwt.getSubject());
-        return activityFeedRepository.findByUserIdOrderByOccurredAtDesc(userId, PageRequest.of(0, Math.max(1, Math.min(limit, 20))))
+        return activityFeedRepository.findByUserIdOrderByOccurredAtDesc(userId, PageRequest.of(Math.max(0, page), Math.max(1, Math.min(size, 50))))
                 .stream()
                 .map(this::toActivityResponse)
                 .toList();

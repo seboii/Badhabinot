@@ -8,7 +8,7 @@ import { BehaviorEventListCard } from '@/features/history/components/BehaviorEve
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
-import { LoadingCard } from '@/components/ui/loading-state'
+import { ActivityFeedSkeleton, MetricCardSkeleton } from '@/components/ui/loading-state'
 import { useLanguage } from '@/i18n/language-provider'
 import { formatMilliliters, toPercent } from '@/lib/format'
 
@@ -50,10 +50,6 @@ export function ReportsPage() {
     queryFn: () => monitoringApi.getDailyReport(selectedDate),
   })
 
-  if (reportQuery.isLoading || !reportQuery.data) {
-    return <LoadingCard message={isTurkish ? 'Gunluk rapor olusturuluyor' : 'Generating daily report'} />
-  }
-
   const report = reportQuery.data
 
   return (
@@ -80,6 +76,27 @@ export function ReportsPage() {
         </CardContent>
       </Card>
 
+      {reportQuery.isLoading || !report ? (
+        <>
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+            <MetricCardSkeleton />
+            <MetricCardSkeleton />
+            <MetricCardSkeleton />
+            <MetricCardSkeleton />
+          </div>
+          <div className="grid gap-4 xl:grid-cols-[minmax(0,1.1fr)_minmax(360px,0.9fr)]">
+            <ActivityFeedSkeleton />
+            <ActivityFeedSkeleton />
+          </div>
+          <div className="grid gap-4 xl:grid-cols-[minmax(0,1.05fr)_minmax(360px,0.95fr)]">
+            <ActivityFeedSkeleton />
+            <ActivityFeedSkeleton />
+          </div>
+        </>
+      ) : null}
+
+      {report ? (
+        <>
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <ReportMetric
           label={isTurkish ? 'Analizler' : 'Analyses'}
@@ -196,6 +213,8 @@ export function ReportsPage() {
           </CardContent>
         </Card>
       </div>
+        </>
+      ) : null}
     </div>
   )
 }
