@@ -65,7 +65,7 @@ services:
       retries: 12
       start_period: 20s
 
-  # Pulls the default model once Ollama is healthy, then exits.
+  # Pulls the base LLM model once Ollama is healthy, then exits.
   ollama-pull:
     image: ollama/ollama:latest
     restart: "no"
@@ -75,7 +75,26 @@ services:
     environment:
       OLLAMA_HOST: http://ollama:11434
     entrypoint: ["ollama", "pull"]
-    command: ["${OLLAMA_MODEL_NAME:-llama3.2:3b}"]
+    command: ["${OLLAMA_BASE_MODEL_NAME:-llama3.2:3b}"]
+    networks:
+      - platform
+
+  # Builds the custom badhabinot model from Modelfile after base model is pulled.
+  ollama-build:
+    image: ollama/ollama:latest
+    restart: "no"
+    depends_on:
+      ollama:
+        condition: service_healthy
+      ollama-pull:
+        condition: service_completed_successfully
+    environment:
+      OLLAMA_HOST: http://ollama:11434
+      OLLAMA_MODEL_NAME: ${OLLAMA_BASE_MODEL_NAME:-llama3.2:3b}
+      BADHABINOT_MODEL_NAME: ${OLLAMA_MODEL_NAME:-badhabinot:latest}
+    volumes:
+      - ./infra/ollama:/modelfiles:ro
+    entrypoint: ["sh", "/modelfiles/build-model.sh"]
     networks:
       - platform
 
@@ -160,6 +179,8 @@ services:
     depends_on:
       ollama:
         condition: service_healthy
+      ollama-build:
+        condition: service_completed_successfully
     networks:
       - platform
     stop_grace_period: 20s
