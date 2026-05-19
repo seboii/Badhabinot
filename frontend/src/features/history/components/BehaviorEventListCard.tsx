@@ -1,7 +1,9 @@
 import { Activity, Cigarette, Hand, ShieldAlert } from 'lucide-react'
+import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { EmptyState } from '@/components/ui/empty-state'
+import { InlineSpinner } from '@/components/ui/loading-state'
 import { useLanguage } from '@/i18n/language-provider'
 import { behaviorLabel, formatClock, formatRelativeTime, severityLabel } from '@/lib/format'
 import type { BehaviorEventResponse } from '@/types/monitoring'
@@ -34,10 +36,16 @@ export function BehaviorEventListCard({
   title,
   description,
   events,
+  hasMore,
+  isLoadingMore,
+  onLoadMore,
 }: {
   title: string
   description: string
   events: BehaviorEventResponse[]
+  hasMore?: boolean
+  isLoadingMore?: boolean
+  onLoadMore?: () => void
 }) {
   const { language, isTurkish } = useLanguage()
 
@@ -91,6 +99,20 @@ export function BehaviorEventListCard({
             </div>
           )
         })}
+        {onLoadMore ? (
+          <div className="flex justify-center pt-2">
+            {hasMore ? (
+              <Button variant="ghost" size="sm" onClick={onLoadMore} disabled={isLoadingMore}>
+                {isLoadingMore ? <InlineSpinner /> : null}
+                {isTurkish ? 'Daha fazla göster' : 'Show more'}
+              </Button>
+            ) : (
+              <p className="text-xs text-[var(--text-soft)]">
+                {isTurkish ? 'Tüm olaylar yüklendi' : 'All events loaded'}
+              </p>
+            )}
+          </div>
+        ) : null}
       </CardContent>
     </Card>
   )

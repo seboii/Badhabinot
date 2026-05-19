@@ -15,5 +15,7 @@ public interface ReminderEventRepository extends JpaRepository<ReminderEvent, UU
     List<ReminderEvent> findByUserIdOrderByOccurredAtDesc(UUID userId, Pageable pageable);
 
     Optional<ReminderEvent> findFirstByUserIdAndReminderTypeOrderByOccurredAtDesc(UUID userId, String reminderType);
+
+    void deleteByUserId(UUID userId);
 }
 

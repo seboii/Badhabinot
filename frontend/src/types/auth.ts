@@ -41,3 +41,12 @@ export type LogoutRequest = {
   refresh_token: string
 }
 
+export type PasswordResetRequestDto = {
+  email: string
+}
+
+export type PasswordResetConfirmDto = {
+  token: string
+  new_password: string
+}
+

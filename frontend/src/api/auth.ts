@@ -3,6 +3,8 @@ import type {
   AuthenticatedUserResponse,
   LoginRequest,
   LogoutRequest,
+  PasswordResetConfirmDto,
+  PasswordResetRequestDto,
   RegisterRequest,
   TokenResponse,
 } from '@/types/auth'
@@ -25,6 +27,14 @@ export const authApi = {
 
   async logout(payload: LogoutRequest) {
     await apiClient.post('/api/v1/auth/logout', payload)
+  },
+
+  async requestPasswordReset(payload: PasswordResetRequestDto) {
+    await apiClient.post('/api/v1/auth/password-reset-request', payload)
+  },
+
+  async confirmPasswordReset(payload: PasswordResetConfirmDto) {
+    await apiClient.post('/api/v1/auth/password-reset-confirm', payload)
   },
 }
 

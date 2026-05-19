@@ -1,9 +1,10 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { Controller, useForm } from 'react-hook-form'
 import { z } from 'zod'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { Switch } from '@/components/ui/switch'
 import { useLanguage } from '@/i18n/language-provider'
 import type { ConsentResponse, UpdateConsentsRequest } from '@/types/user'
@@ -26,6 +27,7 @@ export function ConsentForm({
   onSubmit: (values: UpdateConsentsRequest) => void
 }) {
   const { isTurkish } = useLanguage()
+  const [pendingRevocation, setPendingRevocation] = useState<UpdateConsentsRequest | null>(null)
   const consentLabels = [
     {
       key: 'privacy_policy_accepted' as const,
@@ -67,7 +69,21 @@ export function ConsentForm({
 
   const remoteInferenceAccepted = watch('remote_inference_accepted')
 
+  function handleFormSubmit(values: UpdateConsentsRequest) {
+    const isRevoking =
+      (consents.privacy_policy_accepted && !values.privacy_policy_accepted) ||
+      (consents.camera_monitoring_accepted && !values.camera_monitoring_accepted) ||
+      (consents.remote_inference_accepted && !values.remote_inference_accepted)
+
+    if (isRevoking) {
+      setPendingRevocation(values)
+    } else {
+      onSubmit(values)
+    }
+  }
+
   return (
+    <>
     <Card>
       <CardHeader>
         <div>
@@ -80,7 +96,7 @@ export function ConsentForm({
         </div>
       </CardHeader>
       <CardContent>
-        <form className="space-y-4" onSubmit={handleSubmit(onSubmit)}>
+        <form className="space-y-4" onSubmit={handleSubmit(handleFormSubmit)}>
           {consentLabels.map((item) => (
             <div key={item.key} className="flex items-center justify-between gap-4 rounded-[24px] border border-[var(--line-soft)] bg-[rgba(255,255,255,0.03)] p-4">
               <div>
@@ -111,5 +127,25 @@ export function ConsentForm({
         </form>
       </CardContent>
     </Card>
+
+    <ConfirmDialog
+      isOpen={pendingRevocation !== null}
+      variant="danger"
+      title={isTurkish ? 'Onayı geri al' : 'Revoke consent'}
+      description={
+        isTurkish
+          ? 'Bu izni kaldırmak ilgili özellikleri devre dışı bırakır. Devam etmek istiyor musunuz?'
+          : 'Revoking this consent will disable the related feature. Do you want to continue?'
+      }
+      confirmLabel={isTurkish ? 'Geri al' : 'Revoke'}
+      cancelLabel={isTurkish ? 'Vazgeç' : 'Cancel'}
+      loading={isSaving}
+      onConfirm={() => {
+        if (pendingRevocation) onSubmit(pendingRevocation)
+        setPendingRevocation(null)
+      }}
+      onCancel={() => setPendingRevocation(null)}
+    />
+    </>
   )
 }

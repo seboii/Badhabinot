@@ -3,10 +3,13 @@ package com.badhabinot.backend.controller.auth;
 import com.badhabinot.backend.dto.auth.AuthenticatedUserResponse;
 import com.badhabinot.backend.dto.auth.LoginRequest;
 import com.badhabinot.backend.dto.auth.LogoutRequest;
+import com.badhabinot.backend.dto.auth.PasswordResetConfirmDto;
+import com.badhabinot.backend.dto.auth.PasswordResetRequestDto;
 import com.badhabinot.backend.dto.auth.RefreshTokenRequest;
 import com.badhabinot.backend.dto.auth.RegisterRequest;
 import com.badhabinot.backend.dto.auth.TokenResponse;
 import com.badhabinot.backend.service.auth.AuthApplicationService;
+import com.badhabinot.backend.service.auth.PasswordResetService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -27,9 +30,11 @@ import org.springframework.web.bind.annotation.RestController;
 public class AuthController {
 
     private final AuthApplicationService authApplicationService;
+    private final PasswordResetService passwordResetService;
 
-    public AuthController(AuthApplicationService authApplicationService) {
+    public AuthController(AuthApplicationService authApplicationService, PasswordResetService passwordResetService) {
         this.authApplicationService = authApplicationService;
+        this.passwordResetService = passwordResetService;
     }
 
     @PostMapping("/register")
@@ -56,6 +61,19 @@ public class AuthController {
     @Operation(summary = "Revoke refresh token and terminate the current login session", security = @SecurityRequirement(name = "bearerAuth"))
     public void logout(@AuthenticationPrincipal Jwt jwt, @Valid @RequestBody LogoutRequest request) {
         authApplicationService.logout(jwt, request);
+    }
+
+    @PostMapping("/password-reset-request")
+    @Operation(summary = "Request a password reset email — always returns 200 to avoid email enumeration")
+    public void passwordResetRequest(@Valid @RequestBody PasswordResetRequestDto request) {
+        passwordResetService.requestReset(request);
+    }
+
+    @PostMapping("/password-reset-confirm")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    @Operation(summary = "Confirm a password reset using the token received by email")
+    public void passwordResetConfirm(@Valid @RequestBody PasswordResetConfirmDto request) {
+        passwordResetService.confirmReset(request);
     }
 
     @GetMapping("/me")

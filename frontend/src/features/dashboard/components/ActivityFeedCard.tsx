@@ -1,7 +1,9 @@
 import { BellRing, GlassWater, ShieldAlert, TimerReset, Waves } from 'lucide-react'
+import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { EmptyState } from '@/components/ui/empty-state'
 import { Badge } from '@/components/ui/badge'
+import { InlineSpinner } from '@/components/ui/loading-state'
 import { useLanguage } from '@/i18n/language-provider'
 import { behaviorLabel, formatClock, formatRelativeTime } from '@/lib/format'
 import type { ActivityItemResponse } from '@/types/monitoring'
@@ -43,10 +45,16 @@ export function ActivityFeedCard({
   title,
   description,
   items,
+  hasMore,
+  isLoadingMore,
+  onLoadMore,
 }: {
   title: string
   description: string
   items: ActivityItemResponse[]
+  hasMore?: boolean
+  isLoadingMore?: boolean
+  onLoadMore?: () => void
 }) {
   const { language, isTurkish } = useLanguage()
 
@@ -100,6 +108,20 @@ export function ActivityFeedCard({
             </div>
           )
         })}
+        {onLoadMore ? (
+          <div className="flex justify-center pt-2">
+            {hasMore ? (
+              <Button variant="ghost" size="sm" onClick={onLoadMore} disabled={isLoadingMore}>
+                {isLoadingMore ? <InlineSpinner /> : null}
+                {isTurkish ? 'Daha fazla göster' : 'Show more'}
+              </Button>
+            ) : (
+              <p className="text-xs text-[var(--text-soft)]">
+                {isTurkish ? 'Tüm aktiviteler yüklendi' : 'All activities loaded'}
+              </p>
+            )}
+          </div>
+        ) : null}
       </CardContent>
     </Card>
   )

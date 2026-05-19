@@ -12,6 +12,8 @@ public interface ActivityFeedRepository extends JpaRepository<ActivityFeedItem, 
     List<ActivityFeedItem> findByUserIdOrderByOccurredAtDesc(UUID userId, Pageable pageable);
 
     List<ActivityFeedItem> findByUserIdAndOccurredAtBetweenOrderByOccurredAtAsc(UUID userId, Instant from, Instant to);
+
+    void deleteByUserId(UUID userId);
 }
 
 

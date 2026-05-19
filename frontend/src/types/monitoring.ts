@@ -220,3 +220,9 @@ export type ChatHistoryResponse = {
   conversation_id: string | null
   recent_messages: ChatMessageResponse[]
 }
+
+export type ChatStreamDoneEvent = {
+  conversationId: string
+  groundedFacts: string[]
+  followUpSuggestions: string[]
+}

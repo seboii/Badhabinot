@@ -1,6 +1,7 @@
 package com.badhabinot.backend.service.auth;
 
 import com.badhabinot.backend.dto.auth.AuthenticatedUserResponse;
+import com.badhabinot.backend.dto.auth.ChangePasswordDto;
 import com.badhabinot.backend.dto.auth.LoginRequest;
 import com.badhabinot.backend.dto.auth.LogoutRequest;
 import com.badhabinot.backend.dto.auth.RefreshTokenRequest;
@@ -17,6 +18,7 @@ import com.badhabinot.backend.repository.auth.AuthUserRepository;
 import com.badhabinot.backend.repository.auth.RefreshTokenRepository;
 import com.badhabinot.backend.service.auth.RefreshTokenService;
 import com.badhabinot.backend.service.auth.TokenIssuer;
+import com.badhabinot.backend.infrastructure.redis.LoginAttemptService;
 import com.badhabinot.backend.service.user.UserContextService;
 import java.time.Instant;
 import java.util.List;
@@ -36,6 +38,7 @@ public class AuthApplicationService {
     private final TokenIssuer tokenIssuer;
     private final RefreshTokenService refreshTokenService;
     private final UserContextService userContextService;
+    private final LoginAttemptService loginAttemptService;
 
     public AuthApplicationService(
             AuthUserRepository authUserRepository,
@@ -43,7 +46,8 @@ public class AuthApplicationService {
             PasswordEncoder passwordEncoder,
             TokenIssuer tokenIssuer,
             RefreshTokenService refreshTokenService,
-            UserContextService userContextService
+            UserContextService userContextService,
+            LoginAttemptService loginAttemptService
     ) {
         this.authUserRepository = authUserRepository;
         this.refreshTokenRepository = refreshTokenRepository;
@@ -51,6 +55,7 @@ public class AuthApplicationService {
         this.tokenIssuer = tokenIssuer;
         this.refreshTokenService = refreshTokenService;
         this.userContextService = userContextService;
+        this.loginAttemptService = loginAttemptService;
     }
 
     @Transactional(transactionManager = "authTransactionManager")
@@ -74,14 +79,26 @@ public class AuthApplicationService {
 
     @Transactional(transactionManager = "authTransactionManager")
     public TokenResponse login(LoginRequest request) {
-        AuthUser user = authUserRepository.findByEmail(normalizeEmail(request.email()))
-                .orElseThrow(() -> new AuthenticationFailedException("Invalid email or password"));
+        String normalizedEmail = normalizeEmail(request.email());
+        loginAttemptService.checkNotBlocked(normalizedEmail);
+
+        AuthUser user = authUserRepository.findByEmail(normalizedEmail).orElse(null);
+        if (user == null) {
+            loginAttemptService.recordFailure(normalizedEmail);
+            throw new AuthenticationFailedException("Invalid email or password");
+        }
         if (!passwordEncoder.matches(request.password(), user.getPasswordHash())) {
+            loginAttemptService.recordFailure(normalizedEmail);
             throw new AuthenticationFailedException("Invalid email or password");
         }
         if (user.getStatus() != AccountStatus.ACTIVE) {
+            loginAttemptService.recordFailure(normalizedEmail);
             throw new AuthenticationFailedException("Account is not active");
         }
+
+        loginAttemptService.resetAttempts(normalizedEmail);
+        user.recordLogin();
+        authUserRepository.save(user);
         return issueTokenResponse(user);
     }
 
@@ -114,6 +131,20 @@ public class AuthApplicationService {
         refreshTokenRepository.findByTokenHash(refreshTokenService.hash(request.refreshToken()))
                 .filter(token -> token.getUserId().equals(UUID.fromString(jwt.getSubject())))
                 .ifPresent(token -> token.revoke(Instant.now()));
+    }
+
+    @Transactional(transactionManager = "authTransactionManager")
+    public void changePassword(UUID userId, ChangePasswordDto dto) {
+        AuthUser user = authUserRepository.findById(userId)
+                .orElseThrow(() -> new AuthenticationFailedException("User not found"));
+
+        if (!passwordEncoder.matches(dto.currentPassword(), user.getPasswordHash())) {
+            throw new IllegalArgumentException("Mevcut şifre hatalı");
+        }
+
+        user.updatePassword(passwordEncoder.encode(dto.newPassword()));
+        authUserRepository.save(user);
+        refreshTokenRepository.deleteByUserId(userId);
     }
 
     private TokenResponse issueTokenResponse(AuthUser user) {

@@ -18,5 +18,7 @@ public interface ChatMessageRepository extends JpaRepository<ChatMessage, UUID> 
     Optional<ChatMessage> findFirstByUserIdOrderByCreatedAtDesc(UUID userId);
 
     boolean existsByUserIdAndConversationId(UUID userId, UUID conversationId);
+
+    void deleteByUserId(UUID userId);
 }
 

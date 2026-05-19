@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { format, subDays } from 'date-fns'
-import { useQuery } from '@tanstack/react-query'
+import { useInfiniteQuery, useQuery } from '@tanstack/react-query'
 import { BarChart3, BellRing, Droplets } from 'lucide-react'
 import { monitoringApi } from '@/api/monitoring'
 import { ActivityFeedCard } from '@/features/dashboard/components/ActivityFeedCard'
@@ -8,7 +8,7 @@ import { BehaviorEventListCard } from '@/features/history/components/BehaviorEve
 import { WeeklyTrendChart } from '@/features/history/components/WeeklyTrendChart'
 import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
-import { LoadingCard } from '@/components/ui/loading-state'
+import { ActivityFeedSkeleton, ChartSkeleton, MetricCardSkeleton } from '@/components/ui/loading-state'
 import { useLanguage } from '@/i18n/language-provider'
 
 function SummaryCard({
@@ -49,15 +49,26 @@ export function HistoryPage() {
     queryFn: () => monitoringApi.getWeeklyTrend(from),
   })
 
-  const activitiesQuery = useQuery({
-    queryKey: ['activities', 25],
-    queryFn: () => monitoringApi.getActivities(25),
+  const PAGE_SIZE = 15
+
+  const activitiesQuery = useInfiniteQuery({
+    queryKey: ['activities'],
+    queryFn: ({ pageParam }) => monitoringApi.getActivities(pageParam as number, PAGE_SIZE),
+    initialPageParam: 0,
+    getNextPageParam: (lastPage, _allPages, lastPageParam) =>
+      lastPage.length === PAGE_SIZE ? (lastPageParam as number) + 1 : undefined,
   })
 
-  const eventsQuery = useQuery({
-    queryKey: ['behavior-events', 20],
-    queryFn: () => monitoringApi.getEvents(20),
+  const eventsQuery = useInfiniteQuery({
+    queryKey: ['behavior-events'],
+    queryFn: ({ pageParam }) => monitoringApi.getEvents(pageParam as number, PAGE_SIZE),
+    initialPageParam: 0,
+    getNextPageParam: (lastPage, _allPages, lastPageParam) =>
+      lastPage.length === PAGE_SIZE ? (lastPageParam as number) + 1 : undefined,
   })
+
+  const activitiesFlat = useMemo(() => activitiesQuery.data?.pages.flat() ?? [], [activitiesQuery.data])
+  const eventsFlat = useMemo(() => eventsQuery.data?.pages.flat() ?? [], [eventsQuery.data])
 
   const totals = useMemo(() => {
     const points = weeklyTrendQuery.data?.points ?? []
@@ -91,38 +102,48 @@ export function HistoryPage() {
       </Card>
 
       <div className="grid gap-4 md:grid-cols-3">
-        <SummaryCard
-          icon={BellRing}
-          label={isTurkish ? 'Uyarilar' : 'Alerts'}
-          value={totals.alerts}
-          detail={isTurkish ? 'Secilen haftadaki davranis ve durus uyarilari.' : 'Behavior and posture warnings in the selected week.'}
-        />
-        <SummaryCard
-          icon={BarChart3}
-          label={isTurkish ? 'Hatirlaticilar' : 'Reminders'}
-          value={totals.reminders}
-          detail={
-            isTurkish
-              ? 'Bu haftada kaydedilen manuel veya zamanli hatirlatici olaylari.'
-              : 'Reminder events, manual or scheduled, recorded this week.'
-          }
-        />
-        <SummaryCard
-          icon={Droplets}
-          label={isTurkish ? 'Su kayitlari' : 'Hydration logs'}
-          value={totals.hydration}
-          detail={isTurkish ? 'Ayni donem icin yakalanan su tuketim kayitlari.' : 'Water intake records captured for the same period.'}
-        />
+        {weeklyTrendQuery.isLoading ? (
+          <>
+            <MetricCardSkeleton />
+            <MetricCardSkeleton />
+            <MetricCardSkeleton />
+          </>
+        ) : (
+          <>
+            <SummaryCard
+              icon={BellRing}
+              label={isTurkish ? 'Uyarilar' : 'Alerts'}
+              value={totals.alerts}
+              detail={isTurkish ? 'Secilen haftadaki davranis ve durus uyarilari.' : 'Behavior and posture warnings in the selected week.'}
+            />
+            <SummaryCard
+              icon={BarChart3}
+              label={isTurkish ? 'Hatirlaticilar' : 'Reminders'}
+              value={totals.reminders}
+              detail={
+                isTurkish
+                  ? 'Bu haftada kaydedilen manuel veya zamanli hatirlatici olaylari.'
+                  : 'Reminder events, manual or scheduled, recorded this week.'
+              }
+            />
+            <SummaryCard
+              icon={Droplets}
+              label={isTurkish ? 'Su kayitlari' : 'Hydration logs'}
+              value={totals.hydration}
+              detail={isTurkish ? 'Ayni donem icin yakalanan su tuketim kayitlari.' : 'Water intake records captured for the same period.'}
+            />
+          </>
+        )}
       </div>
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1.15fr)_minmax(360px,0.85fr)]">
         {weeklyTrendQuery.isLoading ? (
-          <LoadingCard message={isTurkish ? 'Haftalik trend yukleniyor' : 'Loading weekly trend'} />
+          <ChartSkeleton />
         ) : (
           <WeeklyTrendChart points={weeklyTrendQuery.data?.points ?? []} />
         )}
         {eventsQuery.isLoading ? (
-          <LoadingCard message={isTurkish ? 'Davranis olaylari yukleniyor' : 'Loading behavior events'} />
+          <ActivityFeedSkeleton />
         ) : (
           <BehaviorEventListCard
             title={isTurkish ? 'Davranis olay akisi' : 'Behavior event stream'}
@@ -131,13 +152,16 @@ export function HistoryPage() {
                 ? 'Izleme servisi tarafinda kaydedilen normalize durus, el hareketi ve sigara benzeri tespitler.'
                 : 'Normalized posture, hand-movement, and smoking-like detections recorded by the monitoring service.'
             }
-            events={eventsQuery.data ?? []}
+            events={eventsFlat}
+            hasMore={eventsQuery.hasNextPage}
+            isLoadingMore={eventsQuery.isFetchingNextPage}
+            onLoadMore={() => void eventsQuery.fetchNextPage()}
           />
         )}
       </div>
 
       {activitiesQuery.isLoading ? (
-        <LoadingCard message={isTurkish ? 'Aktivite gecmisi yukleniyor' : 'Loading activity history'} />
+        <ActivityFeedSkeleton />
       ) : (
         <ActivityFeedCard
           title={isTurkish ? 'Ayrintili zaman cizelgesi' : 'Detailed timeline'}
@@ -146,7 +170,10 @@ export function HistoryPage() {
               ? 'Uyari, hatirlatici ve manuel islemlerdeki son zaman cizelgesi kayitlari.'
               : 'Recent timeline entries across alerts, reminders, and manual actions.'
           }
-          items={activitiesQuery.data ?? []}
+          items={activitiesFlat}
+          hasMore={activitiesQuery.hasNextPage}
+          isLoadingMore={activitiesQuery.isFetchingNextPage}
+          onLoadMore={() => void activitiesQuery.fetchNextPage()}
         />
       )}
     </div>

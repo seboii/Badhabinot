@@ -7,6 +7,7 @@ import { MobileNav } from '@/components/layout/MobileNav'
 import { LoadingScreen } from '@/components/ui/loading-state'
 import { useLanguage } from '@/i18n/language-provider'
 import { userApi } from '@/api/user'
+import { useUserStore } from '@/store/user-store'
 
 const routeMeta: Record<string, { title: string; subtitle: string }> = {
   '/dashboard': {
@@ -34,9 +35,14 @@ const routeMeta: Record<string, { title: string; subtitle: string }> = {
 export function AppShell({ children }: PropsWithChildren) {
   const { isTurkish } = useLanguage()
   const location = useLocation()
+  const setProfile = useUserStore((s) => s.setProfile)
   const { data, isLoading } = useQuery({
     queryKey: ['user-context'],
-    queryFn: userApi.getMe,
+    queryFn: async () => {
+      const profile = await userApi.getMe()
+      setProfile(profile)
+      return profile
+    },
   })
 
   if (isLoading || !data) {
@@ -91,7 +97,7 @@ export function AppShell({ children }: PropsWithChildren) {
     <div className="app-shell-grid flex min-h-screen bg-transparent">
       <Sidebar user={data} />
       <div className="flex min-h-screen flex-1 flex-col">
-        <TopBar title={translatedMeta.title} subtitle={translatedMeta.subtitle} user={data} />
+        <TopBar title={translatedMeta.title} subtitle={translatedMeta.subtitle} />
         <main className="flex-1 px-5 py-6 pb-28 md:px-8 lg:pb-8">{children}</main>
       </div>
       <MobileNav />
