@@ -121,8 +121,8 @@ public class BehaviorEventService {
     }
 
     @Transactional(transactionManager = "monitoringTransactionManager", readOnly = true)
-    public List<BehaviorEventResponse> getRecentEvents(UUID userId, int limit) {
-        return behaviorEventRepository.findByUserIdOrderByOccurredAtDesc(userId, PageRequest.of(0, Math.max(1, Math.min(limit, 25))))
+    public List<BehaviorEventResponse> getRecentEvents(UUID userId, int page, int size) {
+        return behaviorEventRepository.findByUserIdOrderByOccurredAtDesc(userId, PageRequest.of(Math.max(0, page), Math.max(1, Math.min(size, 50))))
                 .stream()
                 .map(this::toResponse)
                 .toList();

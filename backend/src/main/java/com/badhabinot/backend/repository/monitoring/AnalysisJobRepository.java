@@ -14,5 +14,7 @@ public interface AnalysisJobRepository extends JpaRepository<AnalysisJob, UUID> 
     List<AnalysisJob> findByUserIdAndCreatedAtBetweenOrderByCreatedAtAsc(UUID userId, Instant from, Instant to);
 
     List<AnalysisJob> findByUserIdOrderByCreatedAtDesc(UUID userId, Pageable pageable);
+
+    void deleteByUserId(UUID userId);
 }
 

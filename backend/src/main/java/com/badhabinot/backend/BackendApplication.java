@@ -4,6 +4,7 @@ import com.badhabinot.backend.config.IntegrationProperties;
 import com.badhabinot.backend.config.InternalSecurityProperties;
 import com.badhabinot.backend.config.JwtProperties;
 import com.badhabinot.backend.config.MonitoringRedisProperties;
+import com.badhabinot.backend.config.PasswordResetProperties;
 import com.badhabinot.backend.config.UserCacheProperties;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
@@ -17,7 +18,8 @@ import org.springframework.cache.annotation.EnableCaching;
         InternalSecurityProperties.class,
         UserCacheProperties.class,
         MonitoringRedisProperties.class,
-        IntegrationProperties.class
+        IntegrationProperties.class,
+        PasswordResetProperties.class
 })
 public class BackendApplication {
 

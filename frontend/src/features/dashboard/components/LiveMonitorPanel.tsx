@@ -25,6 +25,7 @@ type LiveMonitorPanelProps = {
   isStopping: boolean
   isAnalyzing: boolean
   showOverlay: boolean
+  isThrottled: boolean
   onRequestCamera: () => void
   onStartMonitoring: () => void
   onStopMonitoring: () => void
@@ -49,6 +50,7 @@ export function LiveMonitorPanel({
   isStopping,
   isAnalyzing,
   showOverlay,
+  isThrottled,
   onRequestCamera,
   onStartMonitoring,
   onStopMonitoring,
@@ -86,6 +88,11 @@ export function LiveMonitorPanel({
             {monitoringLive && showOverlay && mpState.ready && (
               <Badge variant="success">
                 {isTurkish ? 'Canlı takip' : 'Live tracking'}
+              </Badge>
+            )}
+            {isThrottled && (
+              <Badge variant="warning">
+                {isTurkish ? 'Analiz yavaşlatıldı' : 'Analysis throttled'}
               </Badge>
             )}
           </div>

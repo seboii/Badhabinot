@@ -3,16 +3,16 @@ import { Badge } from '@/components/ui/badge'
 import { LanguageToggle } from '@/i18n/language-toggle'
 import { useLanguage } from '@/i18n/language-provider'
 import { ThemeToggle } from '@/theme/theme-toggle'
-import type { UserContextResponse } from '@/types/user'
+import { useUserStore } from '@/store/user-store'
 
 type TopBarProps = {
   title: string
   subtitle: string
-  user: UserContextResponse
 }
 
-export function TopBar({ title, subtitle, user }: TopBarProps) {
+export function TopBar({ title, subtitle }: TopBarProps) {
   const { isTurkish } = useLanguage()
+  const profile = useUserStore((s) => s.profile)
 
   return (
     <header className="flex flex-col gap-5 border-b border-[var(--line-soft)] bg-[var(--topbar-surface)] px-5 py-5 backdrop-blur-xl md:px-8 lg:flex-row lg:items-center lg:justify-between">
@@ -28,10 +28,12 @@ export function TopBar({ title, subtitle, user }: TopBarProps) {
           <ShieldCheck className="size-4" />
           {isTurkish ? 'Yerel-oncelikli gizlilik' : 'Local-first privacy'}
         </Badge>
-        <div className="rounded-2xl border border-[var(--line-soft)] bg-[var(--surface)] px-4 py-3">
-          <p className="text-sm font-semibold text-[var(--text-strong)]">{user.display_name}</p>
-          <p className="text-xs text-[var(--text-muted)]">{user.locale}</p>
-        </div>
+        {profile ? (
+          <div className="rounded-2xl border border-[var(--line-soft)] bg-[var(--surface)] px-4 py-3">
+            <p className="text-sm font-semibold text-[var(--text-strong)]">{profile.display_name}</p>
+            <p className="text-xs text-[var(--text-muted)]">{profile.locale}</p>
+          </div>
+        ) : null}
       </div>
     </header>
   )

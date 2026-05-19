@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
-import { CheckCircle, UserRound, X } from 'lucide-react'
+import { CheckCircle, Trash2, UserRound, X } from 'lucide-react'
+import { useMutation } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { monitoringApi } from '@/api/monitoring'
 import { toErrorMessage } from '@/api/client'
 import { Button } from '@/components/ui/button'
+import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { useLanguage } from '@/i18n/language-provider'
 
 const TOTAL_FRAMES = 8
@@ -29,6 +31,19 @@ export function FaceRegistrationModal({ onClose }: FaceRegistrationModalProps) {
   const [cameraError, setCameraError] = useState<string | null>(null)
   const [framesEnrolled, setFramesEnrolled] = useState(0)
   const [lastFrameDetected, setLastFrameDetected] = useState<boolean | null>(null)
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
+
+  const deleteProfileMutation = useMutation({
+    mutationFn: monitoringApi.deleteFaceProfile,
+    onSuccess() {
+      toast.success(isTurkish ? 'Yüz profili silindi.' : 'Face profile deleted.')
+      onClose()
+    },
+    onError(error) {
+      toast.error(toErrorMessage(error, isTurkish ? 'Yüz profili silinemedi.' : 'Unable to delete face profile.'))
+      setDeleteConfirmOpen(false)
+    },
+  })
 
   // Start camera on mount
   useEffect(() => {
@@ -300,7 +315,36 @@ export function FaceRegistrationModal({ onClose }: FaceRegistrationModalProps) {
             </p>
           )}
         </div>
+
+        {phase === 'idle' || phase === 'done' ? (
+          <div className="mt-4 flex justify-center">
+            <button
+              type="button"
+              onClick={() => setDeleteConfirmOpen(true)}
+              className="flex items-center gap-1.5 text-xs text-[var(--text-soft)] transition hover:text-[var(--danger)]"
+            >
+              <Trash2 className="size-3" />
+              {isTurkish ? 'Kayıtlı yüzü sil' : 'Delete face profile'}
+            </button>
+          </div>
+        ) : null}
       </div>
+
+      <ConfirmDialog
+        isOpen={deleteConfirmOpen}
+        variant="danger"
+        title={isTurkish ? 'Yüz profilini sil' : 'Delete face profile'}
+        description={
+          isTurkish
+            ? 'Bu işlem kayıtlı yüz verinizi kalıcı olarak siler. Yüz tanıma devre dışı kalır.'
+            : 'This permanently deletes your enrolled face data. Face recognition will be disabled.'
+        }
+        confirmLabel={isTurkish ? 'Sil' : 'Delete'}
+        cancelLabel={isTurkish ? 'Vazgeç' : 'Cancel'}
+        loading={deleteProfileMutation.isPending}
+        onConfirm={() => deleteProfileMutation.mutate()}
+        onCancel={() => setDeleteConfirmOpen(false)}
+      />
     </div>
   )
 }

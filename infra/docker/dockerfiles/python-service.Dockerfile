@@ -27,12 +27,16 @@ COPY python-services python-services
 # Pre-installing CPU-only variants here prevents pip's resolver from selecting the default
 # CUDA-enabled wheels on Linux (~2 GB of torch+CUDA + nvidia_cudnn + nvidia_cusparselt, etc.).
 # For ai-service this block is skipped — its requirements are lightweight.
+#
+# NOTE: `tensorflow-cpu` was deprecated/removed after TF 2.15. The requirements.txt asks for
+# tf-keras>=2.16 which requires TF 2.16+. We install `tensorflow` (the unified package from 2.16+)
+# which runs CPU-only when no CUDA driver is present — equivalent to the old tensorflow-cpu.
 RUN --mount=type=cache,target=/root/.cache/pip \
     if [ "${SERVICE_PATH}" = "python-services/vision-service" ]; then \
         pip install \
             --index-url https://download.pytorch.org/whl/cpu \
             torch torchvision && \
-        pip install tensorflow-cpu; \
+        pip install tensorflow; \
     fi
 
 RUN --mount=type=cache,target=/root/.cache/pip pip install \

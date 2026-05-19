@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Droplets, Flame, ShieldAlert, Waves } from 'lucide-react'
 import { toast } from 'sonner'
 import { monitoringApi } from '@/api/monitoring'
@@ -12,7 +12,7 @@ import { QuickActionsCard } from '@/features/dashboard/components/QuickActionsCa
 import { BehaviorEventListCard } from '@/features/history/components/BehaviorEventListCard'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
-import { LoadingCard } from '@/components/ui/loading-state'
+import { ActivityFeedSkeleton, LoadingCard, MetricCardSkeleton } from '@/components/ui/loading-state'
 import { useCamera } from '@/hooks/use-camera'
 import { useLanguage } from '@/i18n/language-provider'
 import { behaviorLabel, formatMilliliters, postureLabel } from '@/lib/format'
@@ -59,6 +59,13 @@ export function DashboardPage() {
   const [faceRegOpen, setFaceRegOpen] = useState(false)
   const [pendingAction, setPendingAction] = useState<'water' | 'water_reminder' | 'break' | undefined>(undefined)
   const inFlightRef = useRef(false)
+  const baseIntervalMs = useMemo(() => {
+    const mem = (navigator as Navigator & { deviceMemory?: number }).deviceMemory
+    return typeof mem === 'number' && mem < 2 ? 600 : 300
+  }, [])
+  const consecutiveFailuresRef = useRef(0)
+  const intervalMsRef = useRef(baseIntervalMs)
+  const [isThrottled, setIsThrottled] = useState(false)
 
   const dashboardQuery = useQuery({
     queryKey: ['dashboard'],
@@ -66,14 +73,22 @@ export function DashboardPage() {
     refetchInterval: (query) => (query.state.data?.monitoring_active ? 15_000 : false),
   })
 
-  const activitiesQuery = useQuery({
-    queryKey: ['activities', 12],
-    queryFn: () => monitoringApi.getActivities(12),
+  const PAGE_SIZE = 15
+
+  const activitiesQuery = useInfiniteQuery({
+    queryKey: ['activities'],
+    queryFn: ({ pageParam }) => monitoringApi.getActivities(pageParam as number, PAGE_SIZE),
+    initialPageParam: 0,
+    getNextPageParam: (lastPage, _allPages, lastPageParam) =>
+      lastPage.length === PAGE_SIZE ? (lastPageParam as number) + 1 : undefined,
   })
 
-  const eventsQuery = useQuery({
-    queryKey: ['behavior-events', 8],
-    queryFn: () => monitoringApi.getEvents(8),
+  const eventsQuery = useInfiniteQuery({
+    queryKey: ['behavior-events'],
+    queryFn: ({ pageParam }) => monitoringApi.getEvents(pageParam as number, PAGE_SIZE),
+    initialPageParam: 0,
+    getNextPageParam: (lastPage, _allPages, lastPageParam) =>
+      lastPage.length === PAGE_SIZE ? (lastPageParam as number) + 1 : undefined,
   })
 
   const startSessionMutation = useMutation({
@@ -280,10 +295,21 @@ export function DashboardPage() {
       return
     }
 
+    // Reset throttle state when loop starts (new session or reconnect)
+    consecutiveFailuresRef.current = 0
+    intervalMsRef.current = baseIntervalMs
+    setIsThrottled(false)
+
     let running = true
 
     async function loop() {
       while (running) {
+        // Pause entirely when the tab is hidden — resume when visible again
+        if (document.hidden) {
+          await new Promise<void>((resolve) => setTimeout(resolve, 500))
+          continue
+        }
+
         if (!inFlightRef.current) {
           inFlightRef.current = true
           try {
@@ -297,17 +323,26 @@ export function DashboardPage() {
                 image_content_type: frame.image_content_type,
               })
               setLatestAnalysis(result)
+              // Success: reset failure counter and restore base interval
+              consecutiveFailuresRef.current = 0
+              if (intervalMsRef.current !== baseIntervalMs) {
+                intervalMsRef.current = baseIntervalMs
+                setIsThrottled(false)
+              }
             }
           } catch {
-            // network errors are non-fatal — keep looping
+            // network / server error — increment counter, throttle after 3 consecutive failures
+            consecutiveFailuresRef.current += 1
+            if (consecutiveFailuresRef.current >= 3 && intervalMsRef.current < 1000) {
+              intervalMsRef.current = 1000
+              setIsThrottled(true)
+            }
           } finally {
             inFlightRef.current = false
           }
         }
-        // Minimum gap between requests so we don't flood the server.
-        // The server parallel pipeline completes in ~300-500 ms, so
-        // the effective rate is roughly 1-2 analyses per second.
-        await new Promise<void>(resolve => setTimeout(resolve, 300))
+
+        await new Promise<void>((resolve) => setTimeout(resolve, intervalMsRef.current))
       }
     }
 
@@ -316,10 +351,11 @@ export function DashboardPage() {
     return () => {
       running = false
     }
-  }, [autoScan, captureFrame, dashboardQuery.data?.active_session_id, dashboardQuery.data?.monitoring_active, streamReady])
+  }, [autoScan, baseIntervalMs, captureFrame, dashboardQuery.data?.active_session_id, dashboardQuery.data?.monitoring_active, streamReady])
 
   const dashboard = dashboardQuery.data
-  const activities = activitiesQuery.data ?? dashboard?.recent_activities ?? []
+  const activities = useMemo(() => activitiesQuery.data?.pages.flat() ?? [], [activitiesQuery.data])
+  const events = useMemo(() => eventsQuery.data?.pages.flat() ?? [], [eventsQuery.data])
   const sessionActive = Boolean(dashboard?.monitoring_active && dashboard?.active_session_id)
   const monitoringLive = sessionActive && streamReady
 
@@ -332,7 +368,25 @@ export function DashboardPage() {
   }, [dashboard])
 
   if (dashboardQuery.isLoading || !dashboard) {
-    return <LoadingCard message={isTurkish ? 'Canli panel yukleniyor' : 'Loading live dashboard'} />
+    return (
+      <div className="space-y-6">
+        <div className="grid gap-4 xl:grid-cols-[minmax(0,1.7fr)_minmax(360px,0.9fr)]">
+          <LoadingCard message={isTurkish ? 'Canli panel yukleniyor' : 'Loading live panel'} />
+          <LoadingCard />
+        </div>
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <MetricCardSkeleton />
+          <MetricCardSkeleton />
+          <MetricCardSkeleton />
+          <MetricCardSkeleton />
+        </div>
+        <div className="grid gap-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(360px,0.8fr)]">
+          <ActivityFeedSkeleton />
+          <LoadingCard />
+        </div>
+        <ActivityFeedSkeleton />
+      </div>
+    )
   }
 
   return (
@@ -353,6 +407,7 @@ export function DashboardPage() {
           isStopping={stopSessionMutation.isPending}
           isAnalyzing={analyzeMutation.isPending}
           showOverlay={showOverlay}
+          isThrottled={isThrottled}
           onRequestCamera={requestCamera}
           onStartMonitoring={handleStartMonitoring}
           onStopMonitoring={() => dashboard.active_session_id && stopSessionMutation.mutate(dashboard.active_session_id)}
@@ -425,7 +480,7 @@ export function DashboardPage() {
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(360px,0.8fr)]">
         {activitiesQuery.isLoading ? (
-          <LoadingCard message={isTurkish ? 'Son aktiviteler yukleniyor' : 'Loading recent activities'} />
+          <ActivityFeedSkeleton />
         ) : (
           <ActivityFeedCard
             title={isTurkish ? 'Son aktivite' : 'Recent activity'}
@@ -435,6 +490,9 @@ export function DashboardPage() {
                 : 'Alerts, reminders, and manual actions persisted by monitoring-service.'
             }
             items={activities}
+            hasMore={activitiesQuery.hasNextPage}
+            isLoadingMore={activitiesQuery.isFetchingNextPage}
+            onLoadMore={() => void activitiesQuery.fetchNextPage()}
           />
         )}
 
@@ -447,7 +505,7 @@ export function DashboardPage() {
       </div>
 
       {eventsQuery.isLoading ? (
-        <LoadingCard message={isTurkish ? 'Son davranis olaylari yukleniyor' : 'Loading recent behavior events'} />
+        <ActivityFeedSkeleton />
       ) : (
         <BehaviorEventListCard
           title={isTurkish ? 'Davranis olaylari' : 'Behavior events'}
@@ -456,7 +514,10 @@ export function DashboardPage() {
               ? 'Raporlama, hatirlatici ve veriye dayali sohbet icin kaydedilen normalize tespitler.'
               : 'Normalized detections persisted for reporting, reminders, and grounded chat.'
           }
-          events={eventsQuery.data ?? []}
+          events={events}
+          hasMore={eventsQuery.hasNextPage}
+          isLoadingMore={eventsQuery.isFetchingNextPage}
+          onLoadMore={() => void eventsQuery.fetchNextPage()}
         />
       )}
 

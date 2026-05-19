@@ -38,6 +38,9 @@ public class AuthUser {
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 
+    @Column(name = "last_login_at")
+    private Instant lastLoginAt;
+
     protected AuthUser() {
     }
 
@@ -83,6 +86,18 @@ public class AuthUser {
 
     public AccountStatus getStatus() {
         return status;
+    }
+
+    public Instant getLastLoginAt() {
+        return lastLoginAt;
+    }
+
+    public void recordLogin() {
+        this.lastLoginAt = Instant.now();
+    }
+
+    public void updatePassword(String encodedPassword) {
+        this.passwordHash = encodedPassword;
     }
 }
 
