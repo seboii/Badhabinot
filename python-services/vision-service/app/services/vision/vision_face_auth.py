@@ -29,9 +29,22 @@ except ImportError:  # pragma: no cover
 _DATA_ROOT = Path(os.getenv("FACE_DATA_DIR", "data/users"))
 _EMBED_FILENAME = "face_embeddings.npy"
 _MODEL_NAME = "Facenet"          # compact & fast
-_AUTH_THRESHOLD = 0.85           # cosine similarity floor to pass
+_AUTH_THRESHOLD = 0.85           # cosine similarity floor to pass (full auth)
+_OWNER_ID_THRESHOLD = 0.75       # cosine similarity floor for owner identification (multi-face scan)
+_OWNER_EARLY_EXIT_THRESHOLD = 0.90  # single-face early-exit: skip full scan above this
 _MIN_FRAMES_TO_REGISTER = 3      # minimum stored embeddings to consider profile valid
 _MAX_FRAMES_PER_USER = 15        # cap to keep npy small
+
+
+@dataclass
+class OwnerFaceResult:
+    """Result of multi-face owner identification."""
+
+    owner_found: bool
+    owner_bbox: tuple[int, int, int, int] | None  # (x, y, w, h) pixel coordinates
+    owner_confidence: float          # 0.0 – 1.0 similarity against stored profile
+    total_faces: int                 # total faces detected in the frame
+    strangers_count: int             # faces that did not match the owner
 
 
 @dataclass
@@ -160,6 +173,101 @@ class VisionFaceAuth:
             return True
         return False
 
+    def identify_owner(self, user_id: str, image: np.ndarray) -> OwnerFaceResult:
+        """Detect ALL faces in *image* and find which one belongs to *user_id*.
+
+        For each detected face an embedding is computed and compared against
+        the user's stored profile.  The face with the highest cosine similarity
+        above ``_OWNER_ID_THRESHOLD`` is claimed as the owner.
+
+        Early-exit optimisation: when exactly one face is detected and its
+        similarity exceeds ``_OWNER_EARLY_EXIT_THRESHOLD`` the full multi-face
+        scan is skipped and the result is returned immediately.
+
+        Returns an :class:`OwnerFaceResult` with ``owner_found=False`` when:
+        - DeepFace is not available
+        - No face profile is registered for the user
+        - No detected face exceeds the identification threshold
+        """
+        _not_found = OwnerFaceResult(
+            owner_found=False,
+            owner_bbox=None,
+            owner_confidence=0.0,
+            total_faces=0,
+            strangers_count=0,
+        )
+
+        if not _DEEPFACE_AVAILABLE:
+            return _not_found
+
+        profile_path = self._profile_path(user_id)
+        if not profile_path.exists():
+            return _not_found
+
+        stored: np.ndarray = np.load(str(profile_path))
+        if stored.shape[0] < _MIN_FRAMES_TO_REGISTER:
+            return _not_found
+
+        try:
+            results = DeepFace.represent(
+                img_path=image,
+                model_name=_MODEL_NAME,
+                enforce_detection=False,
+                detector_backend="opencv",
+            )
+        except Exception:
+            logger.debug("DeepFace.represent failed in identify_owner", exc_info=True)
+            return _not_found
+
+        if not results:
+            return _not_found
+
+        total_faces = len(results)
+
+        best_idx = -1
+        best_confidence = 0.0
+
+        for i, face_data in enumerate(results):
+            vec = np.array(face_data["embedding"], dtype=np.float32)
+            norm = float(np.linalg.norm(vec))
+            if norm > 0:
+                vec = vec / norm
+
+            similarity = float(self._best_cosine_similarity(vec, stored))
+
+            # Early-exit: single face with high confidence — skip remaining scan
+            if total_faces == 1 and similarity >= _OWNER_EARLY_EXIT_THRESHOLD:
+                bbox = self._extract_bbox(face_data)
+                return OwnerFaceResult(
+                    owner_found=True,
+                    owner_bbox=bbox,
+                    owner_confidence=round(similarity, 4),
+                    total_faces=1,
+                    strangers_count=0,
+                )
+
+            if similarity > best_confidence:
+                best_confidence = similarity
+                best_idx = i
+
+        if best_idx >= 0 and best_confidence >= _OWNER_ID_THRESHOLD:
+            bbox = self._extract_bbox(results[best_idx])
+            return OwnerFaceResult(
+                owner_found=True,
+                owner_bbox=bbox,
+                owner_confidence=round(best_confidence, 4),
+                total_faces=total_faces,
+                strangers_count=total_faces - 1,
+            )
+
+        return OwnerFaceResult(
+            owner_found=False,
+            owner_bbox=None,
+            owner_confidence=round(best_confidence, 4),
+            total_faces=total_faces,
+            strangers_count=total_faces,  # all faces are unidentified
+        )
+
     # ------------------------------------------------------------------ #
     # Private helpers                                                      #
     # ------------------------------------------------------------------ #
@@ -191,6 +299,24 @@ class VisionFaceAuth:
         best = float(np.max(similarities))
         # clamp to [0, 1] (should be already, but guard against floating point noise)
         return max(0.0, min(1.0, (best + 1.0) / 2.0))  # map [-1,1] → [0,1]
+
+    @staticmethod
+    def _extract_bbox(
+        face_data: dict,
+    ) -> tuple[int, int, int, int] | None:
+        """Extract (x, y, w, h) pixel bbox from a DeepFace.represent() result dict."""
+        area = face_data.get("facial_area")
+        if not area:
+            return None
+        try:
+            return (
+                int(area.get("x", 0)),
+                int(area.get("y", 0)),
+                int(area.get("w", 0)),
+                int(area.get("h", 0)),
+            )
+        except (TypeError, ValueError):
+            return None
 
     @staticmethod
     def _profile_path(user_id: str) -> Path:

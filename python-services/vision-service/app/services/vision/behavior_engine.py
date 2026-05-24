@@ -33,6 +33,8 @@ _LEFT_SCREEN_SECS = 5
 _DROWSY_SECS = 2
 _SLOUCH_SECS = 10
 _DISTRACTED_SECS = 8
+_GAZE_AWAY_SECS = 3    # iris-based gaze off-screen
+_OWNER_ABSENT_SECS = 5  # owner face not identified
 
 # ── Severity mapping ──────────────────────────────────────────────────────────
 _EVENT_SEVERITY: dict[str, str] = {
@@ -47,6 +49,10 @@ _EVENT_SEVERITY: dict[str, str] = {
     "DISTRACTED":      "medium",
     "UNKNOWN_PERSON":  "high",
     "FOREIGN_OBJECT":  "low",
+    # Owner-tracking events
+    "GAZE_AWAY":       "medium",
+    "OWNER_ABSENT":    "high",
+    "STRANGER_DETECTED": "high",
 }
 
 
@@ -66,6 +72,8 @@ class _SessionBehaviorState:
     drowsy_since: datetime | None = None
     slouching_since: datetime | None = None
     distracted_since: datetime | None = None
+    gaze_away_since: datetime | None = None    # iris-based gaze tracking
+    owner_absent_since: datetime | None = None  # owner not identified
     last_seen: datetime = field(default_factory=lambda: datetime.now(tz=timezone.utc))
 
 
@@ -107,6 +115,12 @@ class BehaviorFrameInput:
 
     # Hand face proximity score (legacy)
     hand_face_proximity_score: float = 0.0
+
+    # ── Owner tracking signals (new) ──────────────────────────────────────
+    owner_tracked: bool = True               # True = owner face identified this frame
+    strangers_in_frame: int = 0              # count of non-owner faces in frame
+    owner_gaze_looking_at_screen: bool = True  # from iris-based gaze tracking
+    owner_absence_streak: int = 0            # consecutive frames without owner match
 
 
 class BehaviorStateStore:
@@ -271,6 +285,50 @@ class BehaviorStateStore:
                 confidence=0.80,
                 detail="Mobile phone detected in frame",
             ))
+
+        # ── STRANGER_DETECTED: non-owner face(s) in frame (immediate) ────────
+        if inputs.strangers_in_frame > 0:
+            stranger_conf = min(1.0, 0.60 + inputs.strangers_in_frame * 0.20)
+            events.append(BehaviorEvent(
+                event_type="STRANGER_DETECTED",
+                severity=_EVENT_SEVERITY["STRANGER_DETECTED"],
+                confidence=round(stranger_conf, 4),
+                detail=f"{inputs.strangers_in_frame} unidentified face(s) detected in frame",
+            ))
+
+        # ── GAZE_AWAY: iris-based tracking shows owner not looking at screen ─
+        if inputs.owner_tracked and not inputs.owner_gaze_looking_at_screen:
+            if state.gaze_away_since is None:
+                state.gaze_away_since = now
+        else:
+            state.gaze_away_since = None
+
+        if state.gaze_away_since is not None:
+            gaze_away_secs = (now - state.gaze_away_since).total_seconds()
+            if gaze_away_secs >= _GAZE_AWAY_SECS:
+                events.append(BehaviorEvent(
+                    event_type="GAZE_AWAY",
+                    severity=_EVENT_SEVERITY["GAZE_AWAY"],
+                    confidence=min(1.0, gaze_away_secs / (_GAZE_AWAY_SECS * 2)),
+                    detail=f"Owner gaze off-screen for {gaze_away_secs:.0f}s",
+                ))
+
+        # ── OWNER_ABSENT: owner face not identified for sustained period ──────
+        if not inputs.owner_tracked:
+            if state.owner_absent_since is None:
+                state.owner_absent_since = now
+        else:
+            state.owner_absent_since = None
+
+        if state.owner_absent_since is not None:
+            owner_absent_secs = (now - state.owner_absent_since).total_seconds()
+            if owner_absent_secs >= _OWNER_ABSENT_SECS:
+                events.append(BehaviorEvent(
+                    event_type="OWNER_ABSENT",
+                    severity=_EVENT_SEVERITY["OWNER_ABSENT"],
+                    confidence=min(1.0, owner_absent_secs / (_OWNER_ABSENT_SECS * 3)),
+                    detail=f"Owner not identified for {owner_absent_secs:.0f}s",
+                ))
 
         return events
 

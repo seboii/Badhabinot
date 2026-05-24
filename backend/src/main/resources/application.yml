@@ -2,6 +2,9 @@ server:
   port: 8080
   shutdown: graceful
 
+env:
+  filename: ../.env
+
 spring:
   application:
     name: badhabinot-backend
@@ -61,6 +64,8 @@ management:
       enabled: true
     livenessstate:
       enabled: true
+    mail:
+      enabled: false
 
 springdoc:
   swagger-ui:
