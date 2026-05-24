@@ -173,6 +173,54 @@ class VisionFaceAuth:
             return True
         return False
 
+    def verify_face_for_login(self, user_id: str, image: np.ndarray) -> tuple[bool, float, str]:
+        """Verify *image* against stored embeddings for login authentication.
+
+        Stricter than :meth:`identify_owner` — requires exactly one face in the frame.
+
+        Returns:
+            (verified, confidence, message)
+        """
+        if not _DEEPFACE_AVAILABLE:
+            return False, 0.0, "Face authentication service not available"
+
+        profile_path = self._profile_path(user_id)
+        if not profile_path.exists():
+            return False, 0.0, "No face profile registered for this user"
+
+        stored: np.ndarray = np.load(str(profile_path))
+        if stored.shape[0] < _MIN_FRAMES_TO_REGISTER:
+            return False, 0.0, "Face profile incomplete — not enough enrolled frames"
+
+        try:
+            results = DeepFace.represent(
+                img_path=image,
+                model_name=_MODEL_NAME,
+                enforce_detection=False,
+                detector_backend="opencv",
+            )
+        except Exception:
+            logger.debug("DeepFace.represent failed in verify_face_for_login", exc_info=True)
+            return False, 0.0, "Face detection failed"
+
+        if not results:
+            return False, 0.0, "No face detected in image"
+
+        if len(results) > 1:
+            return False, 0.0, "Multiple faces detected — please ensure only your face is visible"
+
+        vec = np.array(results[0]["embedding"], dtype=np.float32)
+        norm = float(np.linalg.norm(vec))
+        if norm > 0:
+            vec = vec / norm
+
+        best_similarity = float(self._best_cosine_similarity(vec, stored))
+        verified = best_similarity >= _AUTH_THRESHOLD
+
+        if verified:
+            return True, round(best_similarity, 4), "Yüz doğrulandı"
+        return False, round(best_similarity, 4), "Yüz eşleşmedi"
+
     def identify_owner(self, user_id: str, image: np.ndarray) -> OwnerFaceResult:
         """Detect ALL faces in *image* and find which one belongs to *user_id*.
 

@@ -87,6 +87,21 @@ class FaceAuthStatus(BaseModel):
     error: str | None = None
 
 
+class FaceVerifyRequest(BaseModel):
+    model_config = ConfigDict(protected_namespaces=())
+
+    image_base64: str
+    image_content_type: str = "image/jpeg"
+
+
+class FaceVerifyResponse(BaseModel):
+    model_config = ConfigDict(protected_namespaces=())
+
+    verified: bool
+    confidence: float = Field(ge=0.0, le=1.0)
+    message: str
+
+
 # ══════════════════════════════════════════════════════════════════
 # New schemas — Module C: Face Mesh
 # ══════════════════════════════════════════════════════════════════
@@ -236,6 +251,7 @@ class FaceRegisterRequest(BaseModel):
     user_id: str
     image_base64: str
     image_content_type: str = "image/jpeg"
+    pose_hint: str | None = None  # "front", "left", "right" — optional validation hint
 
 
 class FaceRegisterResponse(BaseModel):

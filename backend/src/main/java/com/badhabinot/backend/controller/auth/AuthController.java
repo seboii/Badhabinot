@@ -1,6 +1,7 @@
 package com.badhabinot.backend.controller.auth;
 
 import com.badhabinot.backend.dto.auth.AuthenticatedUserResponse;
+import com.badhabinot.backend.dto.auth.FaceLoginRequest;
 import com.badhabinot.backend.dto.auth.LoginRequest;
 import com.badhabinot.backend.dto.auth.LogoutRequest;
 import com.badhabinot.backend.dto.auth.PasswordResetConfirmDto;
@@ -8,8 +9,8 @@ import com.badhabinot.backend.dto.auth.PasswordResetRequestDto;
 import com.badhabinot.backend.dto.auth.RefreshTokenRequest;
 import com.badhabinot.backend.dto.auth.RegisterRequest;
 import com.badhabinot.backend.dto.auth.TokenResponse;
-import com.badhabinot.backend.service.auth.AuthApplicationService;
-import com.badhabinot.backend.service.auth.PasswordResetService;
+import com.badhabinot.backend.service.auth.impl.AuthApplicationService;
+import com.badhabinot.backend.service.auth.impl.PasswordResetService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -48,6 +49,12 @@ public class AuthController {
     @Operation(summary = "Authenticate an existing BADHABINOT user")
     public TokenResponse login(@Valid @RequestBody LoginRequest request) {
         return authApplicationService.login(request);
+    }
+
+    @PostMapping("/login/face")
+    @Operation(summary = "Authenticate using face recognition — requires a registered face profile")
+    public TokenResponse loginWithFace(@Valid @RequestBody FaceLoginRequest request) {
+        return authApplicationService.loginWithFace(request);
     }
 
     @PostMapping("/refresh")

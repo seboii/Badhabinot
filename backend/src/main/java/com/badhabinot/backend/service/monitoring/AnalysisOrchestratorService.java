@@ -128,6 +128,20 @@ public class AnalysisOrchestratorService {
                         a.enabled(), a.authenticated(), a.confidence(), a.framesEnrolled());
             }
 
+            // Map owner tracking result (null-safe)
+            AnalyzeFrameResponse.OwnerTrackingDetail ownerTracking = null;
+            if (visionResponse.ownerTracking() != null) {
+                VisionAnalysisResponse.OwnerTracking ot = visionResponse.ownerTracking();
+                AnalyzeFrameResponse.GazeDetail gazeDetail = null;
+                if (ot.ownerGaze() != null) {
+                    VisionAnalysisResponse.GazeData g = ot.ownerGaze();
+                    gazeDetail = new AnalyzeFrameResponse.GazeDetail(
+                            g.gazeVector(), g.lookingAtScreen(), g.gazeZone(), g.confidence());
+                }
+                ownerTracking = new AnalyzeFrameResponse.OwnerTrackingDetail(
+                        ot.ownerTracked(), gazeDetail, ot.strangersInFrame());
+            }
+
             AnalyzeFrameResponse response = new AnalyzeFrameResponse(
                     job.getId(),
                     request.sessionId(),
@@ -159,7 +173,8 @@ public class AnalysisOrchestratorService {
                     ),
                     visionResponse.annotatedFrameBase64(),
                     visionBehaviorEvents,
-                    faceAuth
+                    faceAuth,
+                    ownerTracking
             );
             analysisJobStateStore.markCompleted(job, response);
             return response;

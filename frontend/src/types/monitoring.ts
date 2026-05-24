@@ -62,11 +62,23 @@ export type AnalyzeFrameResponse = {
     confidence: number
     frames_enrolled: number
   } | null
+  // Module G — owner tracking and iris gaze (null when face auth disabled)
+  owner_tracking?: {
+    owner_tracked: boolean
+    owner_gaze?: {
+      gaze_vector: [number, number]
+      looking_at_screen: boolean
+      gaze_zone: 'center' | 'left' | 'right' | 'up' | 'down' | 'away'
+      confidence: number
+    } | null
+    strangers_in_frame: number
+  } | null
 }
 
 export type FaceRegisterRequest = {
   image_base64: string
   image_content_type?: string
+  pose_hint?: 'front' | 'left' | 'right'
 }
 
 export type FaceRegisterResponse = {

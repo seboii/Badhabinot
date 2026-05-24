@@ -50,3 +50,15 @@ export type PasswordResetConfirmDto = {
   new_password: string
 }
 
+export type FaceLoginRequest = {
+  email: string
+  face_image_base64: string
+  image_content_type: string
+}
+
+export type FaceLoginErrorCode =
+  | 'FACE_NOT_REGISTERED'
+  | 'FACE_MISMATCH'
+  | 'too_many_login_attempts'
+  | 'unauthorized'
+

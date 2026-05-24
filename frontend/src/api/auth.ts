@@ -1,6 +1,7 @@
 import { apiClient } from '@/api/client'
 import type {
   AuthenticatedUserResponse,
+  FaceLoginRequest,
   LoginRequest,
   LogoutRequest,
   PasswordResetConfirmDto,
@@ -35,6 +36,15 @@ export const authApi = {
 
   async confirmPasswordReset(payload: PasswordResetConfirmDto) {
     await apiClient.post('/api/v1/auth/password-reset-confirm', payload)
+  },
+
+  async loginWithFace(payload: FaceLoginRequest) {
+    const response = await apiClient.post<TokenResponse>('/api/v1/auth/login/face', {
+      email: payload.email,
+      face_image_base64: payload.face_image_base64,
+      image_content_type: payload.image_content_type,
+    })
+    return response.data
   },
 }
 

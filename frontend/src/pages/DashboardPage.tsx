@@ -5,6 +5,7 @@ import { toast } from 'sonner'
 import { monitoringApi } from '@/api/monitoring'
 import { toErrorMessage } from '@/api/client'
 import { ActivityFeedCard } from '@/features/dashboard/components/ActivityFeedCard'
+import { FaceRegistrationBanner } from '@/features/dashboard/FaceRegistrationBanner'
 import { FaceRegistrationModal } from '@/features/dashboard/components/FaceRegistrationModal'
 import { InsightPanel } from '@/features/dashboard/components/InsightPanel'
 import { LiveMonitorPanel } from '@/features/dashboard/components/LiveMonitorPanel'
@@ -391,6 +392,7 @@ export function DashboardPage() {
 
   return (
     <div className="space-y-6">
+      <FaceRegistrationBanner />
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1.7fr)_minmax(360px,0.9fr)]">
         <LiveMonitorPanel
           videoRef={videoRef}

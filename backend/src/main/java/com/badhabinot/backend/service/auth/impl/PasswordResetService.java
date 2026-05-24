@@ -1,4 +1,4 @@
-package com.badhabinot.backend.service.auth;
+package com.badhabinot.backend.service.auth.impl;
 
 import com.badhabinot.backend.common.exception.auth.InvalidPasswordResetTokenException;
 import com.badhabinot.backend.dto.auth.PasswordResetConfirmDto;
@@ -26,18 +26,18 @@ public class PasswordResetService {
     private final StringRedisTemplate redisTemplate;
     private final AuthUserRepository authUserRepository;
     private final PasswordEncoder passwordEncoder;
-    private final MailService mailService;
+    private final MailServiceImpl mailServiceImpl;
 
     public PasswordResetService(
             StringRedisTemplate redisTemplate,
             AuthUserRepository authUserRepository,
             PasswordEncoder passwordEncoder,
-            MailService mailService
+            MailServiceImpl mailServiceImpl
     ) {
         this.redisTemplate = redisTemplate;
         this.authUserRepository = authUserRepository;
         this.passwordEncoder = passwordEncoder;
-        this.mailService = mailService;
+        this.mailServiceImpl = mailServiceImpl;
     }
 
     /**
@@ -55,7 +55,7 @@ public class PasswordResetService {
                 log.warn("Redis unavailable while storing password reset token for {}: {}", normalizedEmail, e.getMessage());
                 return;
             }
-            mailService.sendPasswordResetEmail(normalizedEmail, token);
+            mailServiceImpl.sendPasswordResetEmail(normalizedEmail, token);
         });
     }
 

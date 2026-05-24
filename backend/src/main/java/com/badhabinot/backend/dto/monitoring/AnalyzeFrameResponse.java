@@ -24,7 +24,9 @@ public record AnalyzeFrameResponse(
         String annotatedFrameBase64,
         List<VisionBehaviorEventDetail> visionBehaviorEvents,
         // Module A — face authentication result (null when no profile registered)
-        FaceAuthDetail faceAuth
+        FaceAuthDetail faceAuth,
+        // Module G — owner tracking and iris gaze (null when face auth disabled)
+        OwnerTrackingDetail ownerTracking
 ) {
     public record ProcessingDetails(
             int frameWidth,
@@ -61,6 +63,23 @@ public record AnalyzeFrameResponse(
             boolean authenticated,
             double confidence,
             int framesEnrolled
+    ) {
+    }
+
+    /** Owner tracking and gaze result passed through from vision-service Module G. */
+    public record OwnerTrackingDetail(
+            boolean ownerTracked,
+            GazeDetail ownerGaze,
+            int strangersInFrame
+    ) {
+    }
+
+    /** Iris-based gaze direction for the owner's face. */
+    public record GazeDetail(
+            List<Double> gazeVector,
+            boolean lookingAtScreen,
+            String gazeZone,
+            double confidence
     ) {
     }
 }

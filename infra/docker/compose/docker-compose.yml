@@ -64,9 +64,7 @@ services:
       MONITORING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-badhabinot}
       SPRING_DATA_REDIS_HOST: redis
       SPRING_DATA_REDIS_PORT: 6379
-      # Let Hibernate create / update schema on first boot — avoids validate
-      # failure on a fresh database that has no tables yet.
-      SPRING_JPA_HIBERNATE_DDL_AUTO: update
+      SPRING_JPA_HIBERNATE_DDL_AUTO: validate
       SECURITY_JWT_SECRET: ${SECURITY_JWT_SECRET:-YmFkaGFiaW5vdC1kZXZlbG9wbWVudC1zZWNyZXQta2V5LTIwMjYtYmFkaGFiaW5vdA==}
       INTERNAL_API_KEY: ${INTERNAL_API_KEY:-change-me-in-real-environments}
       USER_CONTEXT_CACHE_TTL: ${USER_CONTEXT_CACHE_TTL:-PT5M}

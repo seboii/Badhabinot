@@ -1,13 +1,11 @@
 import { Suspense, lazy, type ReactNode } from 'react'
 import { BrowserRouter, Navigate, Outlet, Route, Routes } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
 import { ErrorBoundary } from '@/components/ErrorBoundary'
 import { PublicOnlyRoute } from '@/components/layout/PublicOnlyRoute'
 import { ProtectedRoute } from '@/components/layout/ProtectedRoute'
 import { AppShell } from '@/components/layout/AppShell'
 import { LoadingScreen } from '@/components/ui/loading-state'
 import { useLanguage } from '@/i18n/language-provider'
-import { userApi } from '@/api/user'
 
 const DashboardPage = lazy(async () => {
   const module = await import('@/pages/DashboardPage')
@@ -37,11 +35,6 @@ const LoginPage = lazy(async () => {
 const NotFoundPage = lazy(async () => {
   const module = await import('@/pages/NotFoundPage')
   return { default: module.NotFoundPage }
-})
-
-const OnboardingPage = lazy(async () => {
-  const module = await import('@/pages/OnboardingPage')
-  return { default: module.OnboardingPage }
 })
 
 const RegisterPage = lazy(async () => {
@@ -78,20 +71,7 @@ function LazyRoute({ children, message }: { children: ReactNode; message: string
 }
 
 function HomeRedirect() {
-  const { isTurkish } = useLanguage()
-  const { data, isLoading } = useQuery({
-    queryKey: ['user-context'],
-    queryFn: userApi.getMe,
-  })
-
-  if (isLoading) {
-    return <LoadingScreen message={isTurkish ? 'Calisma alani hazirlaniyor' : 'Preparing your workspace'} />
-  }
-
-  const needsOnboarding =
-    !data?.consents.privacy_policy_accepted || !data?.consents.camera_monitoring_accepted
-
-  return <Navigate replace to={needsOnboarding ? '/onboarding' : '/dashboard'} />
+  return <Navigate replace to="/dashboard" />
 }
 
 function ShellOutlet() {
@@ -117,7 +97,6 @@ export function AppRouter() {
         </Route>
 
         <Route element={<ProtectedRoute />}>
-          <Route path="/onboarding" element={<LazyRoute message={loadingMessage}><OnboardingPage /></LazyRoute>} />
           <Route element={<ShellOutlet />}>
             <Route index element={<HomeRedirect />} />
             <Route path="/dashboard" element={<LazyRoute message={loadingMessage}><DashboardPage /></LazyRoute>} />

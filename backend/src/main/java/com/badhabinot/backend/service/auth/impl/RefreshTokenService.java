@@ -1,4 +1,4 @@
-package com.badhabinot.backend.service.auth;
+package com.badhabinot.backend.service.auth.impl;
 
 import com.badhabinot.backend.config.JwtProperties;
 import java.nio.charset.StandardCharsets;

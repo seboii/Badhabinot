@@ -1,4 +1,4 @@
-package com.badhabinot.backend.service.auth;
+package com.badhabinot.backend.service.auth.impl;
 
 import com.badhabinot.backend.config.PasswordResetProperties;
 import org.slf4j.Logger;
@@ -6,21 +6,23 @@ import org.slf4j.LoggerFactory;
 import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.MailException;
 import org.springframework.mail.javamail.JavaMailSender;
+import com.badhabinot.backend.service.auth.IMailService;
 import org.springframework.stereotype.Service;
 
 @Service
-public class MailService {
+public class MailServiceImpl implements IMailService {
 
-    private static final Logger log = LoggerFactory.getLogger(MailService.class);
+    private static final Logger log = LoggerFactory.getLogger(MailServiceImpl.class);
 
     private final JavaMailSender mailSender;
     private final PasswordResetProperties properties;
 
-    public MailService(JavaMailSender mailSender, PasswordResetProperties properties) {
+    public MailServiceImpl(JavaMailSender mailSender, PasswordResetProperties properties) {
         this.mailSender = mailSender;
         this.properties = properties;
     }
 
+    @Override
     public void sendPasswordResetEmail(String to, String token) {
         String resetUrl = properties.resetUrlTemplate().replace("{token}", token);
 
