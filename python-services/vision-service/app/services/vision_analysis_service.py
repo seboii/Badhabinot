@@ -14,9 +14,11 @@ from app.schemas.vision import (
     DetectionEvidence,
     FaceAuthStatus,
     FaceMeshData,
+    GazeData,
     HandData,
     HandTrackingData,
     ObjectDetectionData,
+    OwnerTrackingData,
     PoseData,
     PoseKeypointData,
     ProcessingDetails,
@@ -27,13 +29,17 @@ from app.schemas.vision import (
     YoloDetectionData,
 )
 from app.services.vision import SessionStateStore, VisionDetectors, VisionFeatureExtractor
-from app.services.vision.session_state import SessionObservation
+from app.services.vision.session_state import (
+    OwnerTrackingObservation,
+    OwnerTrackingStateStore,
+    SessionObservation,
+)
 
 # New modules (each degrades gracefully if its dependencies are missing)
 from app.services.vision.behavior_engine import BehaviorFrameInput, BehaviorStateStore
 from app.services.vision.session_logger import log_frame_events
-from app.services.vision.vision_face_auth import VisionFaceAuth
-from app.services.vision.vision_face_mesh import VisionFaceMesh
+from app.services.vision.vision_face_auth import OwnerFaceResult, VisionFaceAuth
+from app.services.vision.vision_face_mesh import GazeResult, VisionFaceMesh
 from app.services.vision.vision_hand_tracker import VisionHandTracker
 from app.services.vision.vision_overlay import OverlayData, frame_to_base64, render_annotated_frame
 from app.services.vision.vision_pose_estimator import VisionPoseEstimator
@@ -54,22 +60,23 @@ class VisionAnalysisService:
         self.pose_estimator = VisionPoseEstimator()
         self.yolo_detector = VisionYoloDetector()
         self.behavior_store = BehaviorStateStore()
+        self.owner_tracking_store = OwnerTrackingStateStore()
 
     async def analyze(self, request: VisionAnalysisRequest, *, render_overlay: bool = False) -> VisionAnalysisResponse:
         started = time.perf_counter()
         image = self._decode_image(request.image_base64)
 
         # ── Phase 1: Parallel — independent modules ───────────────────────
-        # feature_extractor, face_auth, face_mesh, and pose_estimator have no
-        # mutual dependencies and can run simultaneously in the thread pool.
-        features_raw, auth_triple, mesh_result, pose_result = await asyncio.gather(
+        # feature_extractor, identify_owner (replaces face_auth), face_mesh, and
+        # pose_estimator have no mutual dependencies and run simultaneously.
+        features_raw, owner_quad, mesh_result, pose_result = await asyncio.gather(
             asyncio.to_thread(self.feature_extractor.extract, image),
-            asyncio.to_thread(self._run_face_auth, request.user_id, image),
+            asyncio.to_thread(self._run_identify_owner, request.user_id, image),
             asyncio.to_thread(self.face_mesh.analyze, image),
             asyncio.to_thread(self.pose_estimator.analyze, image),
         )
         features, _, _ = features_raw
-        face_authenticated, auth_confidence, auth_status = auth_triple
+        face_authenticated, auth_confidence, auth_status, owner_result = owner_quad
 
         # ── Phase 2: Session state + detectors (need features) ────────────
         frame_diagonal = hypot(features.frame_width, features.frame_height)
@@ -107,12 +114,24 @@ class VisionAnalysisService:
             )
         mouth_region = self._compute_mouth_region(face_landmarks_list)
 
-        # ── Phase 4: Parallel — hand tracker + YOLO (need face_mesh) ─────
-        # Both depend only on mesh_result (done in Phase 1); they can run
-        # simultaneously since they use separate model instances.
-        hand_result, yolo_result = await asyncio.gather(
+        # ── Phase 4: Parallel — hand tracker + YOLO + gaze ───────────────
+        # All three depend only on results from Phase 1/3; they run simultaneously.
+        hand_result, yolo_result, gaze_result = await asyncio.gather(
             asyncio.to_thread(self.hand_tracker.analyze, image, face_landmarks_list),
             asyncio.to_thread(self.yolo_detector.detect, image, mouth_region),
+            asyncio.to_thread(self._run_gaze, image, owner_result.owner_bbox),
+        )
+
+        # ── Phase 4.5: Owner tracking state update ────────────────────────
+        owner_state = self.owner_tracking_store.update(
+            request.session_id,
+            OwnerTrackingObservation(
+                captured_at=request.captured_at,
+                owner_found=owner_result.owner_found,
+                owner_bbox=owner_result.owner_bbox,
+                owner_gaze=gaze_result,
+                strangers_in_frame=owner_result.strangers_count,
+            ),
         )
 
         # ── Unpack hand result ────────────────────────────────────────────
@@ -205,6 +224,13 @@ class VisionAnalysisService:
             phone_detected=phone_detected,
             elongated_object_score=features.elongated_object_score,
             hand_face_proximity_score=features.hand_face_proximity_score,
+            # Owner tracking signals
+            owner_tracked=owner_result.owner_found,
+            strangers_in_frame=owner_result.strangers_count,
+            owner_gaze_looking_at_screen=(
+                gaze_result.looking_at_screen if gaze_result is not None else True
+            ),
+            owner_absence_streak=owner_state.owner_absence_streak,
         )
         behavior_events_raw = self.behavior_store.evaluate(behavior_inputs)
         behavior_events = [
@@ -282,6 +308,21 @@ class VisionAnalysisService:
             behavior_events=[ev.model_dump() for ev in behavior_events],
         )
 
+        # ── Module G: Build owner tracking response ───────────────────────
+        gaze_data: GazeData | None = None
+        if gaze_result is not None:
+            gaze_data = GazeData(
+                gaze_vector=list(gaze_result.gaze_vector),
+                looking_at_screen=gaze_result.looking_at_screen,
+                gaze_zone=gaze_result.gaze_zone,
+                confidence=gaze_result.confidence,
+            )
+        owner_tracking_data = OwnerTrackingData(
+            owner_tracked=owner_result.owner_found,
+            owner_gaze=gaze_data,
+            strangers_in_frame=owner_result.strangers_count,
+        )
+
         return VisionAnalysisResponse(
             request_id=request.request_id,
             subject_present=features.subject_present,
@@ -318,6 +359,7 @@ class VisionAnalysisService:
             pose=pose_data,
             objects=yolo_data,
             behavior_events=behavior_events,
+            owner_tracking=owner_tracking_data,
             annotated_frame_base64=annotated_b64,
         )
 
@@ -334,29 +376,58 @@ class VisionAnalysisService:
             raise HTTPException(status_code=400, detail="image payload could not be decoded")
         return image
 
-    def _run_face_auth(
+    def _run_identify_owner(
         self,
         user_id: str,
         image: np.ndarray,
-    ) -> tuple[bool, float, FaceAuthStatus]:
-        """Run face authentication synchronously; safe to call from a thread."""
-        if self.face_auth.has_profile(user_id):
-            result = self.face_auth.verify(user_id, image)
+    ) -> tuple[bool, float, FaceAuthStatus, OwnerFaceResult]:
+        """Identify the owner face across all detected faces in *image*.
+
+        Replaces ``_run_face_auth``: one DeepFace.represent() call now provides
+        both authentication status and multi-face owner localisation.
+
+        Returns (face_authenticated, auth_confidence, FaceAuthStatus, OwnerFaceResult).
+        When no face profile exists, authentication is not enforced (owner assumed
+        present with confidence 1.0) and owner_bbox is None.
+        """
+        has_profile = self.face_auth.has_profile(user_id)
+        frames_enrolled = self.face_auth.frame_count(user_id)
+
+        if has_profile:
+            owner_result = self.face_auth.identify_owner(user_id, image)
             auth_status = FaceAuthStatus(
                 enabled=True,
-                authenticated=result.authenticated,
-                confidence=result.confidence,
-                frames_enrolled=result.frames_enrolled,
-                error=result.error,
+                authenticated=owner_result.owner_found,
+                confidence=owner_result.owner_confidence,
+                frames_enrolled=frames_enrolled,
             )
-            return result.authenticated, result.confidence, auth_status
+            return owner_result.owner_found, owner_result.owner_confidence, auth_status, owner_result
+
+        # No profile registered — authentication not enforced
+        no_profile_result = OwnerFaceResult(
+            owner_found=True,
+            owner_bbox=None,
+            owner_confidence=1.0,
+            total_faces=0,
+            strangers_count=0,
+        )
         auth_status = FaceAuthStatus(
             enabled=False,
-            authenticated=True,   # not enforced if no profile set up
+            authenticated=True,
             confidence=1.0,
             frames_enrolled=0,
         )
-        return True, 1.0, auth_status
+        return True, 1.0, auth_status, no_profile_result
+
+    def _run_gaze(
+        self,
+        image: np.ndarray,
+        owner_bbox: tuple[int, int, int, int] | None,
+    ) -> GazeResult | None:
+        """Extract iris gaze for the owner face; returns None when bbox is absent."""
+        if owner_bbox is None:
+            return None
+        return self.face_mesh.extract_owner_gaze(image, owner_bbox)
 
     @staticmethod
     def _compute_mouth_region(

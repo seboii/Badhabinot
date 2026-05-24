@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Literal
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -200,6 +200,33 @@ class BehaviorEventData(BaseModel):
 
 
 # ══════════════════════════════════════════════════════════════════
+# New schemas — Module G: Owner Tracking & Iris Gaze
+# ══════════════════════════════════════════════════════════════════
+
+class GazeData(BaseModel):
+    """Iris-based gaze direction for the authenticated owner's face."""
+    model_config = ConfigDict(protected_namespaces=())
+
+    # Normalised iris offset from eye centre: positive x = right, positive y = down
+    gaze_vector: list[float] = Field(
+        default_factory=list,
+        description="[horizontal, vertical] offset, each roughly in [-0.5, 0.5]",
+    )
+    looking_at_screen: bool
+    gaze_zone: Literal["center", "left", "right", "up", "down", "away"]
+    confidence: float = Field(ge=0.0, le=1.0)
+
+
+class OwnerTrackingData(BaseModel):
+    """Aggregated owner identification and gaze result for one frame."""
+    model_config = ConfigDict(protected_namespaces=())
+
+    owner_tracked: bool            # True = owner face identified in this frame
+    owner_gaze: GazeData | None = None
+    strangers_in_frame: int = Field(default=0, ge=0)
+
+
+# ══════════════════════════════════════════════════════════════════
 # Face registration endpoints schemas
 # ══════════════════════════════════════════════════════════════════
 
@@ -251,6 +278,9 @@ class VisionAnalysisResponse(BaseModel):
     pose: PoseData | None = None                      # Module E
     objects: YoloDetectionData | None = None          # Step 3
     behavior_events: list[BehaviorEventData] = Field(default_factory=list)  # Module F
+
+    # Module G — owner tracking & iris gaze (None when face auth is disabled)
+    owner_tracking: OwnerTrackingData | None = None
 
     # Phase 8 — server-rendered annotated frame (base64 JPEG, no data: prefix)
     # Set only when `render_overlay=True` is passed to the analyze endpoint.

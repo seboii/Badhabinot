@@ -12,6 +12,7 @@ from __future__ import annotations
 import logging
 import math
 from dataclasses import dataclass, field
+from typing import Literal
 
 import cv2
 import numpy as np
@@ -53,6 +54,35 @@ _POSE_3D_POINTS = np.array([
 _EAR_DROWSY_THRESHOLD = 0.25
 _MAR_YAWN_THRESHOLD = 0.60
 
+# ─── Iris landmark indices (requires refine_landmarks=True) ────────────────
+_RIGHT_IRIS_CENTER = 468   # right iris centre
+_LEFT_IRIS_CENTER = 473    # left iris centre
+
+# Eye corner indices used for iris-offset normalisation
+_RIGHT_EYE_OUTER = 33
+_RIGHT_EYE_INNER = 133
+_LEFT_EYE_OUTER = 263
+_LEFT_EYE_INNER = 362
+
+# Gaze zone classification thresholds (fraction of eye width)
+_GAZE_H_THRESHOLD = 0.15   # horizontal: beyond this → left / right
+_GAZE_V_THRESHOLD = 0.10   # vertical:   beyond this → up / down
+
+
+@dataclass
+class GazeResult:
+    """Iris-based gaze direction for a single (owner) face."""
+
+    # Normalised offset of iris from eye centre: positive x = looking right,
+    # positive y = looking down.  Range roughly [-0.5, 0.5].
+    gaze_vector: tuple[float, float]
+
+    looking_at_screen: bool  # True when gaze_zone == "center"
+    gaze_zone: Literal["center", "left", "right", "up", "down", "away"]
+
+    # Confidence of the zone classification (higher when iris is clearly displaced)
+    confidence: float
+
 
 @dataclass
 class FaceMeshResult:
@@ -91,6 +121,7 @@ class VisionFaceMesh:
 
     def __init__(self) -> None:
         self._mesh: object | None = None
+        self._gaze_mesh: object | None = None  # separate instance for crop-based gaze
 
     # ------------------------------------------------------------------ #
     # Public API                                                           #
@@ -142,6 +173,92 @@ class VisionFaceMesh:
             gaze_off_screen=gaze_off,
         )
 
+    def extract_owner_gaze(
+        self,
+        frame: np.ndarray,
+        owner_bbox: tuple[int, int, int, int],
+    ) -> GazeResult | None:
+        """Compute iris-based gaze direction for the owner's face crop.
+
+        Runs a dedicated FaceMesh instance on the cropped owner region so that
+        other faces in the frame never influence the result.
+
+        Args:
+            frame:      Full BGR frame (uint8).
+            owner_bbox: (x, y, w, h) pixel bounding box of the owner's face.
+
+        Returns:
+            :class:`GazeResult` or ``None`` when MediaPipe is not available or
+            no face / iris landmarks are found in the crop.
+        """
+        if not _MP_AVAILABLE:
+            return None
+
+        x, y, w, h = owner_bbox
+        if w <= 0 or h <= 0:
+            return None
+
+        # Expand the crop by 20 % on each side for better landmark detection
+        pad = int(max(w, h) * 0.20)
+        x1 = max(0, x - pad)
+        y1 = max(0, y - pad)
+        x2 = min(frame.shape[1], x + w + pad)
+        y2 = min(frame.shape[0], y + h + pad)
+
+        if x2 <= x1 or y2 <= y1:
+            return None
+
+        crop = frame[y1:y2, x1:x2]
+        if crop.size == 0:
+            return None
+
+        rgb = cv2.cvtColor(crop, cv2.COLOR_BGR2RGB)
+        results = self._get_gaze_mesh().process(rgb)
+
+        if not results.multi_face_landmarks:
+            return None
+
+        face_lm = results.multi_face_landmarks[0]
+        # Need at least landmark 477 (right-most iris point)
+        if len(face_lm.landmark) <= _LEFT_IRIS_CENTER:
+            return None
+
+        landmarks = [(lm.x, lm.y) for lm in face_lm.landmark]
+
+        right_gaze = self._eye_gaze(
+            landmarks,
+            iris_center_idx=_RIGHT_IRIS_CENTER,
+            eye_outer_idx=_RIGHT_EYE_OUTER,
+            eye_inner_idx=_RIGHT_EYE_INNER,
+        )
+        left_gaze = self._eye_gaze(
+            landmarks,
+            iris_center_idx=_LEFT_IRIS_CENTER,
+            eye_outer_idx=_LEFT_EYE_OUTER,
+            eye_inner_idx=_LEFT_EYE_INNER,
+        )
+
+        valid = [g for g in (right_gaze, left_gaze) if g is not None]
+        if not valid:
+            return None
+
+        gaze_x = sum(g[0] for g in valid) / len(valid)
+        gaze_y = sum(g[1] for g in valid) / len(valid)
+
+        zone = self._classify_zone(gaze_x, gaze_y)
+        looking = zone == "center"
+
+        # Confidence: higher when iris is clearly displaced from eye centre
+        magnitude = math.hypot(gaze_x, gaze_y)
+        confidence = round(min(1.0, max(0.35, magnitude * 3.5 + 0.25)), 4)
+
+        return GazeResult(
+            gaze_vector=(round(gaze_x, 4), round(gaze_y, 4)),
+            looking_at_screen=looking,
+            gaze_zone=zone,
+            confidence=confidence,
+        )
+
     # ------------------------------------------------------------------ #
     # Private helpers                                                      #
     # ------------------------------------------------------------------ #
@@ -156,6 +273,69 @@ class VisionFaceMesh:
                 min_tracking_confidence=0.5,
             )
         return self._mesh
+
+    def _get_gaze_mesh(self) -> object:
+        """Dedicated FaceMesh for crop-based gaze extraction.
+
+        Uses ``static_image_mode=True`` so every crop is treated independently —
+        no temporal tracking state bleeds between different crop positions.
+        ``refine_landmarks=True`` is mandatory for iris indices 468-477.
+        """
+        if self._gaze_mesh is None:
+            self._gaze_mesh = _mp_face_mesh.FaceMesh(
+                static_image_mode=True,
+                max_num_faces=1,
+                refine_landmarks=True,
+                min_detection_confidence=0.5,
+                min_tracking_confidence=0.5,
+            )
+        return self._gaze_mesh
+
+    @staticmethod
+    def _eye_gaze(
+        landmarks: list[tuple[float, float]],
+        iris_center_idx: int,
+        eye_outer_idx: int,
+        eye_inner_idx: int,
+    ) -> tuple[float, float] | None:
+        """Compute normalised iris offset from eye centre for one eye.
+
+        Returns (gaze_x, gaze_y) normalised by eye width, or ``None`` when the
+        eye width is degenerate.  Positive x = looking right; positive y = down.
+        """
+        if iris_center_idx >= len(landmarks):
+            return None
+
+        iris = landmarks[iris_center_idx]
+        outer = landmarks[eye_outer_idx]
+        inner = landmarks[eye_inner_idx]
+
+        eye_cx = (outer[0] + inner[0]) / 2.0
+        eye_cy = (outer[1] + inner[1]) / 2.0
+        eye_width = abs(outer[0] - inner[0])
+
+        if eye_width < 1e-6:
+            return None
+
+        return (
+            (iris[0] - eye_cx) / eye_width,
+            (iris[1] - eye_cy) / eye_width,
+        )
+
+    @staticmethod
+    def _classify_zone(gx: float, gy: float) -> Literal["center", "left", "right", "up", "down", "away"]:
+        """Map a (gaze_x, gaze_y) vector to a named screen zone."""
+        horiz = abs(gx) >= _GAZE_H_THRESHOLD
+        vert = abs(gy) >= _GAZE_V_THRESHOLD
+
+        if not horiz and not vert:
+            return "center"
+        if horiz and not vert:
+            return "right" if gx > 0 else "left"
+        if vert and not horiz:
+            return "down" if gy > 0 else "up"
+        # Both thresholds exceeded: oblique / ambiguous direction
+        return "away"
 
     @staticmethod
     def _dist(p1: tuple[float, float, float], p2: tuple[float, float, float]) -> float:
