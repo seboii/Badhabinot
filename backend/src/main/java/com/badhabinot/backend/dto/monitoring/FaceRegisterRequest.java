@@ -4,6 +4,7 @@ import jakarta.validation.constraints.NotBlank;
 
 public record FaceRegisterRequest(
         @NotBlank String imageBase64,
-        String imageContentType
+        String imageContentType,
+        String poseHint
 ) {
 }

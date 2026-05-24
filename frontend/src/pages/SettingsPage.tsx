@@ -2,9 +2,11 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
+import { UserRound } from 'lucide-react'
 import { authApi } from '@/api/auth'
 import { toErrorMessage } from '@/api/client'
 import { userApi } from '@/api/user'
+import { monitoringApi } from '@/api/monitoring'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
@@ -14,6 +16,7 @@ import { ConsentForm } from '@/features/settings/components/ConsentForm'
 import { PasswordChangeForm } from '@/features/settings/components/PasswordChangeForm'
 import { ProfileForm } from '@/features/settings/components/ProfileForm'
 import { SettingsForm } from '@/features/settings/components/SettingsForm'
+import { FaceRegistrationModal } from '@/features/dashboard/components/FaceRegistrationModal'
 import { useAuth } from '@/hooks/use-auth'
 import { useLanguage } from '@/i18n/language-provider'
 import { useUserStore } from '@/store/user-store'
@@ -27,6 +30,8 @@ export function SettingsPage() {
   const clearUser = useUserStore((s) => s.clearUser)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [deletePassword, setDeletePassword] = useState('')
+  const [faceRegOpen, setFaceRegOpen] = useState(false)
+  const [deleteFaceConfirmOpen, setDeleteFaceConfirmOpen] = useState(false)
   const userContextQuery = useQuery({
     queryKey: ['user-context'],
     queryFn: userApi.getMe,
@@ -98,11 +103,32 @@ export function SettingsPage() {
     },
   })
 
+  const faceStatusQuery = useQuery({
+    queryKey: ['face-status'],
+    queryFn: monitoringApi.faceStatus,
+    staleTime: 30_000,
+  })
+
+  const deleteFaceMutation = useMutation({
+    mutationFn: monitoringApi.deleteFaceProfile,
+    onSuccess() {
+      void faceStatusQuery.refetch()
+      void queryClient.invalidateQueries({ queryKey: ['face-status'] })
+      toast.success(isTurkish ? 'Yüz profili silindi.' : 'Face profile deleted.')
+      setDeleteFaceConfirmOpen(false)
+    },
+    onError(error) {
+      toast.error(toErrorMessage(error, isTurkish ? 'Yüz profili silinemedi.' : 'Unable to delete face profile.'))
+      setDeleteFaceConfirmOpen(false)
+    },
+  })
+
   if (userContextQuery.isLoading || !userContextQuery.data) {
     return <LoadingCard message={isTurkish ? 'Hesap ayarlari yukleniyor' : 'Loading account settings'} />
   }
 
   const user = userContextQuery.data
+  const faceRegistered = faceStatusQuery.data?.success ?? false
 
   return (
     <div className="space-y-6">
@@ -142,6 +168,61 @@ export function SettingsPage() {
         isSaving={consentMutation.isPending}
         onSubmit={(values) => consentMutation.mutate(values)}
       />
+
+      {/* Face recognition management */}
+      <Card>
+        <CardHeader>
+          <div>
+            <CardTitle>{isTurkish ? 'Yüz Tanıma' : 'Face Recognition'}</CardTitle>
+            <CardDescription className="mt-2">
+              {isTurkish
+                ? 'Yüz tanıma ile giriş yapmak ve davranış analizini etkinleştirmek için yüzünüzü kaydedin.'
+                : 'Register your face to enable face login and behavior analysis features.'}
+            </CardDescription>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex items-center gap-3">
+            <div className={`flex size-10 items-center justify-center rounded-2xl ${faceRegistered ? 'bg-[var(--success)]/10' : 'bg-[var(--surface-muted)]'}`}>
+              <UserRound className={`size-5 ${faceRegistered ? 'text-[var(--success)]' : 'text-[var(--text-muted)]'}`} />
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-white">
+                {faceRegistered
+                  ? isTurkish ? 'Yüz kaydı aktif ✓' : 'Face registered ✓'
+                  : isTurkish ? 'Yüz kaydı yok' : 'No face registered'}
+              </p>
+              <p className="text-sm text-[var(--text-muted)]">
+                {faceRegistered
+                  ? (isTurkish
+                    ? `${faceStatusQuery.data?.frames_enrolled ?? 0} kare kaydedildi`
+                    : `${faceStatusQuery.data?.frames_enrolled ?? 0} frames enrolled`)
+                  : (isTurkish
+                    ? 'Yüz tanıma devre dışı'
+                    : 'Face recognition disabled')}
+              </p>
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-3">
+            <Button
+              variant="secondary"
+              onClick={() => setFaceRegOpen(true)}
+            >
+              {faceRegistered
+                ? isTurkish ? 'Yüzü Güncelle' : 'Update Face'
+                : isTurkish ? 'Yüz Kaydı Yap' : 'Register Face'}
+            </Button>
+            {faceRegistered && (
+              <Button
+                variant="danger"
+                onClick={() => setDeleteFaceConfirmOpen(true)}
+              >
+                {isTurkish ? 'Yüz Kaydını Sil' : 'Delete Face Profile'}
+              </Button>
+            )}
+          </div>
+        </CardContent>
+      </Card>
 
       <Card className="border-[var(--danger)]/30">
         <CardHeader>
@@ -218,6 +299,31 @@ export function SettingsPage() {
             />
           </div>
         }
+      />
+
+      {faceRegOpen && (
+        <FaceRegistrationModal
+          onClose={() => {
+            setFaceRegOpen(false)
+            void faceStatusQuery.refetch()
+          }}
+        />
+      )}
+
+      <ConfirmDialog
+        isOpen={deleteFaceConfirmOpen}
+        variant="danger"
+        title={isTurkish ? 'Yüz profilini sil' : 'Delete face profile'}
+        description={
+          isTurkish
+            ? 'Bu işlem kayıtlı yüz verinizi kalıcı olarak siler. Yüz tanıma ve yüz ile giriş devre dışı kalır.'
+            : 'This permanently deletes your enrolled face data. Face recognition and face login will be disabled.'
+        }
+        confirmLabel={isTurkish ? 'Sil' : 'Delete'}
+        cancelLabel={isTurkish ? 'Vazgeç' : 'Cancel'}
+        loading={deleteFaceMutation.isPending}
+        onConfirm={() => deleteFaceMutation.mutate()}
+        onCancel={() => setDeleteFaceConfirmOpen(false)}
       />
     </div>
   )

@@ -1,5 +1,5 @@
 import type { PropsWithChildren } from 'react'
-import { Navigate, useLocation } from 'react-router-dom'
+import { useLocation } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { Sidebar } from '@/components/layout/Sidebar'
 import { TopBar } from '@/components/layout/TopBar'
@@ -47,13 +47,6 @@ export function AppShell({ children }: PropsWithChildren) {
 
   if (isLoading || !data) {
     return <LoadingScreen message={isTurkish ? 'BADHABINOT calisma alani yukleniyor' : 'Loading your BADHABINOT workspace'} />
-  }
-
-  const needsOnboarding =
-    !data.consents.privacy_policy_accepted || !data.consents.camera_monitoring_accepted
-
-  if (needsOnboarding) {
-    return <Navigate replace to="/onboarding" />
   }
 
   const meta =

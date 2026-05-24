@@ -2,6 +2,7 @@ package com.badhabinot.backend.integration.python;
 
 import com.badhabinot.backend.dto.monitoring.FaceRegisterRequest;
 import com.badhabinot.backend.dto.monitoring.FaceRegisterResponse;
+import com.badhabinot.backend.dto.monitoring.FaceVerificationResponse;
 import com.badhabinot.backend.dto.monitoring.VisionAnalysisRequest;
 import com.badhabinot.backend.dto.monitoring.VisionAnalysisResponse;
 import com.badhabinot.backend.common.exception.monitoring.DownstreamServiceException;
@@ -66,6 +67,9 @@ public class VisionServiceClient {
             visionRequest.put("image_base64", request.imageBase64());
             visionRequest.put("image_content_type",
                     request.imageContentType() != null ? request.imageContentType() : "image/jpeg");
+            if (request.poseHint() != null) {
+                visionRequest.put("pose_hint", request.poseHint());
+            }
 
             return webClient.post()
                     .uri("/v1/vision/face/register")
@@ -103,6 +107,34 @@ public class VisionServiceClient {
             throw exception;
         } catch (Exception exception) {
             throw new DownstreamServiceException("vision_service_unavailable", "Unexpected failure during face profile deletion");
+        }
+    }
+
+    /** Verify a face image against stored embeddings for login. */
+    public FaceVerificationResponse verifyFace(String userId, String imageBase64, String contentType) {
+        try {
+            var body = new java.util.HashMap<String, String>();
+            body.put("image_base64", imageBase64);
+            body.put("image_content_type", contentType != null ? contentType : "image/jpeg");
+
+            return webClient.post()
+                    .uri("/v1/vision/face/{userId}/verify", userId)
+                    .bodyValue(body)
+                    .retrieve()
+                    .onStatus(HttpStatusCode::isError, response -> response.bodyToMono(String.class)
+                            .defaultIfEmpty("face-verify error")
+                            .flatMap(b -> Mono.error(new DownstreamServiceException("vision_face_error", b))))
+                    .bodyToMono(FaceVerificationResponse.class)
+                    .block(Duration.ofSeconds(10));
+        } catch (DownstreamServiceException exception) {
+            throw exception;
+        } catch (WebClientRequestException exception) {
+            if (isTimeout(exception)) {
+                throw new DownstreamTimeoutException("vision_face_timeout", "Timed out during face verification");
+            }
+            throw new DownstreamServiceException("vision_service_unavailable", "Unable to reach vision-service");
+        } catch (Exception exception) {
+            throw new DownstreamServiceException("vision_service_unavailable", "Unexpected failure during face verification");
         }
     }
 

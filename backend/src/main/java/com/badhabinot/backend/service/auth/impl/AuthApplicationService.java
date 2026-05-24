@@ -1,7 +1,8 @@
-package com.badhabinot.backend.service.auth;
+package com.badhabinot.backend.service.auth.impl;
 
 import com.badhabinot.backend.dto.auth.AuthenticatedUserResponse;
 import com.badhabinot.backend.dto.auth.ChangePasswordDto;
+import com.badhabinot.backend.dto.auth.FaceLoginRequest;
 import com.badhabinot.backend.dto.auth.LoginRequest;
 import com.badhabinot.backend.dto.auth.LogoutRequest;
 import com.badhabinot.backend.dto.auth.RefreshTokenRequest;
@@ -9,15 +10,16 @@ import com.badhabinot.backend.dto.auth.RegisterRequest;
 import com.badhabinot.backend.dto.auth.TokenResponse;
 import com.badhabinot.backend.common.exception.auth.AuthenticationFailedException;
 import com.badhabinot.backend.common.exception.auth.DuplicateEmailException;
+import com.badhabinot.backend.common.exception.auth.FaceMismatchException;
+import com.badhabinot.backend.common.exception.auth.FaceNotRegisteredException;
 import com.badhabinot.backend.common.exception.auth.InvalidRefreshTokenException;
+import com.badhabinot.backend.integration.python.VisionServiceClient;
 import com.badhabinot.backend.model.auth.AccountStatus;
 import com.badhabinot.backend.model.auth.AuthUser;
 import com.badhabinot.backend.model.auth.RefreshToken;
 import com.badhabinot.backend.model.auth.UserRole;
 import com.badhabinot.backend.repository.auth.AuthUserRepository;
 import com.badhabinot.backend.repository.auth.RefreshTokenRepository;
-import com.badhabinot.backend.service.auth.RefreshTokenService;
-import com.badhabinot.backend.service.auth.TokenIssuer;
 import com.badhabinot.backend.infrastructure.redis.LoginAttemptService;
 import com.badhabinot.backend.service.user.UserContextService;
 import java.time.Instant;
@@ -39,6 +41,7 @@ public class AuthApplicationService {
     private final RefreshTokenService refreshTokenService;
     private final UserContextService userContextService;
     private final LoginAttemptService loginAttemptService;
+    private final VisionServiceClient visionServiceClient;
 
     public AuthApplicationService(
             AuthUserRepository authUserRepository,
@@ -47,7 +50,8 @@ public class AuthApplicationService {
             TokenIssuer tokenIssuer,
             RefreshTokenService refreshTokenService,
             UserContextService userContextService,
-            LoginAttemptService loginAttemptService
+            LoginAttemptService loginAttemptService,
+            VisionServiceClient visionServiceClient
     ) {
         this.authUserRepository = authUserRepository;
         this.refreshTokenRepository = refreshTokenRepository;
@@ -56,6 +60,7 @@ public class AuthApplicationService {
         this.refreshTokenService = refreshTokenService;
         this.userContextService = userContextService;
         this.loginAttemptService = loginAttemptService;
+        this.visionServiceClient = visionServiceClient;
     }
 
     @Transactional(transactionManager = "authTransactionManager")
@@ -131,6 +136,42 @@ public class AuthApplicationService {
         refreshTokenRepository.findByTokenHash(refreshTokenService.hash(request.refreshToken()))
                 .filter(token -> token.getUserId().equals(UUID.fromString(jwt.getSubject())))
                 .ifPresent(token -> token.revoke(Instant.now()));
+    }
+
+    @Transactional(transactionManager = "authTransactionManager")
+    public TokenResponse loginWithFace(FaceLoginRequest request) {
+        String normalizedEmail = normalizeEmail(request.email());
+        loginAttemptService.checkNotBlocked(normalizedEmail);
+
+        AuthUser user = authUserRepository.findByEmail(normalizedEmail).orElse(null);
+        if (user == null) {
+            loginAttemptService.recordFailure(normalizedEmail);
+            throw new AuthenticationFailedException("Invalid email or password");
+        }
+        if (user.getStatus() != AccountStatus.ACTIVE) {
+            loginAttemptService.recordFailure(normalizedEmail);
+            throw new AuthenticationFailedException("Account is not active");
+        }
+
+        var faceStatus = visionServiceClient.faceStatus(user.getId().toString());
+        if (!faceStatus.success()) {
+            throw new FaceNotRegisteredException("No face profile registered for this account. Please sign in with your password.");
+        }
+
+        var verification = visionServiceClient.verifyFace(
+                user.getId().toString(),
+                request.faceImageBase64(),
+                request.imageContentType()
+        );
+        if (!verification.verified()) {
+            loginAttemptService.recordFailure(normalizedEmail);
+            throw new FaceMismatchException("Face verification failed. Please try again or sign in with your password.");
+        }
+
+        loginAttemptService.resetAttempts(normalizedEmail);
+        user.recordLogin();
+        authUserRepository.save(user);
+        return issueTokenResponse(user);
     }
 
     @Transactional(transactionManager = "authTransactionManager")

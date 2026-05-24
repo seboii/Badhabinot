@@ -2,6 +2,8 @@ package com.badhabinot.backend.common.exception;
 
 import com.badhabinot.backend.common.exception.auth.AuthenticationFailedException;
 import com.badhabinot.backend.common.exception.auth.DuplicateEmailException;
+import com.badhabinot.backend.common.exception.auth.FaceMismatchException;
+import com.badhabinot.backend.common.exception.auth.FaceNotRegisteredException;
 import com.badhabinot.backend.common.exception.auth.InvalidPasswordResetTokenException;
 import com.badhabinot.backend.common.exception.auth.InvalidRefreshTokenException;
 import com.badhabinot.backend.common.exception.auth.TooManyLoginAttemptsException;
@@ -37,6 +39,16 @@ public class GlobalApiExceptionHandler {
     @ExceptionHandler(InvalidPasswordResetTokenException.class)
     public ResponseEntity<Map<String, Object>> handleInvalidResetToken(InvalidPasswordResetTokenException exception) {
         return error(HttpStatus.BAD_REQUEST, "invalid_reset_token", exception.getMessage());
+    }
+
+    @ExceptionHandler(FaceNotRegisteredException.class)
+    public ResponseEntity<Map<String, Object>> handleFaceNotRegistered(FaceNotRegisteredException exception) {
+        return error(HttpStatus.BAD_REQUEST, "FACE_NOT_REGISTERED", exception.getMessage());
+    }
+
+    @ExceptionHandler(FaceMismatchException.class)
+    public ResponseEntity<Map<String, Object>> handleFaceMismatch(FaceMismatchException exception) {
+        return error(HttpStatus.UNAUTHORIZED, "FACE_MISMATCH", exception.getMessage());
     }
 
     @ExceptionHandler({

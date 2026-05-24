@@ -1,6 +1,7 @@
-package com.badhabinot.backend.service.auth;
+package com.badhabinot.backend.service.auth.impl;
 
 import com.badhabinot.backend.common.exception.auth.AuthenticationFailedException;
+import com.badhabinot.backend.integration.python.VisionServiceClient;
 import com.badhabinot.backend.model.auth.AuthUser;
 import com.badhabinot.backend.repository.auth.AuthUserRepository;
 import com.badhabinot.backend.repository.auth.RefreshTokenRepository;
@@ -15,12 +16,22 @@ import com.badhabinot.backend.repository.monitoring.ReminderEventRepository;
 import com.badhabinot.backend.repository.user.UserConsentRepository;
 import com.badhabinot.backend.repository.user.UserProfileRepository;
 import com.badhabinot.backend.repository.user.UserSettingsRepository;
+import java.util.List;
 import java.util.UUID;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.cache.CacheManager;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
 @Service
 public class AccountDeletionService {
+
+    private static final Logger log = LoggerFactory.getLogger(AccountDeletionService.class);
+
+    private static final List<String> USER_CACHE_NAMES = List.of(
+            "user-context", "user-settings", "user-consents", "analysis-context"
+    );
 
     private final AuthUserRepository authUserRepository;
     private final RefreshTokenRepository refreshTokenRepository;
@@ -36,6 +47,8 @@ public class AccountDeletionService {
     private final HydrationLogRepository hydrationLogRepository;
     private final MonitoringSessionRepository monitoringSessionRepository;
     private final ReminderEventRepository reminderEventRepository;
+    private final VisionServiceClient visionServiceClient;
+    private final CacheManager cacheManager;
 
     public AccountDeletionService(
             AuthUserRepository authUserRepository,
@@ -51,7 +64,9 @@ public class AccountDeletionService {
             DailyReportRepository dailyReportRepository,
             HydrationLogRepository hydrationLogRepository,
             MonitoringSessionRepository monitoringSessionRepository,
-            ReminderEventRepository reminderEventRepository
+            ReminderEventRepository reminderEventRepository,
+            VisionServiceClient visionServiceClient,
+            CacheManager cacheManager
     ) {
         this.authUserRepository = authUserRepository;
         this.refreshTokenRepository = refreshTokenRepository;
@@ -67,6 +82,8 @@ public class AccountDeletionService {
         this.hydrationLogRepository = hydrationLogRepository;
         this.monitoringSessionRepository = monitoringSessionRepository;
         this.reminderEventRepository = reminderEventRepository;
+        this.visionServiceClient = visionServiceClient;
+        this.cacheManager = cacheManager;
     }
 
     public void deleteAccount(UUID userId, String password) {
@@ -95,5 +112,21 @@ public class AccountDeletionService {
         // Delete auth data
         refreshTokenRepository.deleteByUserId(userId);
         authUserRepository.deleteById(userId);
+
+        // Delete face profile from vision service (non-blocking — deletion must not fail the account removal)
+        try {
+            visionServiceClient.deleteFaceProfile(userId.toString());
+        } catch (Exception ex) {
+            log.warn("Face profile deletion failed for userId={} — continuing account deletion: {}", userId, ex.getMessage());
+        }
+
+        // Evict all user-scoped cache entries
+        String userKey = userId.toString();
+        for (String cacheName : USER_CACHE_NAMES) {
+            var cache = cacheManager.getCache(cacheName);
+            if (cache != null) {
+                cache.evict(userKey);
+            }
+        }
     }
 }

@@ -15,7 +15,7 @@ import numpy as np
 from fastapi import APIRouter, Depends, HTTPException
 
 from app.core.security import require_internal_api_key
-from app.schemas.vision import FaceDeleteResponse, FaceRegisterRequest, FaceRegisterResponse
+from app.schemas.vision import FaceDeleteResponse, FaceRegisterRequest, FaceRegisterResponse, FaceVerifyRequest, FaceVerifyResponse
 from app.services.vision.vision_face_auth import VisionFaceAuth
 
 router = APIRouter(prefix="/v1/vision/face", tags=["face-registration"])
@@ -70,6 +70,24 @@ async def register_face(
         frames_enrolled=frames,
         message=msg,
     )
+
+
+@router.post("/{user_id}/verify", response_model=FaceVerifyResponse)
+async def verify_face(
+    user_id: str,
+    request: FaceVerifyRequest,
+    _: None = Depends(require_internal_api_key),
+) -> FaceVerifyResponse:
+    """Verify a face image against stored embeddings for login authentication.
+
+    Returns verified=True only when:
+    - The user has a registered face profile (≥3 frames)
+    - Exactly one face is detected in the image
+    - Cosine similarity against stored embeddings >= 0.85
+    """
+    image = _decode_image(request.image_base64)
+    verified, confidence, message = _auth.verify_face_for_login(user_id, image)
+    return FaceVerifyResponse(verified=verified, confidence=confidence, message=message)
 
 
 @router.delete("/{user_id}", response_model=FaceDeleteResponse)
