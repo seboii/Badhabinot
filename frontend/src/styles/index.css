@@ -150,3 +150,31 @@ a {
 :root[data-theme='light'] .text-white {
   color: var(--text-strong) !important;
 }
+
+/* Touch-friendly improvements */
+@media (pointer: coarse) {
+  button,
+  [role='button'] {
+    min-height: 44px;
+  }
+}
+
+/* Hide scrollbar utility — used for horizontal overflow on mobile */
+.scrollbar-none {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+
+/* Prevent horizontal scroll at the root level */
+html,
+body {
+  overflow-x: hidden;
+}
+
+/* Safe-area padding helper for iPhone notch/home-indicator */
+.pb-safe {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}

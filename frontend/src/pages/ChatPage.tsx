@@ -262,12 +262,12 @@ export function ChatPage() {
   }
 
   return (
-    <div className="grid gap-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(340px,0.8fr)]">
-      <Card className="min-h-[620px]">
+    <div className="grid gap-4 lg:grid-cols-[minmax(0,1.2fr)_minmax(300px,0.8fr)] xl:grid-cols-[minmax(0,1.2fr)_minmax(340px,0.8fr)]">
+      <Card className="min-h-[480px] sm:min-h-[560px] lg:min-h-[620px]">
         <CardHeader>
           <div className="flex items-start justify-between gap-3">
             <div>
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <CardTitle>{isTurkish ? 'Davranis sohbeti' : 'Behavior chat'}</CardTitle>
                 {modelMode === 'LOCAL' ? (
                   <span className="inline-flex items-center gap-1 rounded-full border border-[rgba(139,92,246,0.4)] bg-[rgba(139,92,246,0.1)] px-2 py-0.5 text-xs text-purple-300">
@@ -293,12 +293,13 @@ export function ChatPage() {
               iconLeft={<RefreshCcw className="size-4" />}
               onClick={resetConversation}
               disabled={isStreaming}
+              className="shrink-0"
             >
-              {isTurkish ? 'Konusmayi Sifirla' : 'Reset'}
+              <span className="hidden sm:inline">{isTurkish ? 'Konusmayi Sifirla' : 'Reset'}</span>
             </Button>
           </div>
         </CardHeader>
-        <CardContent className="flex h-[calc(100%-5.5rem)] flex-col gap-4">
+        <CardContent className="flex flex-col gap-4" style={{ height: 'calc(100% - 5.5rem)' }}>
           {historyQuery.isError ? (
             <div className="rounded-[20px] border border-[rgba(245,158,11,0.4)] bg-[rgba(245,158,11,0.08)] p-3 text-sm text-[var(--text-muted)]">
               <div className="flex items-start gap-2">
@@ -399,7 +400,7 @@ export function ChatPage() {
 
           <form className="space-y-3" onSubmit={handleSubmit}>
             <textarea
-              className="min-h-[112px] w-full rounded-[24px] border border-[var(--line-soft)] bg-[rgba(255,255,255,0.03)] px-4 py-3 text-sm text-white outline-none focus:border-[var(--primary)]"
+              className="min-h-[88px] w-full rounded-[20px] border border-[var(--line-soft)] bg-[rgba(255,255,255,0.03)] px-4 py-3 text-sm text-white outline-none focus:border-[var(--primary)] sm:min-h-[112px] sm:rounded-[24px]"
               placeholder={
                 isTurkish
                   ? 'Durus, su, hatirlatici, sigara-benzeri olaylar veya gunluk trend hakkinda sor.'
@@ -410,7 +411,7 @@ export function ChatPage() {
               disabled={isStreaming}
             />
             <div className="flex justify-end">
-              <Button type="submit" loading={isStreaming} iconLeft={<Send className="size-4" />}>
+              <Button type="submit" loading={isStreaming} iconLeft={<Send className="size-4" />} className="w-full sm:w-auto">
                 {isTurkish ? 'Soruyu gonder' : 'Send question'}
               </Button>
             </div>

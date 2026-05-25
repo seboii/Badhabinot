@@ -29,7 +29,7 @@ function ReportMetric({
         <div className="flex items-start justify-between gap-4">
           <div>
             <p className="text-sm font-medium text-[var(--text-muted)]">{label}</p>
-            <p className="mt-4 text-3xl font-extrabold tracking-tight text-white">{value}</p>
+            <p className="mt-4 text-2xl font-extrabold tracking-tight text-white sm:text-3xl">{value}</p>
             <p className="mt-3 text-sm text-[var(--text-muted)]">{detail}</p>
           </div>
           <div className="flex size-12 items-center justify-center rounded-2xl bg-[rgba(255,255,255,0.06)]">
@@ -84,11 +84,11 @@ export function ReportsPage() {
             <MetricCardSkeleton />
             <MetricCardSkeleton />
           </div>
-          <div className="grid gap-4 xl:grid-cols-[minmax(0,1.1fr)_minmax(360px,0.9fr)]">
+          <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-[minmax(0,1.1fr)_minmax(360px,0.9fr)]">
             <ActivityFeedSkeleton />
             <ActivityFeedSkeleton />
           </div>
-          <div className="grid gap-4 xl:grid-cols-[minmax(0,1.05fr)_minmax(360px,0.95fr)]">
+          <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-[minmax(0,1.05fr)_minmax(360px,0.95fr)]">
             <ActivityFeedSkeleton />
             <ActivityFeedSkeleton />
           </div>
@@ -128,7 +128,7 @@ export function ReportsPage() {
         />
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1.1fr)_minmax(360px,0.9fr)]">
+      <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-[minmax(0,1.1fr)_minmax(360px,0.9fr)]">
         <Card>
           <CardHeader>
             <div>
@@ -169,7 +169,7 @@ export function ReportsPage() {
         />
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1.05fr)_minmax(360px,0.95fr)]">
+      <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-[minmax(0,1.05fr)_minmax(360px,0.95fr)]">
         <ActivityFeedCard
           title={isTurkish ? 'Zaman cizelgesi' : 'Timeline'}
           description={

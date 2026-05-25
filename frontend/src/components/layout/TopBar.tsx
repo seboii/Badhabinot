@@ -15,23 +15,27 @@ export function TopBar({ title, subtitle }: TopBarProps) {
   const profile = useUserStore((s) => s.profile)
 
   return (
-    <header className="flex flex-col gap-5 border-b border-[var(--line-soft)] bg-[var(--topbar-surface)] px-5 py-5 backdrop-blur-xl md:px-8 lg:flex-row lg:items-center lg:justify-between">
-      <div>
-        <p className="text-2xl font-bold tracking-tight text-[var(--text-strong)]">{title}</p>
-        <p className="mt-1 text-sm text-[var(--text-muted)]">{subtitle}</p>
+    <header className="flex flex-col gap-3 border-b border-[var(--line-soft)] bg-[var(--topbar-surface)] px-5 py-4 backdrop-blur-xl md:px-8 md:py-5 lg:flex-row lg:items-center lg:justify-between lg:gap-5">
+      <div className="min-w-0">
+        <p className="text-xl font-bold tracking-tight text-[var(--text-strong)] sm:text-2xl">{title}</p>
+        <p className="mt-1 hidden text-sm text-[var(--text-muted)] sm:block">{subtitle}</p>
       </div>
 
-      <div className="flex items-center gap-3">
+      <div className="flex shrink-0 items-center gap-2 md:gap-3">
         <LanguageToggle />
         <ThemeToggle />
-        <Badge variant="success" className="gap-2 px-3 py-1.5">
+        {/* Badge: icon-only on xs, full text from sm */}
+        <Badge variant="success" className="hidden gap-2 px-3 py-1.5 sm:inline-flex">
           <ShieldCheck className="size-4" />
           {isTurkish ? 'Yerel-oncelikli gizlilik' : 'Local-first privacy'}
         </Badge>
+        <Badge variant="success" className="gap-1 px-2 py-1.5 sm:hidden">
+          <ShieldCheck className="size-3.5" />
+        </Badge>
         {profile ? (
-          <div className="rounded-2xl border border-[var(--line-soft)] bg-[var(--surface)] px-4 py-3">
-            <p className="text-sm font-semibold text-[var(--text-strong)]">{profile.display_name}</p>
-            <p className="text-xs text-[var(--text-muted)]">{profile.locale}</p>
+          <div className="shrink-0 rounded-xl border border-[var(--line-soft)] bg-[var(--surface)] px-3 py-2 sm:rounded-2xl md:px-4 md:py-3">
+            <p className="max-w-[90px] truncate text-xs font-semibold text-[var(--text-strong)] sm:max-w-none sm:text-sm">{profile.display_name}</p>
+            <p className="hidden text-xs text-[var(--text-muted)] md:block">{profile.locale}</p>
           </div>
         ) : null}
       </div>

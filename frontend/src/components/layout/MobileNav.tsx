@@ -14,20 +14,23 @@ export function MobileNav() {
   ]
 
   return (
-    <nav className="fixed inset-x-4 bottom-4 z-30 flex items-center justify-between rounded-[28px] border border-[var(--line-soft)] bg-[var(--nav-surface)] px-4 py-3 shadow-[var(--shadow-panel)] backdrop-blur-xl lg:hidden">
+    <nav
+      className="fixed inset-x-3 z-30 flex items-center justify-between rounded-[28px] border border-[var(--line-soft)] bg-[var(--nav-surface)] px-2 py-2.5 shadow-[var(--shadow-panel)] backdrop-blur-xl sm:inset-x-4 sm:py-3 lg:hidden"
+      style={{ bottom: 'max(0.75rem, env(safe-area-inset-bottom, 0.75rem))' }}
+    >
       {items.map(({ to, label, icon: Icon }) => (
         <NavLink
           key={to}
           to={to}
           className={({ isActive }) =>
             cn(
-              'flex flex-1 flex-col items-center gap-1 rounded-2xl px-3 py-2 text-[11px] font-semibold text-[var(--text-muted)] transition',
+              'flex flex-1 flex-col items-center gap-1 rounded-2xl px-1.5 py-1.5 text-[10px] font-semibold text-[var(--text-muted)] transition sm:px-3 sm:text-[11px]',
               isActive && 'bg-[var(--primary-soft)] text-[var(--text-on-accent)]',
             )
           }
         >
-          <Icon className="size-4" />
-          <span>{label}</span>
+          <Icon className="size-[18px] sm:size-4" />
+          <span className="max-w-full truncate">{label}</span>
         </NavLink>
       ))}
     </nav>

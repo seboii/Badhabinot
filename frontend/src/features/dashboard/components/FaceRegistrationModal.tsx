@@ -185,7 +185,7 @@ export function FaceRegistrationModal({ onClose }: FaceRegistrationModalProps) {
         if (e.target === e.currentTarget && !isRunning) onClose()
       }}
     >
-      <div className="relative mx-4 w-full max-w-md rounded-[32px] border border-[var(--line-soft)] bg-[var(--surface-soft)] p-6 shadow-2xl">
+      <div className="relative mx-4 w-full max-w-md overflow-y-auto rounded-[28px] border border-[var(--line-soft)] bg-[var(--surface-soft)] p-5 shadow-2xl sm:rounded-[32px] sm:p-6" style={{ maxHeight: '90svh' }}>
         {/* Close button */}
         {!isRunning ? (
           <button

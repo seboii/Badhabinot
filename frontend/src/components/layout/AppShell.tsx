@@ -91,7 +91,9 @@ export function AppShell({ children }: PropsWithChildren) {
       <Sidebar user={data} />
       <div className="flex min-h-screen flex-1 flex-col">
         <TopBar title={translatedMeta.title} subtitle={translatedMeta.subtitle} />
-        <main className="flex-1 px-5 py-6 pb-28 md:px-8 lg:pb-8">{children}</main>
+        <main className="flex-1 px-4 py-5 pb-32 md:px-8 md:py-6 lg:pb-8">
+          {children}
+        </main>
       </div>
       <MobileNav />
     </div>

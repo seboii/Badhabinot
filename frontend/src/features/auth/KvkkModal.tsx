@@ -38,8 +38,8 @@ export function KvkkModal({ isOpen, onConfirm, onClose }: KvkkModalProps) {
         if (e.target === e.currentTarget) onClose()
       }}
     >
-      <div className="relative flex w-full max-w-2xl flex-col rounded-[32px] border border-[var(--line-soft)] bg-[var(--surface-soft)] shadow-2xl"
-        style={{ maxHeight: '90vh' }}
+      <div className="relative flex w-full max-w-2xl flex-col rounded-[24px] border border-[var(--line-soft)] bg-[var(--surface-soft)] shadow-2xl sm:rounded-[32px]"
+        style={{ maxHeight: '90svh' }}
       >
         {/* Header */}
         <div className="flex items-start justify-between gap-4 border-b border-[var(--line-soft)] p-6 pb-5">
