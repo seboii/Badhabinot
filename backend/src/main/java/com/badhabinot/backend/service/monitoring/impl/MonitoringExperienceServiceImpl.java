@@ -1,4 +1,4 @@
-package com.badhabinot.backend.service.monitoring;
+package com.badhabinot.backend.service.monitoring.impl;
 
 import com.badhabinot.backend.dto.monitoring.ActivityItemResponse;
 import com.badhabinot.backend.dto.monitoring.DashboardResponse;
@@ -19,7 +19,9 @@ import com.badhabinot.backend.model.monitoring.MonitoringSessionStatus;
 import com.badhabinot.backend.repository.monitoring.ActivityFeedRepository;
 import com.badhabinot.backend.repository.monitoring.HydrationLogRepository;
 import com.badhabinot.backend.repository.monitoring.MonitoringSessionRepository;
-import com.badhabinot.backend.service.user.UserContextService;
+import com.badhabinot.backend.service.monitoring.IMonitoringExperienceService;
+import com.badhabinot.backend.service.monitoring.IReminderEngineService;
+import com.badhabinot.backend.service.user.IUserContextService;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
@@ -35,20 +37,20 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
-public class MonitoringExperienceService {
+public class MonitoringExperienceServiceImpl implements IMonitoringExperienceService {
 
     private final MonitoringSessionRepository monitoringSessionRepository;
     private final ActivityFeedRepository activityFeedRepository;
     private final HydrationLogRepository hydrationLogRepository;
-    private final UserContextService userContextService;
-    private final ReminderEngineService reminderEngineService;
+    private final IUserContextService userContextService;
+    private final IReminderEngineService reminderEngineService;
 
-    public MonitoringExperienceService(
+    public MonitoringExperienceServiceImpl(
             MonitoringSessionRepository monitoringSessionRepository,
             ActivityFeedRepository activityFeedRepository,
             HydrationLogRepository hydrationLogRepository,
-            UserContextService userContextService,
-            ReminderEngineService reminderEngineService
+            IUserContextService userContextService,
+            IReminderEngineService reminderEngineService
     ) {
         this.monitoringSessionRepository = monitoringSessionRepository;
         this.activityFeedRepository = activityFeedRepository;
@@ -57,6 +59,7 @@ public class MonitoringExperienceService {
         this.reminderEngineService = reminderEngineService;
     }
 
+    @Override
     @Transactional(transactionManager = "monitoringTransactionManager")
     public SessionStartResponse startSession(Jwt jwt, SessionStartRequest request) {
         UUID userId = UUID.fromString(jwt.getSubject());
@@ -80,6 +83,7 @@ public class MonitoringExperienceService {
         return new SessionStartResponse(session.getId().toString(), session.getStatus().name(), session.getStartedAt());
     }
 
+    @Override
     @Transactional(transactionManager = "monitoringTransactionManager")
     public SessionStopResponse stopSession(Jwt jwt, String sessionId) {
         UUID userId = UUID.fromString(jwt.getSubject());
@@ -101,6 +105,7 @@ public class MonitoringExperienceService {
         return new SessionStopResponse(session.getId().toString(), session.getStatus().name(), session.getEndedAt());
     }
 
+    @Override
     @Transactional(transactionManager = "monitoringTransactionManager", readOnly = true)
     public DashboardResponse getDashboard(Jwt jwt) {
         UUID userId = UUID.fromString(jwt.getSubject());
@@ -141,6 +146,7 @@ public class MonitoringExperienceService {
         );
     }
 
+    @Override
     @Transactional(transactionManager = "monitoringTransactionManager", readOnly = true)
     public List<ActivityItemResponse> getRecentActivities(Jwt jwt, int page, int size) {
         UUID userId = UUID.fromString(jwt.getSubject());
@@ -150,6 +156,7 @@ public class MonitoringExperienceService {
                 .toList();
     }
 
+    @Override
     @Transactional(transactionManager = "monitoringTransactionManager", readOnly = true)
     public WeeklyTrendResponse getWeeklyTrend(Jwt jwt, LocalDate from) {
         UUID userId = UUID.fromString(jwt.getSubject());
@@ -180,6 +187,7 @@ public class MonitoringExperienceService {
         return new WeeklyTrendResponse(startDate, endDate, points);
     }
 
+    @Override
     @Transactional(transactionManager = "monitoringTransactionManager")
     public HydrationLogResponse logHydration(Jwt jwt, HydrationLogRequest request) {
         UUID userId = UUID.fromString(jwt.getSubject());
@@ -200,6 +208,7 @@ public class MonitoringExperienceService {
         return new HydrationLogResponse(log.getId(), request.amountMl(), request.source(), occurredAt);
     }
 
+    @Override
     @Transactional(transactionManager = "monitoringTransactionManager")
     public ActivityItemResponse triggerReminder(Jwt jwt, ReminderTriggerRequest request) {
         UUID userId = UUID.fromString(jwt.getSubject());
@@ -276,4 +285,3 @@ public class MonitoringExperienceService {
         }
     }
 }
-

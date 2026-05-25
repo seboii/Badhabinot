@@ -16,6 +16,7 @@ import com.badhabinot.backend.repository.monitoring.ReminderEventRepository;
 import com.badhabinot.backend.repository.user.UserConsentRepository;
 import com.badhabinot.backend.repository.user.UserProfileRepository;
 import com.badhabinot.backend.repository.user.UserSettingsRepository;
+import com.badhabinot.backend.service.auth.IAccountDeletionService;
 import java.util.List;
 import java.util.UUID;
 import org.slf4j.Logger;
@@ -25,9 +26,9 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
 @Service
-public class AccountDeletionService {
+public class AccountDeletionServiceImpl implements IAccountDeletionService {
 
-    private static final Logger log = LoggerFactory.getLogger(AccountDeletionService.class);
+    private static final Logger log = LoggerFactory.getLogger(AccountDeletionServiceImpl.class);
 
     private static final List<String> USER_CACHE_NAMES = List.of(
             "user-context", "user-settings", "user-consents", "analysis-context"
@@ -50,7 +51,7 @@ public class AccountDeletionService {
     private final VisionServiceClient visionServiceClient;
     private final CacheManager cacheManager;
 
-    public AccountDeletionService(
+    public AccountDeletionServiceImpl(
             AuthUserRepository authUserRepository,
             RefreshTokenRepository refreshTokenRepository,
             PasswordEncoder passwordEncoder,
@@ -86,6 +87,7 @@ public class AccountDeletionService {
         this.cacheManager = cacheManager;
     }
 
+    @Override
     public void deleteAccount(UUID userId, String password) {
         AuthUser user = authUserRepository.findById(userId)
                 .orElseThrow(() -> new AuthenticationFailedException("User not found"));

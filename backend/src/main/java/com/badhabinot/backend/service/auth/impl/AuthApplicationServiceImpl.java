@@ -21,7 +21,10 @@ import com.badhabinot.backend.model.auth.UserRole;
 import com.badhabinot.backend.repository.auth.AuthUserRepository;
 import com.badhabinot.backend.repository.auth.RefreshTokenRepository;
 import com.badhabinot.backend.infrastructure.redis.LoginAttemptService;
-import com.badhabinot.backend.service.user.UserContextService;
+import com.badhabinot.backend.service.auth.IAuthApplicationService;
+import com.badhabinot.backend.service.auth.IRefreshTokenService;
+import com.badhabinot.backend.service.auth.ITokenIssuer;
+import com.badhabinot.backend.service.user.IUserContextService;
 import java.time.Instant;
 import java.util.List;
 import java.util.Locale;
@@ -32,24 +35,24 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
-public class AuthApplicationService {
+public class AuthApplicationServiceImpl implements IAuthApplicationService {
 
     private final AuthUserRepository authUserRepository;
     private final RefreshTokenRepository refreshTokenRepository;
     private final PasswordEncoder passwordEncoder;
-    private final TokenIssuer tokenIssuer;
-    private final RefreshTokenService refreshTokenService;
-    private final UserContextService userContextService;
+    private final ITokenIssuer tokenIssuer;
+    private final IRefreshTokenService refreshTokenService;
+    private final IUserContextService userContextService;
     private final LoginAttemptService loginAttemptService;
     private final VisionServiceClient visionServiceClient;
 
-    public AuthApplicationService(
+    public AuthApplicationServiceImpl(
             AuthUserRepository authUserRepository,
             RefreshTokenRepository refreshTokenRepository,
             PasswordEncoder passwordEncoder,
-            TokenIssuer tokenIssuer,
-            RefreshTokenService refreshTokenService,
-            UserContextService userContextService,
+            ITokenIssuer tokenIssuer,
+            IRefreshTokenService refreshTokenService,
+            IUserContextService userContextService,
             LoginAttemptService loginAttemptService,
             VisionServiceClient visionServiceClient
     ) {
@@ -63,7 +66,9 @@ public class AuthApplicationService {
         this.visionServiceClient = visionServiceClient;
     }
 
+
     @Transactional(transactionManager = "authTransactionManager")
+    @Override
     public TokenResponse register(RegisterRequest request) {
         String normalizedEmail = normalizeEmail(request.email());
         if (authUserRepository.existsByEmail(normalizedEmail)) {
@@ -82,7 +87,9 @@ public class AuthApplicationService {
         return issueTokenResponse(user);
     }
 
+
     @Transactional(transactionManager = "authTransactionManager")
+    @Override
     public TokenResponse login(LoginRequest request) {
         String normalizedEmail = normalizeEmail(request.email());
         loginAttemptService.checkNotBlocked(normalizedEmail);
@@ -107,7 +114,9 @@ public class AuthApplicationService {
         return issueTokenResponse(user);
     }
 
+
     @Transactional(transactionManager = "authTransactionManager")
+    @Override
     public TokenResponse refresh(RefreshTokenRequest request) {
         RefreshToken storedToken = refreshTokenRepository.findByTokenHash(refreshTokenService.hash(request.refreshToken()))
                 .orElseThrow(() -> new InvalidRefreshTokenException("Refresh token is invalid"));
@@ -123,7 +132,9 @@ public class AuthApplicationService {
         return issueTokenResponse(user);
     }
 
+
     @Transactional(transactionManager = "authTransactionManager", readOnly = true)
+    @Override
     public AuthenticatedUserResponse me(Jwt jwt) {
         UUID userId = UUID.fromString(jwt.getSubject());
         String email = jwt.getClaimAsString("email");
@@ -131,14 +142,18 @@ public class AuthApplicationService {
         return new AuthenticatedUserResponse(userId, email, roles, jwt.getIssuedAt(), jwt.getExpiresAt());
     }
 
+
     @Transactional(transactionManager = "authTransactionManager")
+    @Override
     public void logout(Jwt jwt, LogoutRequest request) {
         refreshTokenRepository.findByTokenHash(refreshTokenService.hash(request.refreshToken()))
                 .filter(token -> token.getUserId().equals(UUID.fromString(jwt.getSubject())))
                 .ifPresent(token -> token.revoke(Instant.now()));
     }
 
+
     @Transactional(transactionManager = "authTransactionManager")
+    @Override
     public TokenResponse loginWithFace(FaceLoginRequest request) {
         String normalizedEmail = normalizeEmail(request.email());
         loginAttemptService.checkNotBlocked(normalizedEmail);
@@ -174,7 +189,9 @@ public class AuthApplicationService {
         return issueTokenResponse(user);
     }
 
+
     @Transactional(transactionManager = "authTransactionManager")
+    @Override
     public void changePassword(UUID userId, ChangePasswordDto dto) {
         AuthUser user = authUserRepository.findById(userId)
                 .orElseThrow(() -> new AuthenticationFailedException("User not found"));
@@ -189,8 +206,8 @@ public class AuthApplicationService {
     }
 
     private TokenResponse issueTokenResponse(AuthUser user) {
-        TokenIssuer.IssuedAccessToken accessToken = tokenIssuer.issueAccessToken(user);
-        RefreshTokenService.GeneratedRefreshToken refresh = refreshTokenService.generate(user.getId());
+        ITokenIssuer.IssuedAccessToken accessToken = tokenIssuer.issueAccessToken(user);
+        IRefreshTokenService.GeneratedRefreshToken refresh = refreshTokenService.generate(user.getId());
 
         refreshTokenRepository.save(RefreshToken.issue(
                 user.getId(),
@@ -211,4 +228,3 @@ public class AuthApplicationService {
         return email.trim().toLowerCase(Locale.ROOT);
     }
 }
-

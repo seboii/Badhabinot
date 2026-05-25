@@ -2,7 +2,7 @@ package com.badhabinot.backend.controller.user;
 
 import com.badhabinot.backend.dto.user.InternalUserAnalysisContextResponse;
 import com.badhabinot.backend.dto.user.InternalUserBootstrapRequest;
-import com.badhabinot.backend.service.user.UserContextService;
+import com.badhabinot.backend.service.user.IUserContextService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -21,9 +21,9 @@ import org.springframework.web.bind.annotation.RestController;
 @Tag(name = "Internal Users", description = "Internal-only user bootstrap and analysis context APIs")
 public class InternalUserController {
 
-    private final UserContextService userContextService;
+    private final IUserContextService userContextService;
 
-    public InternalUserController(UserContextService userContextService) {
+    public InternalUserController(IUserContextService userContextService) {
         this.userContextService = userContextService;
     }
 

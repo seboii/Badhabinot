@@ -2,6 +2,7 @@ package com.badhabinot.backend.service.auth.impl;
 
 import com.badhabinot.backend.model.auth.AuthUser;
 import com.badhabinot.backend.config.JwtProperties;
+import com.badhabinot.backend.service.auth.ITokenIssuer;
 import java.time.Instant;
 import java.util.List;
 import org.springframework.security.oauth2.jose.jws.MacAlgorithm;
@@ -12,17 +13,18 @@ import org.springframework.security.oauth2.jwt.JwtEncoderParameters;
 import org.springframework.stereotype.Component;
 
 @Component
-public class TokenIssuer {
+public class TokenIssuerImpl implements ITokenIssuer {
 
     private final JwtEncoder jwtEncoder;
     private final JwtProperties jwtProperties;
 
-    public TokenIssuer(JwtEncoder jwtEncoder, JwtProperties jwtProperties) {
+    public TokenIssuerImpl(JwtEncoder jwtEncoder, JwtProperties jwtProperties) {
         this.jwtEncoder = jwtEncoder;
         this.jwtProperties = jwtProperties;
     }
 
-    public IssuedAccessToken issueAccessToken(AuthUser user) {
+    @Override
+    public ITokenIssuer.IssuedAccessToken issueAccessToken(AuthUser user) {
         Instant issuedAt = Instant.now();
         Instant expiresAt = issuedAt.plus(jwtProperties.accessTokenTtl());
 
@@ -41,13 +43,7 @@ public class TokenIssuer {
                 claimsSet
         )).getTokenValue();
 
-        return new IssuedAccessToken(tokenValue, expiresAt);
-    }
-
-    public record IssuedAccessToken(
-            String tokenValue,
-            Instant expiresAt
-    ) {
+        return new ITokenIssuer.IssuedAccessToken(tokenValue, expiresAt);
     }
 }
 

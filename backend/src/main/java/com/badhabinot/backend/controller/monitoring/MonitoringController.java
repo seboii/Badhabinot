@@ -21,12 +21,12 @@ import com.badhabinot.backend.dto.monitoring.ChatHistoryResponse;
 import com.badhabinot.backend.dto.monitoring.ChatRequest;
 import com.badhabinot.backend.dto.monitoring.ChatResponse;
 import com.badhabinot.backend.integration.python.AiChatClient;
-import com.badhabinot.backend.service.monitoring.AnalysisOrchestratorService;
-import com.badhabinot.backend.service.monitoring.BehaviorEventService;
-import com.badhabinot.backend.service.monitoring.DailyReportService;
-import com.badhabinot.backend.service.monitoring.GroundedChatService;
-import com.badhabinot.backend.service.monitoring.MonitoringExperienceService;
-import com.badhabinot.backend.service.user.UserContextService;
+import com.badhabinot.backend.service.monitoring.IAnalysisOrchestratorService;
+import com.badhabinot.backend.service.monitoring.IBehaviorEventService;
+import com.badhabinot.backend.service.monitoring.IDailyReportService;
+import com.badhabinot.backend.service.monitoring.IGroundedChatService;
+import com.badhabinot.backend.service.monitoring.IMonitoringExperienceService;
+import com.badhabinot.backend.service.user.IUserContextService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -51,24 +51,24 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 @Tag(name = "Monitoring", description = "Spring-to-Python orchestration endpoints")
 public class MonitoringController {
 
-    private final AnalysisOrchestratorService analysisOrchestratorService;
-    private final MonitoringExperienceService monitoringExperienceService;
-    private final BehaviorEventService behaviorEventService;
-    private final DailyReportService dailyReportService;
-    private final GroundedChatService groundedChatService;
+    private final IAnalysisOrchestratorService analysisOrchestratorService;
+    private final IMonitoringExperienceService monitoringExperienceService;
+    private final IBehaviorEventService behaviorEventService;
+    private final IDailyReportService dailyReportService;
+    private final IGroundedChatService groundedChatService;
     private final VisionServiceClient visionServiceClient;
     private final AiChatClient aiChatClient;
-    private final UserContextService userContextService;
+    private final IUserContextService userContextService;
 
     public MonitoringController(
-            AnalysisOrchestratorService analysisOrchestratorService,
-            MonitoringExperienceService monitoringExperienceService,
-            BehaviorEventService behaviorEventService,
-            DailyReportService dailyReportService,
-            GroundedChatService groundedChatService,
+            IAnalysisOrchestratorService analysisOrchestratorService,
+            IMonitoringExperienceService monitoringExperienceService,
+            IBehaviorEventService behaviorEventService,
+            IDailyReportService dailyReportService,
+            IGroundedChatService groundedChatService,
             VisionServiceClient visionServiceClient,
             AiChatClient aiChatClient,
-            UserContextService userContextService
+            IUserContextService userContextService
     ) {
         this.analysisOrchestratorService = analysisOrchestratorService;
         this.monitoringExperienceService = monitoringExperienceService;
@@ -220,4 +220,3 @@ public class MonitoringController {
         return aiChatClient.ollamaHealth(ctx.ollamaBaseUrl(), ctx.localModelName());
     }
 }
-

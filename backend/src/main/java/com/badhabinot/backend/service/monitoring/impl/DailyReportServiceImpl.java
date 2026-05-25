@@ -1,4 +1,4 @@
-package com.badhabinot.backend.service.monitoring;
+package com.badhabinot.backend.service.monitoring.impl;
 
 import com.badhabinot.backend.dto.monitoring.ActivityItemResponse;
 import com.badhabinot.backend.dto.monitoring.BehaviorEventResponse;
@@ -17,7 +17,10 @@ import com.badhabinot.backend.repository.monitoring.BehaviorEventRepository;
 import com.badhabinot.backend.repository.monitoring.DailyReportRepository;
 import com.badhabinot.backend.repository.monitoring.HydrationLogRepository;
 import com.badhabinot.backend.repository.monitoring.ReminderEventRepository;
-import com.badhabinot.backend.service.user.UserContextService;
+import com.badhabinot.backend.service.monitoring.IBehaviorEventService;
+import com.badhabinot.backend.service.monitoring.IDailyReportService;
+import com.badhabinot.backend.service.monitoring.IReminderEngineService;
+import com.badhabinot.backend.service.user.IUserContextService;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.Instant;
@@ -33,7 +36,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
-public class DailyReportService {
+public class DailyReportServiceImpl implements IDailyReportService {
 
     private static final TypeReference<List<String>> STRING_LIST = new TypeReference<>() {
     };
@@ -46,21 +49,21 @@ public class DailyReportService {
     private final HydrationLogRepository hydrationLogRepository;
     private final ActivityFeedRepository activityFeedRepository;
     private final AnalysisJobRepository analysisJobRepository;
-    private final UserContextService userContextService;
-    private final BehaviorEventService behaviorEventService;
-    private final ReminderEngineService reminderEngineService;
+    private final IUserContextService userContextService;
+    private final IBehaviorEventService behaviorEventService;
+    private final IReminderEngineService reminderEngineService;
     private final ObjectMapper objectMapper;
 
-    public DailyReportService(
+    public DailyReportServiceImpl(
             DailyReportRepository dailyReportRepository,
             BehaviorEventRepository behaviorEventRepository,
             ReminderEventRepository reminderEventRepository,
             HydrationLogRepository hydrationLogRepository,
             ActivityFeedRepository activityFeedRepository,
             AnalysisJobRepository analysisJobRepository,
-            UserContextService userContextService,
-            BehaviorEventService behaviorEventService,
-            ReminderEngineService reminderEngineService,
+            IUserContextService userContextService,
+            IBehaviorEventService behaviorEventService,
+            IReminderEngineService reminderEngineService,
             ObjectMapper objectMapper
     ) {
         this.dailyReportRepository = dailyReportRepository;
@@ -75,6 +78,7 @@ public class DailyReportService {
         this.objectMapper = objectMapper;
     }
 
+    @Override
     @Transactional(transactionManager = "monitoringTransactionManager")
     public DailyReportResponse getDailyReport(Jwt jwt, LocalDate requestedDate) {
         UUID userId = UUID.fromString(jwt.getSubject());
@@ -83,6 +87,7 @@ public class DailyReportService {
         return getDailyReport(userId, reportDate, context);
     }
 
+    @Override
     @Transactional(transactionManager = "monitoringTransactionManager")
     public DailyReportResponse getDailyReport(UUID userId, LocalDate reportDate, InternalUserAnalysisContext context) {
         ZoneId zoneId = zoneId(context.timezone());
@@ -262,4 +267,3 @@ public class DailyReportService {
         return Math.round(value * 10_000.0) / 10_000.0;
     }
 }
-

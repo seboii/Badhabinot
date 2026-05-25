@@ -16,6 +16,7 @@ import com.badhabinot.backend.model.monitoring.ReminderEvent;
 import com.badhabinot.backend.repository.monitoring.ActivityFeedRepository;
 import com.badhabinot.backend.repository.monitoring.HydrationLogRepository;
 import com.badhabinot.backend.repository.monitoring.ReminderEventRepository;
+import com.badhabinot.backend.service.monitoring.impl.ReminderEngineServiceImpl;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.Instant;
 import java.util.List;
@@ -39,11 +40,11 @@ class ReminderEngineServiceTest {
     @Mock
     private HydrationLogRepository hydrationLogRepository;
 
-    private ReminderEngineService reminderEngineService;
+    private ReminderEngineServiceImpl ReminderEngineServiceImpl;
 
     @BeforeEach
     void setUp() {
-        reminderEngineService = new ReminderEngineService(
+        ReminderEngineServiceImpl = new ReminderEngineServiceImpl(
                 reminderEventRepository,
                 activityFeedRepository,
                 hydrationLogRepository,
@@ -94,7 +95,7 @@ class ReminderEngineServiceTest {
         when(reminderEventRepository.save(any(ReminderEvent.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(activityFeedRepository.save(any(ActivityFeedItem.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
-        var reminders = reminderEngineService.evaluateAfterAnalysis(userId, sessionId, context, occurredAt, List.of(postureEvent));
+        var reminders = ReminderEngineServiceImpl.evaluateAfterAnalysis(userId, sessionId, context, occurredAt, List.of(postureEvent));
 
         assertThat(reminders).hasSize(2);
         assertThat(reminders).extracting("reminderType").containsExactlyInAnyOrder("water_reminder", "posture_reminder");
@@ -125,7 +126,7 @@ class ReminderEngineServiceTest {
                 "llama3.2:3b",
                 "http://localhost:11434"
         );
-        var reminders = reminderEngineService.evaluateAfterAnalysis(userId, sessionId, context, occurredAt, List.of());
+        var reminders = ReminderEngineServiceImpl.evaluateAfterAnalysis(userId, sessionId, context, occurredAt, List.of());
 
         assertThat(reminders).isEmpty();
         verify(reminderEventRepository, never()).save(any(ReminderEvent.class));

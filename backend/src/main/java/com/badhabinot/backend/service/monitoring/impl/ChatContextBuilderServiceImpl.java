@@ -1,4 +1,4 @@
-package com.badhabinot.backend.service.monitoring;
+package com.badhabinot.backend.service.monitoring.impl;
 
 import com.badhabinot.backend.dto.monitoring.AiChatRequest;
 import com.badhabinot.backend.dto.monitoring.DailyReportResponse;
@@ -13,6 +13,7 @@ import com.badhabinot.backend.repository.monitoring.DailyReportRepository;
 import com.badhabinot.backend.repository.monitoring.HydrationLogRepository;
 import com.badhabinot.backend.repository.monitoring.MonitoringSessionRepository;
 import com.badhabinot.backend.repository.monitoring.ReminderEventRepository;
+import com.badhabinot.backend.service.monitoring.IChatContextBuilderService;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.Duration;
@@ -30,7 +31,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 
 @Service
-public class ChatContextBuilderService {
+public class ChatContextBuilderServiceImpl implements IChatContextBuilderService {
 
     private static final TypeReference<Map<String, Object>> MAP_TYPE = new TypeReference<>() {
     };
@@ -42,7 +43,7 @@ public class ChatContextBuilderService {
     private final HydrationLogRepository hydrationLogRepository;
     private final ObjectMapper objectMapper;
 
-    public ChatContextBuilderService(
+    public ChatContextBuilderServiceImpl(
             BehaviorEventRepository behaviorEventRepository,
             ReminderEventRepository reminderEventRepository,
             DailyReportRepository dailyReportRepository,
@@ -58,6 +59,7 @@ public class ChatContextBuilderService {
         this.objectMapper = objectMapper;
     }
 
+    @Override
     public AiChatRequest.Context build(
             UUID userId,
             InternalUserAnalysisContext userContext,
@@ -306,4 +308,3 @@ public class ChatContextBuilderService {
         }
     }
 }
-

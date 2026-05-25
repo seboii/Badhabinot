@@ -13,6 +13,7 @@ import com.badhabinot.backend.model.user.UserSettings;
 import com.badhabinot.backend.repository.user.UserConsentRepository;
 import com.badhabinot.backend.repository.user.UserProfileRepository;
 import com.badhabinot.backend.repository.user.UserSettingsRepository;
+import com.badhabinot.backend.service.user.impl.UserContextServiceImpl;
 import java.time.LocalTime;
 import java.util.Optional;
 import java.util.UUID;
@@ -34,11 +35,11 @@ class UserContextServiceTest {
     @Mock
     private UserConsentRepository userConsentRepository;
 
-    private UserContextService userContextService;
+    private UserContextServiceImpl UserContextServiceImpl;
 
     @BeforeEach
     void setUp() {
-        userContextService = new UserContextService(userProfileRepository, userSettingsRepository, userConsentRepository);
+        UserContextServiceImpl = new UserContextServiceImpl(userProfileRepository, userSettingsRepository, userConsentRepository);
     }
 
     @Test
@@ -66,7 +67,7 @@ class UserContextServiceTest {
         when(userSettingsRepository.findById(userId)).thenReturn(Optional.of(settings));
         when(userConsentRepository.findById(userId)).thenReturn(Optional.of(consent));
 
-        var context = userContextService.getMonitoringAnalysisContext(userId);
+        var context = UserContextServiceImpl.getMonitoringAnalysisContext(userId);
 
         assertThat(context.userId()).isEqualTo(userId.toString());
         assertThat(context.timezone()).isEqualTo("Europe/Istanbul");
@@ -88,7 +89,7 @@ class UserContextServiceTest {
         when(userConsentRepository.findById(userId)).thenReturn(Optional.empty());
         when(userConsentRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
-        userContextService.bootstrap(userId, "alice@example.com", "Alice", "UTC", "en-US");
+        UserContextServiceImpl.bootstrap(userId, "alice@example.com", "Alice", "UTC", "en-US");
 
         verify(userProfileRepository).save(any(UserProfile.class));
         verify(userSettingsRepository).save(any(UserSettings.class));

@@ -19,7 +19,8 @@ import com.badhabinot.backend.model.monitoring.AnalysisJob;
 import com.badhabinot.backend.model.monitoring.MonitoringSession;
 import com.badhabinot.backend.repository.monitoring.AnalysisJobRepository;
 import com.badhabinot.backend.repository.monitoring.MonitoringSessionRepository;
-import com.badhabinot.backend.service.user.UserContextService;
+import com.badhabinot.backend.service.monitoring.impl.AnalysisOrchestratorServiceImpl;
+import com.badhabinot.backend.service.user.IUserContextService;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
@@ -42,7 +43,7 @@ class AnalysisOrchestratorServiceTest {
     private MonitoringSessionRepository monitoringSessionRepository;
 
     @Mock
-    private UserContextService userContextService;
+    private IUserContextService userContextService;
 
     @Mock
     private VisionServiceClient visionServiceClient;
@@ -51,16 +52,16 @@ class AnalysisOrchestratorServiceTest {
     private AiAnalysisClient aiAnalysisClient;
 
     @Mock
-    private BehaviorEventService behaviorEventService;
+    private IBehaviorEventService behaviorEventService;
 
     @Mock
-    private ReminderEngineService reminderEngineService;
+    private IReminderEngineService reminderEngineService;
 
     @Mock
     private AnalysisJobStateStore analysisJobStateStore;
 
     @InjectMocks
-    private AnalysisOrchestratorService analysisOrchestratorService;
+    private AnalysisOrchestratorServiceImpl AnalysisOrchestratorServiceImpl;
 
     @Test
     void analyzeRejectsFramesWhenRemoteInferenceConsentIsMissing() {
@@ -95,7 +96,7 @@ class AnalysisOrchestratorServiceTest {
                 "image/jpeg"
         );
 
-        assertThatThrownBy(() -> analysisOrchestratorService.analyze(jwt, request))
+        assertThatThrownBy(() -> AnalysisOrchestratorServiceImpl.analyze(jwt, request))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("Remote inference consent");
 
@@ -164,7 +165,7 @@ class AnalysisOrchestratorServiceTest {
                 "image/jpeg"
         );
 
-        var response = analysisOrchestratorService.analyze(jwt, request);
+        var response = AnalysisOrchestratorServiceImpl.analyze(jwt, request);
 
         assertThat(response.subjectPresent()).isFalse();
         assertThat(response.model().provider()).isEqualTo("none");
@@ -197,7 +198,7 @@ class AnalysisOrchestratorServiceTest {
         );
         when(analysisJobStateStore.findOwned(analysisId, userId)).thenReturn(Optional.of(cached));
 
-        var response = analysisOrchestratorService.getJobStatus(jwt, analysisId.toString());
+        var response = AnalysisOrchestratorServiceImpl.getJobStatus(jwt, analysisId.toString());
 
         assertThat(response).isEqualTo(cached);
         verifyNoInteractions(analysisJobRepository);

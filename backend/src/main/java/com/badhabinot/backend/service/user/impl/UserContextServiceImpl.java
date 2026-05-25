@@ -1,4 +1,4 @@
-package com.badhabinot.backend.service.user;
+package com.badhabinot.backend.service.user.impl;
 
 import com.badhabinot.backend.dto.user.ConsentResponse;
 import com.badhabinot.backend.dto.user.InternalUserBootstrapRequest;
@@ -17,6 +17,7 @@ import com.badhabinot.backend.repository.user.UserConsentRepository;
 import com.badhabinot.backend.repository.user.UserProfileRepository;
 import com.badhabinot.backend.repository.user.UserSettingsRepository;
 import com.badhabinot.backend.security.CurrentUserClaims;
+import com.badhabinot.backend.service.user.IUserContextService;
 import java.util.UUID;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
@@ -25,13 +26,13 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
-public class UserContextService {
+public class UserContextServiceImpl implements IUserContextService {
 
     private final UserProfileRepository userProfileRepository;
     private final UserSettingsRepository userSettingsRepository;
     private final UserConsentRepository userConsentRepository;
 
-    public UserContextService(
+    public UserContextServiceImpl(
             UserProfileRepository userProfileRepository,
             UserSettingsRepository userSettingsRepository,
             UserConsentRepository userConsentRepository
@@ -41,6 +42,7 @@ public class UserContextService {
         this.userConsentRepository = userConsentRepository;
     }
 
+    @Override
     @Transactional(transactionManager = "userTransactionManager")
     @Cacheable(cacheNames = "user-context", key = "#claims.userId.toString()")
     public UserContextResponse getContext(CurrentUserClaims claims) {
@@ -50,6 +52,7 @@ public class UserContextService {
         return toContextResponse(profile, settings, consent);
     }
 
+    @Override
     @Transactional(transactionManager = "userTransactionManager")
     @Caching(evict = {
             @CacheEvict(cacheNames = "user-context", key = "#claims.userId.toString()"),
@@ -64,6 +67,7 @@ public class UserContextService {
         return toProfileResponse(userProfileRepository.save(profile));
     }
 
+    @Override
     @Transactional(transactionManager = "userTransactionManager")
     @Cacheable(cacheNames = "user-settings", key = "#claims.userId.toString()")
     public SettingsResponse getSettings(CurrentUserClaims claims) {
@@ -71,6 +75,7 @@ public class UserContextService {
         return toSettingsResponse(ensureSettings(claims.userId()));
     }
 
+    @Override
     @Transactional(transactionManager = "userTransactionManager")
     @Caching(evict = {
             @CacheEvict(cacheNames = "user-context", key = "#claims.userId.toString()"),
@@ -97,6 +102,7 @@ public class UserContextService {
         return toSettingsResponse(userSettingsRepository.save(settings));
     }
 
+    @Override
     @Transactional(transactionManager = "userTransactionManager")
     @Cacheable(cacheNames = "user-consents", key = "#claims.userId.toString()")
     public ConsentResponse getConsents(CurrentUserClaims claims) {
@@ -105,6 +111,7 @@ public class UserContextService {
         return toConsentResponse(ensureConsent(claims.userId()));
     }
 
+    @Override
     @Transactional(transactionManager = "userTransactionManager")
     @Caching(evict = {
             @CacheEvict(cacheNames = "user-context", key = "#claims.userId.toString()"),
@@ -123,6 +130,7 @@ public class UserContextService {
         return toConsentResponse(userConsentRepository.save(consent));
     }
 
+    @Override
     @Transactional(transactionManager = "userTransactionManager")
     @Caching(evict = {
             @CacheEvict(cacheNames = "user-context", key = "#request.userId.toString()"),
@@ -134,6 +142,7 @@ public class UserContextService {
         bootstrap(request.userId(), request.email(), request.displayName(), request.timezone(), request.locale());
     }
 
+    @Override
     @Transactional(transactionManager = "userTransactionManager")
     @Caching(evict = {
             @CacheEvict(cacheNames = "user-context", key = "#userId.toString()"),
@@ -156,6 +165,7 @@ public class UserContextService {
         ensureConsent(userId);
     }
 
+    @Override
     @Transactional(transactionManager = "userTransactionManager")
     @Cacheable(cacheNames = "analysis-context", key = "#userId.toString()")
     public InternalUserAnalysisContextResponse getInternalAnalysisContext(UUID userId) {
@@ -182,6 +192,7 @@ public class UserContextService {
         );
     }
 
+    @Override
     @Transactional(transactionManager = "userTransactionManager", readOnly = true)
     public InternalUserAnalysisContext getMonitoringAnalysisContext(UUID userId) {
         InternalUserAnalysisContextResponse context = getInternalAnalysisContext(userId);
@@ -280,4 +291,3 @@ public class UserContextService {
         );
     }
 }
-

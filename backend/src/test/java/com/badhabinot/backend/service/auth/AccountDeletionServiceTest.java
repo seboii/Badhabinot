@@ -27,7 +27,7 @@ import com.badhabinot.backend.repository.monitoring.ReminderEventRepository;
 import com.badhabinot.backend.repository.user.UserConsentRepository;
 import com.badhabinot.backend.repository.user.UserProfileRepository;
 import com.badhabinot.backend.repository.user.UserSettingsRepository;
-import com.badhabinot.backend.service.auth.impl.AccountDeletionService;
+import com.badhabinot.backend.service.auth.impl.AccountDeletionServiceImpl;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -62,7 +62,7 @@ class AccountDeletionServiceTest {
     @Mock private Cache mockCache;
 
     @InjectMocks
-    private AccountDeletionService accountDeletionService;
+    private AccountDeletionServiceImpl AccountDeletionServiceImpl;
 
     @Test
     void deleteAccountCascadesAllTablesAndDeletesFaceProfile() {
@@ -73,7 +73,7 @@ class AccountDeletionServiceTest {
         when(passwordEncoder.matches("correct-pw", "hashed-pw")).thenReturn(true);
         when(cacheManager.getCache(any())).thenReturn(mockCache);
 
-        accountDeletionService.deleteAccount(userId, "correct-pw");
+        AccountDeletionServiceImpl.deleteAccount(userId, "correct-pw");
 
         // Verify all monitoring repositories are cleared
         verify(activityFeedRepository).deleteByUserId(userId);
@@ -109,7 +109,7 @@ class AccountDeletionServiceTest {
         when(authUserRepository.findById(userId)).thenReturn(Optional.of(user));
         when(passwordEncoder.matches("wrong-pw", "hashed-pw")).thenReturn(false);
 
-        assertThatThrownBy(() -> accountDeletionService.deleteAccount(userId, "wrong-pw"))
+        assertThatThrownBy(() -> AccountDeletionServiceImpl.deleteAccount(userId, "wrong-pw"))
                 .isInstanceOf(IllegalArgumentException.class);
 
         // Nothing should be deleted — only the lookup is expected, not any delete
@@ -124,7 +124,7 @@ class AccountDeletionServiceTest {
         UUID userId = UUID.randomUUID();
         when(authUserRepository.findById(userId)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> accountDeletionService.deleteAccount(userId, "any-pw"))
+        assertThatThrownBy(() -> AccountDeletionServiceImpl.deleteAccount(userId, "any-pw"))
                 .isInstanceOf(AuthenticationFailedException.class);
     }
 
@@ -140,7 +140,7 @@ class AccountDeletionServiceTest {
                 .when(visionServiceClient).deleteFaceProfile(userId.toString());
 
         // Should not throw — face profile deletion failure is non-fatal
-        accountDeletionService.deleteAccount(userId, "correct-pw");
+        AccountDeletionServiceImpl.deleteAccount(userId, "correct-pw");
 
         // All DB deletions should still have been called
         verify(authUserRepository).deleteById(userId);

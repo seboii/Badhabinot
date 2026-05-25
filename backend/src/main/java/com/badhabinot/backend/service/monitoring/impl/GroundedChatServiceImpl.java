@@ -1,4 +1,4 @@
-package com.badhabinot.backend.service.monitoring;
+package com.badhabinot.backend.service.monitoring.impl;
 
 import com.badhabinot.backend.dto.monitoring.AiChatRequest;
 import com.badhabinot.backend.dto.monitoring.AiChatResponse;
@@ -11,7 +11,10 @@ import com.badhabinot.backend.dto.monitoring.InternalUserAnalysisContext;
 import com.badhabinot.backend.model.monitoring.ChatMessage;
 import com.badhabinot.backend.repository.monitoring.ChatMessageRepository;
 import com.badhabinot.backend.integration.python.AiChatClient;
-import com.badhabinot.backend.service.user.UserContextService;
+import com.badhabinot.backend.service.monitoring.IChatContextBuilderService;
+import com.badhabinot.backend.service.monitoring.IDailyReportService;
+import com.badhabinot.backend.service.monitoring.IGroundedChatService;
+import com.badhabinot.backend.service.user.IUserContextService;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
@@ -30,7 +33,7 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 @Service
-public class GroundedChatService {
+public class GroundedChatServiceImpl implements IGroundedChatService {
 
     private static final TypeReference<Map<String, Object>> MAP_TYPE = new TypeReference<>() {
     };
@@ -38,17 +41,17 @@ public class GroundedChatService {
     private static final int RECENT_MESSAGES_LIMIT = 50;
 
     private final ChatMessageRepository chatMessageRepository;
-    private final UserContextService userContextService;
-    private final DailyReportService dailyReportService;
-    private final ChatContextBuilderService chatContextBuilderService;
+    private final IUserContextService userContextService;
+    private final IDailyReportService dailyReportService;
+    private final IChatContextBuilderService chatContextBuilderService;
     private final AiChatClient aiChatClient;
     private final ObjectMapper objectMapper;
 
-    public GroundedChatService(
+    public GroundedChatServiceImpl(
             ChatMessageRepository chatMessageRepository,
-            UserContextService userContextService,
-            DailyReportService dailyReportService,
-            ChatContextBuilderService chatContextBuilderService,
+            IUserContextService userContextService,
+            IDailyReportService dailyReportService,
+            IChatContextBuilderService chatContextBuilderService,
             AiChatClient aiChatClient,
             ObjectMapper objectMapper
     ) {
@@ -60,6 +63,7 @@ public class GroundedChatService {
         this.objectMapper = objectMapper;
     }
 
+    @Override
     @Transactional(transactionManager = "monitoringTransactionManager", readOnly = true)
     public ChatHistoryResponse history(Jwt jwt, String conversationId, int limit) {
         UUID userId = UUID.fromString(jwt.getSubject());
@@ -76,6 +80,7 @@ public class GroundedChatService {
         return new ChatHistoryResponse(resolvedConversationId.toString(), messages);
     }
 
+    @Override
     @Transactional(transactionManager = "monitoringTransactionManager")
     public ChatResponse chat(Jwt jwt, ChatRequest request) {
         UUID userId = UUID.fromString(jwt.getSubject());
@@ -142,6 +147,7 @@ public class GroundedChatService {
         );
     }
 
+    @Override
     @Transactional(transactionManager = "monitoringTransactionManager")
     public SseEmitter chatStream(Jwt jwt, ChatRequest request) {
         UUID userId = UUID.fromString(jwt.getSubject());
@@ -189,8 +195,6 @@ public class GroundedChatService {
                 writeJson(metadata)
         ));
 
-        // Capture final values before the transaction commits so the streaming
-        // thread (which runs outside the transaction) can safely read them.
         final String answerToStream = aiResponse.answer();
         final List<String> finalGroundedFacts = safeList(aiResponse.groundedFacts());
         final List<String> finalFollowUpSuggestions = safeList(aiResponse.followUpSuggestions());
@@ -199,21 +203,17 @@ public class GroundedChatService {
         SseEmitter emitter = new SseEmitter(120_000L);
         emitter.onTimeout(emitter::complete);
 
-        // Start the virtual streaming thread only after the TX commits so
-        // the saved messages are visible to any subsequent history queries.
         TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
             @Override
             public void afterCommit() {
                 Thread.ofVirtual().start(() -> {
                     try {
-                        // Stream the answer two characters at a time to simulate token delivery.
                         for (int i = 0; i < answerToStream.length(); i += 2) {
                             String chunk = answerToStream.substring(i, Math.min(i + 2, answerToStream.length()));
                             emitter.send(SseEmitter.event()
                                     .data(objectMapper.writeValueAsString(Map.of("token", chunk))));
                             Thread.sleep(15);
                         }
-                        // Final event carries metadata so the frontend can finalise the message.
                         emitter.send(SseEmitter.event()
                                 .data(objectMapper.writeValueAsString(Map.of(
                                         "done", true,
@@ -223,7 +223,6 @@ public class GroundedChatService {
                                 ))));
                         emitter.complete();
                     } catch (IOException ex) {
-                        // Client disconnected mid-stream — normal for SSE.
                         emitter.completeWithError(ex);
                     } catch (InterruptedException ex) {
                         Thread.currentThread().interrupt();
@@ -322,4 +321,3 @@ public class GroundedChatService {
         }
     }
 }
-

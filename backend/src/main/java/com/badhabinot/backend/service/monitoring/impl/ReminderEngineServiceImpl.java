@@ -1,4 +1,4 @@
-package com.badhabinot.backend.service.monitoring;
+package com.badhabinot.backend.service.monitoring.impl;
 
 import com.badhabinot.backend.dto.monitoring.BehaviorEventResponse;
 import com.badhabinot.backend.dto.monitoring.InternalUserAnalysisContext;
@@ -10,6 +10,7 @@ import com.badhabinot.backend.model.monitoring.ReminderEvent;
 import com.badhabinot.backend.repository.monitoring.ActivityFeedRepository;
 import com.badhabinot.backend.repository.monitoring.HydrationLogRepository;
 import com.badhabinot.backend.repository.monitoring.ReminderEventRepository;
+import com.badhabinot.backend.service.monitoring.IReminderEngineService;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.Duration;
@@ -26,7 +27,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
-public class ReminderEngineService {
+public class ReminderEngineServiceImpl implements IReminderEngineService {
 
     private static final TypeReference<Map<String, Object>> MAP_TYPE = new TypeReference<>() {
     };
@@ -36,7 +37,7 @@ public class ReminderEngineService {
     private final HydrationLogRepository hydrationLogRepository;
     private final ObjectMapper objectMapper;
 
-    public ReminderEngineService(
+    public ReminderEngineServiceImpl(
             ReminderEventRepository reminderEventRepository,
             ActivityFeedRepository activityFeedRepository,
             HydrationLogRepository hydrationLogRepository,
@@ -48,6 +49,7 @@ public class ReminderEngineService {
         this.objectMapper = objectMapper;
     }
 
+    @Override
     @Transactional(transactionManager = "monitoringTransactionManager")
     public List<ReminderEventResponse> evaluateAfterAnalysis(
             UUID userId,
@@ -78,6 +80,7 @@ public class ReminderEngineService {
         return reminders;
     }
 
+    @Override
     @Transactional(transactionManager = "monitoringTransactionManager")
     public ReminderEventResponse recordManualReminder(
             UUID userId,
@@ -100,6 +103,7 @@ public class ReminderEngineService {
         );
     }
 
+    @Override
     @Transactional(transactionManager = "monitoringTransactionManager", readOnly = true)
     public List<ReminderEventResponse> getRecentReminders(UUID userId, int limit) {
         return reminderEventRepository.findByUserIdOrderByOccurredAtDesc(userId, PageRequest.of(0, Math.max(1, Math.min(limit, 20))))
@@ -252,6 +256,7 @@ public class ReminderEngineService {
         return !currentTime.isBefore(start) || currentTime.isBefore(end);
     }
 
+    @Override
     public ReminderEventResponse toResponse(ReminderEvent reminderEvent) {
         return new ReminderEventResponse(
                 reminderEvent.getId(),
@@ -316,4 +321,3 @@ public class ReminderEngineService {
         }
     }
 }
-

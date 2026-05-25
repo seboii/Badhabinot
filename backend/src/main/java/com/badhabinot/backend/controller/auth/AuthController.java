@@ -9,8 +9,8 @@ import com.badhabinot.backend.dto.auth.PasswordResetRequestDto;
 import com.badhabinot.backend.dto.auth.RefreshTokenRequest;
 import com.badhabinot.backend.dto.auth.RegisterRequest;
 import com.badhabinot.backend.dto.auth.TokenResponse;
-import com.badhabinot.backend.service.auth.impl.AuthApplicationService;
-import com.badhabinot.backend.service.auth.impl.PasswordResetService;
+import com.badhabinot.backend.service.auth.IAuthApplicationService;
+import com.badhabinot.backend.service.auth.IPasswordResetService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -30,10 +30,10 @@ import org.springframework.web.bind.annotation.RestController;
 @Tag(name = "Authentication", description = "Registration, login, refresh, and current-user APIs")
 public class AuthController {
 
-    private final AuthApplicationService authApplicationService;
-    private final PasswordResetService passwordResetService;
+    private final IAuthApplicationService authApplicationService;
+    private final IPasswordResetService passwordResetService;
 
-    public AuthController(AuthApplicationService authApplicationService, PasswordResetService passwordResetService) {
+    public AuthController(IAuthApplicationService authApplicationService, IPasswordResetService passwordResetService) {
         this.authApplicationService = authApplicationService;
         this.passwordResetService = passwordResetService;
     }
@@ -89,4 +89,3 @@ public class AuthController {
         return authApplicationService.me(jwt);
     }
 }
-

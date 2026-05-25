@@ -27,10 +27,8 @@ import com.badhabinot.backend.model.auth.UserRole;
 import com.badhabinot.backend.repository.auth.AuthUserRepository;
 import com.badhabinot.backend.repository.auth.RefreshTokenRepository;
 import com.badhabinot.backend.infrastructure.redis.LoginAttemptService;
-import com.badhabinot.backend.service.auth.impl.AuthApplicationService;
-import com.badhabinot.backend.service.auth.impl.RefreshTokenService;
-import com.badhabinot.backend.service.auth.impl.TokenIssuer;
-import com.badhabinot.backend.service.user.UserContextService;
+import com.badhabinot.backend.service.auth.impl.AuthApplicationServiceImpl;
+import com.badhabinot.backend.service.user.IUserContextService;
 import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
@@ -55,13 +53,13 @@ class AuthApplicationServiceTest {
     private PasswordEncoder passwordEncoder;
 
     @Mock
-    private TokenIssuer tokenIssuer;
+    private ITokenIssuer tokenIssuer;
 
     @Mock
-    private RefreshTokenService refreshTokenService;
+    private IRefreshTokenService refreshTokenService;
 
     @Mock
-    private UserContextService userContextService;
+    private IUserContextService userContextService;
 
     @Mock
     private LoginAttemptService loginAttemptService;
@@ -70,7 +68,7 @@ class AuthApplicationServiceTest {
     private VisionServiceClient visionServiceClient;
 
     @InjectMocks
-    private AuthApplicationService authApplicationService;
+    private AuthApplicationServiceImpl AuthApplicationServiceImpl;
 
     @Test
     void registerNormalizesEmailAndBootstrapsUserContext() {
@@ -78,14 +76,14 @@ class AuthApplicationServiceTest {
         when(authUserRepository.existsByEmail("alice@example.com")).thenReturn(false);
         when(passwordEncoder.encode("secret-123")).thenReturn("encoded-password");
         when(authUserRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
-        when(tokenIssuer.issueAccessToken(any())).thenReturn(new TokenIssuer.IssuedAccessToken("access-token", expiresAt));
-        when(refreshTokenService.generate(any())).thenReturn(new RefreshTokenService.GeneratedRefreshToken(
+        when(tokenIssuer.issueAccessToken(any())).thenReturn(new ITokenIssuer.IssuedAccessToken("access-token", expiresAt));
+        when(refreshTokenService.generate(any())).thenReturn(new IRefreshTokenService.GeneratedRefreshToken(
                 "refresh-token",
                 "refresh-hash",
                 expiresAt
         ));
 
-        var response = authApplicationService.register(new RegisterRequest(
+        var response = AuthApplicationServiceImpl.register(new RegisterRequest(
                 " Alice@Example.com ",
                 "secret-123",
                 "Alice",
@@ -112,7 +110,7 @@ class AuthApplicationServiceTest {
     void registerRejectsDuplicateEmail() {
         when(authUserRepository.existsByEmail("duplicate@example.com")).thenReturn(true);
 
-        assertThatThrownBy(() -> authApplicationService.register(new RegisterRequest(
+        assertThatThrownBy(() -> AuthApplicationServiceImpl.register(new RegisterRequest(
                 "duplicate@example.com",
                 "secret-123",
                 "Alice",
@@ -132,11 +130,11 @@ class AuthApplicationServiceTest {
         when(authUserRepository.findByEmail("bob@example.com")).thenReturn(Optional.of(user));
         when(passwordEncoder.matches("correct-pw", "hashed-pw")).thenReturn(true);
         when(authUserRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
-        when(tokenIssuer.issueAccessToken(any())).thenReturn(new TokenIssuer.IssuedAccessToken("access-token", expiresAt));
-        when(refreshTokenService.generate(any())).thenReturn(new RefreshTokenService.GeneratedRefreshToken(
+        when(tokenIssuer.issueAccessToken(any())).thenReturn(new ITokenIssuer.IssuedAccessToken("access-token", expiresAt));
+        when(refreshTokenService.generate(any())).thenReturn(new IRefreshTokenService.GeneratedRefreshToken(
                 "refresh-token", "refresh-hash", expiresAt));
 
-        var response = authApplicationService.login(new LoginRequest("bob@example.com", "correct-pw"));
+        var response = AuthApplicationServiceImpl.login(new LoginRequest("bob@example.com", "correct-pw"));
 
         assertThat(response.accessToken()).isEqualTo("access-token");
         assertThat(response.user().email()).isEqualTo("bob@example.com");
@@ -149,7 +147,7 @@ class AuthApplicationServiceTest {
         when(authUserRepository.findByEmail("bob@example.com")).thenReturn(Optional.of(user));
         when(passwordEncoder.matches("wrong-pw", "hashed-pw")).thenReturn(false);
 
-        assertThatThrownBy(() -> authApplicationService.login(new LoginRequest("bob@example.com", "wrong-pw")))
+        assertThatThrownBy(() -> AuthApplicationServiceImpl.login(new LoginRequest("bob@example.com", "wrong-pw")))
                 .isInstanceOf(AuthenticationFailedException.class);
 
         verify(loginAttemptService).recordFailure("bob@example.com");
@@ -160,7 +158,7 @@ class AuthApplicationServiceTest {
     void loginRejectsUnknownEmail() {
         when(authUserRepository.findByEmail("ghost@example.com")).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> authApplicationService.login(new LoginRequest("ghost@example.com", "pw")))
+        assertThatThrownBy(() -> AuthApplicationServiceImpl.login(new LoginRequest("ghost@example.com", "pw")))
                 .isInstanceOf(AuthenticationFailedException.class);
 
         verify(loginAttemptService).recordFailure("ghost@example.com");
@@ -178,11 +176,11 @@ class AuthApplicationServiceTest {
         when(visionServiceClient.verifyFace(any(), any(), any())).thenReturn(
                 new FaceVerificationResponse(true, 0.92f, "Yüz doğrulandı"));
         when(authUserRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
-        when(tokenIssuer.issueAccessToken(any())).thenReturn(new TokenIssuer.IssuedAccessToken("access-token", expiresAt));
+        when(tokenIssuer.issueAccessToken(any())).thenReturn(new ITokenIssuer.IssuedAccessToken("access-token", expiresAt));
         when(refreshTokenService.generate(any())).thenReturn(
-                new RefreshTokenService.GeneratedRefreshToken("refresh-token", "refresh-hash", expiresAt));
+                new IRefreshTokenService.GeneratedRefreshToken("refresh-token", "refresh-hash", expiresAt));
 
-        var response = authApplicationService.loginWithFace(
+        var response = AuthApplicationServiceImpl.loginWithFace(
                 new FaceLoginRequest("carol@example.com", "base64image==", "image/jpeg"));
 
         assertThat(response.accessToken()).isEqualTo("access-token");
@@ -197,7 +195,7 @@ class AuthApplicationServiceTest {
         when(visionServiceClient.faceStatus(any())).thenReturn(
                 new FaceRegisterResponse("user-id", false, 0, "No profile"));
 
-        assertThatThrownBy(() -> authApplicationService.loginWithFace(
+        assertThatThrownBy(() -> AuthApplicationServiceImpl.loginWithFace(
                 new FaceLoginRequest("dave@example.com", "base64image==", "image/jpeg")))
                 .isInstanceOf(FaceNotRegisteredException.class);
 
@@ -213,7 +211,7 @@ class AuthApplicationServiceTest {
         when(visionServiceClient.verifyFace(any(), any(), any())).thenReturn(
                 new FaceVerificationResponse(false, 0.42f, "Yüz eşleşmedi"));
 
-        assertThatThrownBy(() -> authApplicationService.loginWithFace(
+        assertThatThrownBy(() -> AuthApplicationServiceImpl.loginWithFace(
                 new FaceLoginRequest("eve@example.com", "base64image==", "image/jpeg")))
                 .isInstanceOf(FaceMismatchException.class);
 
@@ -225,7 +223,7 @@ class AuthApplicationServiceTest {
     void faceLoginThrowsAuthFailedForUnknownEmail() {
         when(authUserRepository.findByEmail("ghost@example.com")).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> authApplicationService.loginWithFace(
+        assertThatThrownBy(() -> AuthApplicationServiceImpl.loginWithFace(
                 new FaceLoginRequest("ghost@example.com", "base64image==", "image/jpeg")))
                 .isInstanceOf(AuthenticationFailedException.class);
 
@@ -241,7 +239,7 @@ class AuthApplicationServiceTest {
         when(refreshTokenService.hash("refresh-token")).thenReturn("token-hash");
         when(refreshTokenRepository.findByTokenHash("token-hash")).thenReturn(Optional.of(token));
 
-        assertThatThrownBy(() -> authApplicationService.refresh(new RefreshTokenRequest("refresh-token")))
+        assertThatThrownBy(() -> AuthApplicationServiceImpl.refresh(new RefreshTokenRequest("refresh-token")))
                 .isInstanceOf(InvalidRefreshTokenException.class)
                 .hasMessageContaining("expired or revoked");
 

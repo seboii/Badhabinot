@@ -1,4 +1,4 @@
-package com.badhabinot.backend.service.monitoring;
+package com.badhabinot.backend.service.monitoring.impl;
 
 import com.badhabinot.backend.dto.monitoring.AiAnalysisRequest;
 import com.badhabinot.backend.dto.monitoring.AiAnalysisResponse;
@@ -18,7 +18,10 @@ import com.badhabinot.backend.repository.monitoring.MonitoringSessionRepository;
 import com.badhabinot.backend.integration.python.AiAnalysisClient;
 import com.badhabinot.backend.integration.python.VisionServiceClient;
 import com.badhabinot.backend.infrastructure.redis.AnalysisJobStateStore;
-import com.badhabinot.backend.service.user.UserContextService;
+import com.badhabinot.backend.service.monitoring.IAnalysisOrchestratorService;
+import com.badhabinot.backend.service.monitoring.IBehaviorEventService;
+import com.badhabinot.backend.service.monitoring.IReminderEngineService;
+import com.badhabinot.backend.service.user.IUserContextService;
 import java.time.Instant;
 import java.util.Comparator;
 import java.util.List;
@@ -29,25 +32,25 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
-public class AnalysisOrchestratorService {
+public class AnalysisOrchestratorServiceImpl implements IAnalysisOrchestratorService {
 
     private final AnalysisJobRepository analysisJobRepository;
     private final MonitoringSessionRepository monitoringSessionRepository;
-    private final UserContextService userContextService;
+    private final IUserContextService userContextService;
     private final VisionServiceClient visionServiceClient;
     private final AiAnalysisClient aiAnalysisClient;
-    private final BehaviorEventService behaviorEventService;
-    private final ReminderEngineService reminderEngineService;
+    private final IBehaviorEventService behaviorEventService;
+    private final IReminderEngineService reminderEngineService;
     private final AnalysisJobStateStore analysisJobStateStore;
 
-    public AnalysisOrchestratorService(
+    public AnalysisOrchestratorServiceImpl(
             AnalysisJobRepository analysisJobRepository,
             MonitoringSessionRepository monitoringSessionRepository,
-            UserContextService userContextService,
+            IUserContextService userContextService,
             VisionServiceClient visionServiceClient,
             AiAnalysisClient aiAnalysisClient,
-            BehaviorEventService behaviorEventService,
-            ReminderEngineService reminderEngineService,
+            IBehaviorEventService behaviorEventService,
+            IReminderEngineService reminderEngineService,
             AnalysisJobStateStore analysisJobStateStore
     ) {
         this.analysisJobRepository = analysisJobRepository;
@@ -60,7 +63,9 @@ public class AnalysisOrchestratorService {
         this.analysisJobStateStore = analysisJobStateStore;
     }
 
+
     @Transactional(transactionManager = "monitoringTransactionManager", noRollbackFor = DownstreamServiceException.class)
+    @Override
     public AnalyzeFrameResponse analyze(Jwt jwt, AnalyzeFrameRequest request) {
         UUID userId = UUID.fromString(jwt.getSubject());
         UUID sessionId = requireActiveSession(userId, request.sessionId());
@@ -187,6 +192,7 @@ public class AnalysisOrchestratorService {
     }
 
     @Transactional(transactionManager = "monitoringTransactionManager", readOnly = true)
+    @Override
     public AnalysisJobStatusResponse getJobStatus(Jwt jwt, String analysisId) {
         UUID userId = UUID.fromString(jwt.getSubject());
         UUID jobId = parseAnalysisId(analysisId);
@@ -372,4 +378,3 @@ public class AnalysisOrchestratorService {
         }
     }
 }
-

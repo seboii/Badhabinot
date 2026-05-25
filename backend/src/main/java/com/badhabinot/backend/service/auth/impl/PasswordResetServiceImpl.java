@@ -5,6 +5,8 @@ import com.badhabinot.backend.dto.auth.PasswordResetConfirmDto;
 import com.badhabinot.backend.dto.auth.PasswordResetRequestDto;
 import com.badhabinot.backend.model.auth.AuthUser;
 import com.badhabinot.backend.repository.auth.AuthUserRepository;
+import com.badhabinot.backend.service.auth.IMailService;
+import com.badhabinot.backend.service.auth.IPasswordResetService;
 import java.time.Duration;
 import java.util.Locale;
 import java.util.UUID;
@@ -16,9 +18,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
-public class PasswordResetService {
+public class PasswordResetServiceImpl implements IPasswordResetService {
 
-    private static final Logger log = LoggerFactory.getLogger(PasswordResetService.class);
+    private static final Logger log = LoggerFactory.getLogger(PasswordResetServiceImpl.class);
 
     private static final String KEY_PREFIX = "pwd:reset:";
     private static final Duration TOKEN_TTL = Duration.ofHours(1);
@@ -26,25 +28,27 @@ public class PasswordResetService {
     private final StringRedisTemplate redisTemplate;
     private final AuthUserRepository authUserRepository;
     private final PasswordEncoder passwordEncoder;
-    private final MailServiceImpl mailServiceImpl;
+    private final IMailService mailService;
 
-    public PasswordResetService(
+    public PasswordResetServiceImpl(
             StringRedisTemplate redisTemplate,
             AuthUserRepository authUserRepository,
             PasswordEncoder passwordEncoder,
-            MailServiceImpl mailServiceImpl
+            IMailService mailService
     ) {
         this.redisTemplate = redisTemplate;
         this.authUserRepository = authUserRepository;
         this.passwordEncoder = passwordEncoder;
-        this.mailServiceImpl = mailServiceImpl;
+        this.mailService = mailService;
     }
 
     /**
      * Generates a reset token and sends a reset email if the address is registered.
      * Always completes silently to avoid revealing whether an email exists.
      */
+
     @Transactional(transactionManager = "authTransactionManager", readOnly = true)
+    @Override
     public void requestReset(PasswordResetRequestDto request) {
         String normalizedEmail = request.email().trim().toLowerCase(Locale.ROOT);
         authUserRepository.findByEmail(normalizedEmail).ifPresent(user -> {
@@ -55,7 +59,7 @@ public class PasswordResetService {
                 log.warn("Redis unavailable while storing password reset token for {}: {}", normalizedEmail, e.getMessage());
                 return;
             }
-            mailServiceImpl.sendPasswordResetEmail(normalizedEmail, token);
+            mailService.sendPasswordResetEmail(normalizedEmail, token);
         });
     }
 
@@ -63,7 +67,9 @@ public class PasswordResetService {
      * Validates the token, updates the password, and invalidates the token.
      * Throws InvalidPasswordResetTokenException if the token is missing or expired.
      */
+
     @Transactional(transactionManager = "authTransactionManager")
+    @Override
     public void confirmReset(PasswordResetConfirmDto request) {
         String key = KEY_PREFIX + request.token();
         String email;

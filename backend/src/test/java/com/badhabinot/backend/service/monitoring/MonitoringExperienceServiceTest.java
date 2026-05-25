@@ -16,7 +16,8 @@ import com.badhabinot.backend.model.monitoring.MonitoringSessionStatus;
 import com.badhabinot.backend.repository.monitoring.ActivityFeedRepository;
 import com.badhabinot.backend.repository.monitoring.HydrationLogRepository;
 import com.badhabinot.backend.repository.monitoring.MonitoringSessionRepository;
-import com.badhabinot.backend.service.user.UserContextService;
+import com.badhabinot.backend.service.monitoring.impl.MonitoringExperienceServiceImpl;
+import com.badhabinot.backend.service.user.IUserContextService;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
@@ -42,13 +43,13 @@ class MonitoringExperienceServiceTest {
     private HydrationLogRepository hydrationLogRepository;
 
     @Mock
-    private UserContextService userContextService;
+    private IUserContextService userContextService;
 
     @Mock
-    private ReminderEngineService reminderEngineService;
+    private IReminderEngineService reminderEngineService;
 
     @InjectMocks
-    private MonitoringExperienceService monitoringExperienceService;
+    private MonitoringExperienceServiceImpl MonitoringExperienceServiceImpl;
 
     @Test
     void getDashboardAggregatesActivitiesHydrationAndPrivacyState() {
@@ -107,7 +108,7 @@ class MonitoringExperienceServiceTest {
         when(hydrationLogRepository.findByUserIdAndOccurredAtBetweenOrderByOccurredAtAsc(eq(userId), any(), any()))
                 .thenReturn(List.of(hydrationLog));
 
-        var dashboard = monitoringExperienceService.getDashboard(jwt);
+        var dashboard = MonitoringExperienceServiceImpl.getDashboard(jwt);
 
         assertThat(dashboard.monitoringActive()).isTrue();
         assertThat(dashboard.activeSessionId()).isEqualTo(sessionId.toString());
@@ -131,7 +132,7 @@ class MonitoringExperienceServiceTest {
         when(monitoringSessionRepository.save(any(MonitoringSession.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(activityFeedRepository.save(any(ActivityFeedItem.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
-        var response = monitoringExperienceService.startSession(jwt, new SessionStartRequest("mobile", "phone"));
+        var response = MonitoringExperienceServiceImpl.startSession(jwt, new SessionStartRequest("mobile", "phone"));
 
         assertThat(response.status()).isEqualTo(MonitoringSessionStatus.ACTIVE.name());
         verify(monitoringSessionRepository).save(existingSession);

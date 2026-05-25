@@ -9,9 +9,9 @@ import com.badhabinot.backend.dto.user.UpdateProfileRequest;
 import com.badhabinot.backend.dto.user.UpdateSettingsRequest;
 import com.badhabinot.backend.dto.user.UserContextResponse;
 import com.badhabinot.backend.dto.user.UserProfileResponse;
-import com.badhabinot.backend.service.auth.impl.AccountDeletionService;
-import com.badhabinot.backend.service.auth.impl.AuthApplicationService;
-import com.badhabinot.backend.service.user.UserContextService;
+import com.badhabinot.backend.service.auth.IAccountDeletionService;
+import com.badhabinot.backend.service.auth.IAuthApplicationService;
+import com.badhabinot.backend.service.user.IUserContextService;
 import com.badhabinot.backend.security.CurrentUserClaims;
 import java.util.UUID;
 import io.swagger.v3.oas.annotations.Operation;
@@ -35,11 +35,11 @@ import org.springframework.web.bind.annotation.RestController;
 @Tag(name = "Users", description = "User profile, settings, consent, and bootstrap APIs")
 public class UserController {
 
-    private final UserContextService userContextService;
-    private final AuthApplicationService authApplicationService;
-    private final AccountDeletionService accountDeletionService;
+    private final IUserContextService userContextService;
+    private final IAuthApplicationService authApplicationService;
+    private final IAccountDeletionService accountDeletionService;
 
-    public UserController(UserContextService userContextService, AuthApplicationService authApplicationService, AccountDeletionService accountDeletionService) {
+    public UserController(IUserContextService userContextService, IAuthApplicationService authApplicationService, IAccountDeletionService accountDeletionService) {
         this.userContextService = userContextService;
         this.authApplicationService = authApplicationService;
         this.accountDeletionService = accountDeletionService;
@@ -96,4 +96,3 @@ public class UserController {
         accountDeletionService.deleteAccount(userId, request.password());
     }
 }
-

@@ -22,7 +22,8 @@ import com.badhabinot.backend.repository.monitoring.BehaviorEventRepository;
 import com.badhabinot.backend.repository.monitoring.DailyReportRepository;
 import com.badhabinot.backend.repository.monitoring.HydrationLogRepository;
 import com.badhabinot.backend.repository.monitoring.ReminderEventRepository;
-import com.badhabinot.backend.service.user.UserContextService;
+import com.badhabinot.backend.service.monitoring.impl.DailyReportServiceImpl;
+import com.badhabinot.backend.service.user.IUserContextService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -57,19 +58,19 @@ class DailyReportServiceTest {
     private AnalysisJobRepository analysisJobRepository;
 
     @Mock
-    private UserContextService userContextService;
+    private IUserContextService userContextService;
 
     @Mock
-    private BehaviorEventService behaviorEventService;
+    private IBehaviorEventService behaviorEventService;
 
     @Mock
-    private ReminderEngineService reminderEngineService;
+    private IReminderEngineService reminderEngineService;
 
-    private DailyReportService dailyReportService;
+    private DailyReportServiceImpl DailyReportServiceImpl;
 
     @BeforeEach
     void setUp() {
-        dailyReportService = new DailyReportService(
+        DailyReportServiceImpl = new DailyReportServiceImpl(
                 dailyReportRepository,
                 behaviorEventRepository,
                 reminderEventRepository,
@@ -195,7 +196,7 @@ class DailyReportServiceTest {
                 occurredAt.plusSeconds(60)
         ));
 
-        var response = dailyReportService.getDailyReport(userId, reportDate, context);
+        var response = DailyReportServiceImpl.getDailyReport(userId, reportDate, context);
 
         assertThat(response.analysesCompleted()).isEqualTo(2);
         assertThat(response.postureAlertCount()).isEqualTo(1);
@@ -236,7 +237,7 @@ class DailyReportServiceTest {
         when(dailyReportRepository.findByUserIdAndReportDate(userId, reportDate)).thenReturn(Optional.of(existing));
         when(dailyReportRepository.save(any(DailyReport.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
-        var response = dailyReportService.getDailyReport(userId, reportDate, context);
+        var response = DailyReportServiceImpl.getDailyReport(userId, reportDate, context);
 
         assertThat(response.recommendations())
                 .containsExactly("The tracked patterns stayed stable today. Keep the same monitoring cadence tomorrow.");

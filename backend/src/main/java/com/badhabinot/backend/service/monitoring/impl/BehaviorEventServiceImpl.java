@@ -1,4 +1,4 @@
-package com.badhabinot.backend.service.monitoring;
+package com.badhabinot.backend.service.monitoring.impl;
 
 import com.badhabinot.backend.dto.monitoring.AiAnalysisResponse;
 import com.badhabinot.backend.dto.monitoring.BehaviorEventResponse;
@@ -8,6 +8,7 @@ import com.badhabinot.backend.model.monitoring.ActivityFeedItem;
 import com.badhabinot.backend.model.monitoring.BehaviorEvent;
 import com.badhabinot.backend.repository.monitoring.ActivityFeedRepository;
 import com.badhabinot.backend.repository.monitoring.BehaviorEventRepository;
+import com.badhabinot.backend.service.monitoring.IBehaviorEventService;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.Instant;
@@ -21,7 +22,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
-public class BehaviorEventService {
+public class BehaviorEventServiceImpl implements IBehaviorEventService {
 
     private static final TypeReference<Map<String, Object>> MAP_TYPE = new TypeReference<>() {
     };
@@ -30,7 +31,7 @@ public class BehaviorEventService {
     private final ActivityFeedRepository activityFeedRepository;
     private final ObjectMapper objectMapper;
 
-    public BehaviorEventService(
+    public BehaviorEventServiceImpl(
             BehaviorEventRepository behaviorEventRepository,
             ActivityFeedRepository activityFeedRepository,
             ObjectMapper objectMapper
@@ -40,7 +41,9 @@ public class BehaviorEventService {
         this.objectMapper = objectMapper;
     }
 
+
     @Transactional(transactionManager = "monitoringTransactionManager")
+    @Override
     public List<BehaviorEventResponse> recordAnalysisEvents(
             UUID userId,
             UUID sessionId,
@@ -120,7 +123,9 @@ public class BehaviorEventService {
         return responses;
     }
 
+
     @Transactional(transactionManager = "monitoringTransactionManager", readOnly = true)
+    @Override
     public List<BehaviorEventResponse> getRecentEvents(UUID userId, int page, int size) {
         return behaviorEventRepository.findByUserIdOrderByOccurredAtDesc(userId, PageRequest.of(Math.max(0, page), Math.max(1, Math.min(size, 50))))
                 .stream()
@@ -128,6 +133,7 @@ public class BehaviorEventService {
                 .toList();
     }
 
+    @Override
     public BehaviorEventResponse toResponse(BehaviorEvent event) {
         return new BehaviorEventResponse(
                 event.getId(),
@@ -217,4 +223,3 @@ public class BehaviorEventService {
     ) {
     }
 }
-

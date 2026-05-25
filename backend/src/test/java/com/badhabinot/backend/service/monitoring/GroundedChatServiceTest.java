@@ -16,7 +16,8 @@ import com.badhabinot.backend.dto.monitoring.DailyReportResponse;
 import com.badhabinot.backend.dto.monitoring.InternalUserAnalysisContext;
 import com.badhabinot.backend.model.monitoring.ChatMessage;
 import com.badhabinot.backend.repository.monitoring.ChatMessageRepository;
-import com.badhabinot.backend.service.user.UserContextService;
+import com.badhabinot.backend.service.monitoring.impl.GroundedChatServiceImpl;
+import com.badhabinot.backend.service.user.IUserContextService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -44,22 +45,22 @@ class GroundedChatServiceTest {
     private ChatMessageRepository chatMessageRepository;
 
     @Mock
-    private UserContextService userContextService;
+    private IUserContextService userContextService;
 
     @Mock
-    private DailyReportService dailyReportService;
+    private IDailyReportService dailyReportService;
 
     @Mock
-    private ChatContextBuilderService chatContextBuilderService;
+    private IChatContextBuilderService chatContextBuilderService;
 
     @Mock
     private com.badhabinot.backend.integration.python.AiChatClient aiChatClient;
 
-    private GroundedChatService groundedChatService;
+    private GroundedChatServiceImpl GroundedChatServiceImpl;
 
     @BeforeEach
     void setUp() {
-        groundedChatService = new GroundedChatService(
+        GroundedChatServiceImpl = new GroundedChatServiceImpl(
                 chatMessageRepository,
                 userContextService,
                 dailyReportService,
@@ -74,7 +75,7 @@ class GroundedChatServiceTest {
         UUID userId = UUID.randomUUID();
         when(chatMessageRepository.findFirstByUserIdOrderByCreatedAtDesc(userId)).thenReturn(Optional.empty());
 
-        var response = groundedChatService.history(jwt(userId), null, 10);
+        var response = GroundedChatServiceImpl.history(jwt(userId), null, 10);
 
         assertThat(response.conversationId()).isNull();
         assertThat(response.recentMessages()).isEmpty();
@@ -91,7 +92,7 @@ class GroundedChatServiceTest {
         when(dailyReportService.getDailyReport(eq(userId), any(LocalDate.class), eq(context))).thenReturn(report);
         when(chatMessageRepository.existsByUserIdAndConversationId(userId, foreignConversationId)).thenReturn(false);
 
-        assertThatThrownBy(() -> groundedChatService.chat(
+        assertThatThrownBy(() -> GroundedChatServiceImpl.chat(
                 jwt(userId),
                 new ChatRequest(foreignConversationId.toString(), "Show me the trend.")
         )).isInstanceOf(IllegalArgumentException.class)
@@ -141,7 +142,7 @@ class GroundedChatServiceTest {
                     .toList();
         });
 
-        var response = groundedChatService.chat(jwt(userId), new ChatRequest(null, "How did I do today?"));
+        var response = GroundedChatServiceImpl.chat(jwt(userId), new ChatRequest(null, "How did I do today?"));
 
         assertThat(response.answer()).contains("posture improved");
         assertThat(response.model().provider()).isEqualTo("openai-compatible");
