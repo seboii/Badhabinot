@@ -9,9 +9,12 @@ import java.util.Map;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpStatusCode;
+import org.springframework.http.MediaType;
+import org.springframework.http.codec.ServerSentEvent;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.reactive.function.client.WebClientRequestException;
+import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 @Component
@@ -44,6 +47,20 @@ public class AiChatClient {
         } catch (Exception exception) {
             throw new DownstreamServiceException("ai_chat_service_unavailable", "Unexpected failure while calling ai-service chat");
         }
+    }
+
+    public Flux<String> respondStream(AiChatRequest request) {
+        return webClient.post()
+                .uri("/v1/chat/stream")
+                .bodyValue(request)
+                .accept(MediaType.TEXT_EVENT_STREAM)
+                .retrieve()
+                .onStatus(HttpStatusCode::isError, clientResponse -> clientResponse.bodyToMono(String.class)
+                        .defaultIfEmpty("ai-service stream error")
+                        .flatMap(body -> Mono.error(new DownstreamServiceException("ai_chat_stream_error", body))))
+                .bodyToFlux(new ParameterizedTypeReference<ServerSentEvent<String>>() {})
+                .mapNotNull(ServerSentEvent::data)
+                .timeout(Duration.ofSeconds(120));
     }
 
     public Map<String, Object> ollamaHealth(String baseUrl, String modelName) {

@@ -37,6 +37,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.Pageable;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionStatus;
 
 @ExtendWith(MockitoExtension.class)
 class GroundedChatServiceTest {
@@ -60,13 +62,25 @@ class GroundedChatServiceTest {
 
     @BeforeEach
     void setUp() {
+        // Minimal PlatformTransactionManager stub: executes the callback directly (no real transaction)
+        PlatformTransactionManager txManager = new PlatformTransactionManager() {
+            @Override
+            public TransactionStatus getTransaction(org.springframework.transaction.TransactionDefinition def) {
+                return new org.springframework.transaction.support.DefaultTransactionStatus(null, true, true, false, false, null);
+            }
+            @Override
+            public void commit(TransactionStatus status) {}
+            @Override
+            public void rollback(TransactionStatus status) {}
+        };
         GroundedChatServiceImpl = new GroundedChatServiceImpl(
                 chatMessageRepository,
                 userContextService,
                 dailyReportService,
                 chatContextBuilderService,
                 aiChatClient,
-                new ObjectMapper().findAndRegisterModules()
+                new ObjectMapper().findAndRegisterModules(),
+                txManager
         );
     }
 

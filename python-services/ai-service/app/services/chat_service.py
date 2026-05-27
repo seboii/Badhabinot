@@ -40,6 +40,30 @@ class ChatService:
             },
         )
 
+    async def stream(self, request: ChatRequest):
+        """Async generator yielding JSON event strings for SSE streaming."""
+        import json as _json
+
+        provider = self._resolve_provider(request)
+        if isinstance(provider, OllamaProvider):
+            async for event_json in provider.stream_chat(request):
+                yield event_json
+            return
+        # Fallback for non-Ollama providers: get full response, simulate streaming
+        try:
+            result: ChatProviderResult = await provider.respond_chat(request)
+        except ProviderConfigurationError as exc:
+            raise HTTPException(status_code=503, detail=str(exc)) from exc
+        except ProviderInvocationError as exc:
+            raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
+        for char in result.answer:
+            yield _json.dumps({"token": char})
+        yield _json.dumps({
+            "done": True,
+            "grounded_facts": result.grounded_facts,
+            "follow_up_suggestions": result.follow_up_suggestions,
+        })
+
     def _resolve_provider(
         self, request: ChatRequest
     ) -> MockProvider | OpenAiCompatibleProvider | OllamaProvider:

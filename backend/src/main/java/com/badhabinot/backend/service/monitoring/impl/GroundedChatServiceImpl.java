@@ -16,21 +16,30 @@ import com.badhabinot.backend.service.monitoring.IDailyReportService;
 import com.badhabinot.backend.service.monitoring.IGroundedChatService;
 import com.badhabinot.backend.service.user.IUserContextService;
 import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
+import java.time.Duration;
 import java.time.LocalDate;
 import java.time.ZoneId;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicReference;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
+import reactor.core.scheduler.Schedulers;
 
 @Service
 public class GroundedChatServiceImpl implements IGroundedChatService {
@@ -46,6 +55,7 @@ public class GroundedChatServiceImpl implements IGroundedChatService {
     private final IChatContextBuilderService chatContextBuilderService;
     private final AiChatClient aiChatClient;
     private final ObjectMapper objectMapper;
+    private final TransactionTemplate monitoringTx;
 
     public GroundedChatServiceImpl(
             ChatMessageRepository chatMessageRepository,
@@ -53,7 +63,8 @@ public class GroundedChatServiceImpl implements IGroundedChatService {
             IDailyReportService dailyReportService,
             IChatContextBuilderService chatContextBuilderService,
             AiChatClient aiChatClient,
-            ObjectMapper objectMapper
+            ObjectMapper objectMapper,
+            @Qualifier("monitoringTransactionManager") PlatformTransactionManager txManager
     ) {
         this.chatMessageRepository = chatMessageRepository;
         this.userContextService = userContextService;
@@ -61,6 +72,7 @@ public class GroundedChatServiceImpl implements IGroundedChatService {
         this.chatContextBuilderService = chatContextBuilderService;
         this.aiChatClient = aiChatClient;
         this.objectMapper = objectMapper;
+        this.monitoringTx = new TransactionTemplate(txManager);
     }
 
     @Override
@@ -148,93 +160,95 @@ public class GroundedChatServiceImpl implements IGroundedChatService {
     }
 
     @Override
-    @Transactional(transactionManager = "monitoringTransactionManager")
     public SseEmitter chatStream(Jwt jwt, ChatRequest request) {
         UUID userId = UUID.fromString(jwt.getSubject());
+
+        // Read context — each service manages its own transaction
         InternalUserAnalysisContext context = userContextService.getMonitoringAnalysisContext(userId);
         LocalDate reportDate = LocalDate.now(zoneId(context.timezone()));
         DailyReportResponse report = dailyReportService.getDailyReport(userId, reportDate, context);
 
-        UUID conversationId = resolveConversationIdForChat(userId, request.conversationId());
-
-        ChatMessage userMessage = chatMessageRepository.save(ChatMessage.create(conversationId, userId, "user", request.message()));
-        List<AiChatRequest.Message> historyItems = loadConversationMessages(userId, conversationId, AI_HISTORY_LIMIT + 1).stream()
-                .filter(message -> !message.getId().equals(userMessage.getId()))
-                .map(message -> new AiChatRequest.Message(message.getRole(), message.getContent(), message.getCreatedAt()))
-                .toList();
-
-        AiChatRequest.Context aiContext = chatContextBuilderService.build(userId, context, reportDate, report);
-
-        AiChatResponse aiResponse = aiChatClient.respond(new AiChatRequest(
-                conversationId.toString(),
-                userId.toString(),
-                context.timezone(),
-                report.reportDate(),
-                request.message(),
-                historyItems,
-                aiContext,
-                context.modelMode(),
-                context.localModelName(),
-                context.ollamaBaseUrl()
-        ));
-
-        Map<String, Object> metadata = new LinkedHashMap<>();
-        metadata.put("grounded_facts", safeList(aiResponse.groundedFacts()));
-        metadata.put("follow_up_suggestions", safeList(aiResponse.followUpSuggestions()));
-        Map<String, Object> modelMetadata = new LinkedHashMap<>();
-        modelMetadata.put("provider", aiResponse.model().provider());
-        modelMetadata.put("name", aiResponse.model().name());
-        modelMetadata.put("mode", aiResponse.model().mode());
-        metadata.put("model", modelMetadata);
-
-        chatMessageRepository.save(ChatMessage.create(
-                conversationId,
-                userId,
-                "assistant",
-                aiResponse.answer(),
-                writeJson(metadata)
-        ));
-
-        final String answerToStream = aiResponse.answer();
-        final List<String> finalGroundedFacts = safeList(aiResponse.groundedFacts());
-        final List<String> finalFollowUpSuggestions = safeList(aiResponse.followUpSuggestions());
-        final String finalConversationId = conversationId.toString();
+        // Transaction 1: save user message, resolve conversation, load history
+        record SetupData(UUID conversationId, AiChatRequest aiRequest) {}
+        SetupData setup = Objects.requireNonNull(monitoringTx.execute(status -> {
+            UUID conversationId = resolveConversationIdForChat(userId, request.conversationId());
+            ChatMessage userMessage = chatMessageRepository.save(
+                    ChatMessage.create(conversationId, userId, "user", request.message()));
+            List<AiChatRequest.Message> historyItems = loadConversationMessages(userId, conversationId, AI_HISTORY_LIMIT + 1)
+                    .stream()
+                    .filter(m -> !m.getId().equals(userMessage.getId()))
+                    .map(m -> new AiChatRequest.Message(m.getRole(), m.getContent(), m.getCreatedAt()))
+                    .toList();
+            AiChatRequest.Context aiContext = chatContextBuilderService.build(userId, context, reportDate, report);
+            return new SetupData(conversationId, new AiChatRequest(
+                    conversationId.toString(), userId.toString(), context.timezone(), report.reportDate(),
+                    request.message(), historyItems, aiContext,
+                    context.modelMode(), context.localModelName(), context.ollamaBaseUrl()));
+        }));
 
         SseEmitter emitter = new SseEmitter(120_000L);
         emitter.onTimeout(emitter::complete);
 
-        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-            @Override
-            public void afterCommit() {
-                Thread.ofVirtual().start(() -> {
-                    try {
-                        for (int i = 0; i < answerToStream.length(); i += 2) {
-                            String chunk = answerToStream.substring(i, Math.min(i + 2, answerToStream.length()));
-                            emitter.send(SseEmitter.event()
-                                    .data(objectMapper.writeValueAsString(Map.of("token", chunk))));
-                            Thread.sleep(15);
-                        }
-                        emitter.send(SseEmitter.event()
-                                .data(objectMapper.writeValueAsString(Map.of(
-                                        "done", true,
-                                        "conversationId", finalConversationId,
-                                        "followUpSuggestions", finalFollowUpSuggestions,
-                                        "groundedFacts", finalGroundedFacts
-                                ))));
-                        emitter.complete();
-                    } catch (IOException ex) {
-                        emitter.completeWithError(ex);
-                    } catch (InterruptedException ex) {
-                        Thread.currentThread().interrupt();
-                        emitter.completeWithError(ex);
-                    } catch (Exception ex) {
-                        emitter.completeWithError(ex);
-                    }
+        final UUID finalUserId = userId;
+        final UUID finalConversationId = setup.conversationId();
+        final AtomicReference<StringBuilder> accumulated = new AtomicReference<>(new StringBuilder());
+        final AtomicReference<List<String>> finalGroundedFacts = new AtomicReference<>(List.of());
+        final AtomicReference<List<String>> finalFollowUps = new AtomicReference<>(List.of());
+
+        Thread.ofVirtual().start(() -> {
+            try {
+                aiChatClient.respondStream(setup.aiRequest())
+                        .publishOn(Schedulers.boundedElastic())
+                        .doOnNext(data -> {
+                            try {
+                                JsonNode node = objectMapper.readTree(data);
+                                if (node.has("token")) {
+                                    String token = node.get("token").asText();
+                                    accumulated.get().append(token);
+                                    emitter.send(SseEmitter.event()
+                                            .data(objectMapper.writeValueAsString(Map.of("token", token))));
+                                } else if (node.path("done").asBoolean(false)) {
+                                    finalGroundedFacts.set(extractStringList(node, "grounded_facts"));
+                                    finalFollowUps.set(extractStringList(node, "follow_up_suggestions"));
+                                }
+                            } catch (Exception ignored) {}
+                        })
+                        .blockLast(Duration.ofSeconds(120));
+
+                // Transaction 2: save assistant message
+                Map<String, Object> metadata = new LinkedHashMap<>();
+                metadata.put("grounded_facts", finalGroundedFacts.get());
+                metadata.put("follow_up_suggestions", finalFollowUps.get());
+                monitoringTx.execute(status -> {
+                    chatMessageRepository.save(ChatMessage.create(
+                            finalConversationId, finalUserId, "assistant",
+                            accumulated.get().toString(), writeJson(metadata)));
+                    return null;
                 });
+
+                emitter.send(SseEmitter.event().data(objectMapper.writeValueAsString(Map.of(
+                        "done", true,
+                        "conversationId", finalConversationId.toString(),
+                        "groundedFacts", finalGroundedFacts.get(),
+                        "followUpSuggestions", finalFollowUps.get()
+                ))));
+                emitter.complete();
+            } catch (Exception e) {
+                emitter.completeWithError(e);
             }
         });
 
         return emitter;
+    }
+
+    private List<String> extractStringList(JsonNode node, String fieldName) {
+        JsonNode array = node.get(fieldName);
+        if (array == null || !array.isArray()) return List.of();
+        List<String> result = new ArrayList<>();
+        for (JsonNode item : array) {
+            if (item.isTextual()) result.add(item.asText());
+        }
+        return result;
     }
 
     private ChatMessageResponse toResponse(ChatMessage message) {

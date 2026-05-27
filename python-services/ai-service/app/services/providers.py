@@ -510,6 +510,77 @@ class OllamaProvider:
             model_mode="local_ollama",
         )
 
+    def _compute_chat_response_meta(self, request: ChatRequest) -> tuple[list[str], list[str]]:
+        """Return (grounded_facts, follow_up_suggestions) from monitoring context."""
+        ctx = request.context
+        msg_type = self._classify_message(request.message)
+        if msg_type in ("casual", "system"):
+            return [], ["Bugünkü performansımı göster", "Duruşum nasıl?", "Ne kadar su içtim?"]
+        posture_score = round((1.0 - ctx.poor_posture_ratio) * 100, 1)
+        hydration_pct = round(
+            (ctx.hydration_progress_ml / ctx.water_goal_ml * 100) if ctx.water_goal_ml > 0 else 0, 1
+        )
+        cleanliness_score = max(0, round(100 - ctx.smoking_like_count * 20 - ctx.hand_movement_count * 5, 1))
+        grounded_facts = [
+            f"Duruş skoru: {posture_score}/100 (kötü duruş oranı: %{round(ctx.poor_posture_ratio * 100, 1)}, uyarı: {ctx.posture_alert_count})",
+            f"Hidrasyon: {ctx.hydration_progress_ml}/{ctx.water_goal_ml} ml (%{hydration_pct})",
+            f"Temizlik skoru: {cleanliness_score}/100 (sigara benzeri: {ctx.smoking_like_count}, el hareketi: {ctx.hand_movement_count})",
+        ]
+        if ctx.comparison_to_previous_day:
+            grounded_facts.append(f"Dünle karşılaştırma: {ctx.comparison_to_previous_day}")
+        follow_up_suggestions: list[str] = []
+        if ctx.poor_posture_ratio > 0.25:
+            follow_up_suggestions.append("Duruşumu günün geri kalanında nasıl düzeltebilirim?")
+        if hydration_pct < 60:
+            follow_up_suggestions.append("Su içmemi artırmak için nasıl bir plan yapmalıyım?")
+        if ctx.smoking_like_count >= 3:
+            follow_up_suggestions.append("El-yüz hareketlerimi azaltmak için ne yapabilirim?")
+        follow_up_suggestions.append("Bu hafta genel trendim nasıl gidiyor?")
+        return grounded_facts, follow_up_suggestions[:3]
+
+    async def stream_chat(self, request: ChatRequest):
+        """Async generator: yields JSON-serialised event strings for SSE (token or done)."""
+        import json as _json
+
+        msg_type = self._classify_message(request.message)
+        if msg_type == "system":
+            yield _json.dumps({"token": "Bu konuda sana yardımcı olamam. Davranış verilerinle ilgili bir sorun var mı?"})
+            grounded_facts, follow_up_suggestions = self._compute_chat_response_meta(request)
+            yield _json.dumps({"done": True, "grounded_facts": grounded_facts, "follow_up_suggestions": follow_up_suggestions})
+            return
+
+        messages = self._build_messages(request)
+        payload = {
+            "model": self.model_name,
+            "messages": messages,
+            "stream": True,
+            "options": {"temperature": 0.15},
+        }
+        try:
+            async with httpx.AsyncClient(timeout=httpx.Timeout(self.timeout_seconds)) as client:
+                async with client.stream("POST", f"{self.base_url}/api/chat", json=payload) as response:
+                    response.raise_for_status()
+                    async for line in response.aiter_lines():
+                        if not line.strip():
+                            continue
+                        try:
+                            data = _json.loads(line)
+                        except _json.JSONDecodeError:
+                            continue
+                        if not data.get("done"):
+                            token = (data.get("message") or {}).get("content", "")
+                            if token:
+                                yield _json.dumps({"token": token})
+        except httpx.TimeoutException as exc:
+            raise ProviderInvocationError("Ollama streaming timed out", status_code=504) from exc
+        except httpx.HTTPStatusError as exc:
+            raise ProviderInvocationError(f"Ollama returned HTTP {exc.response.status_code}", status_code=502) from exc
+        except httpx.HTTPError as exc:
+            raise ProviderInvocationError("Ollama is unreachable during streaming", status_code=502) from exc
+
+        grounded_facts, follow_up_suggestions = self._compute_chat_response_meta(request)
+        yield _json.dumps({"done": True, "grounded_facts": grounded_facts, "follow_up_suggestions": follow_up_suggestions})
+
     async def readiness(self) -> ProviderReadiness:
         try:
             async with httpx.AsyncClient(timeout=httpx.Timeout(5.0)) as client:
