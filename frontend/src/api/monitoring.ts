@@ -135,11 +135,13 @@ export const monitoringApi = {
           buffer = buffer.slice(eventEnd + 2)
 
           for (const line of eventBlock.split('\n')) {
-            if (!line.startsWith('data: ')) continue
+            // SSE spec allows both "data:value" and "data: value" (space optional)
+            if (!line.startsWith('data:')) continue
+            const jsonStr = line.startsWith('data: ') ? line.slice(6) : line.slice(5)
 
             let parsed: Record<string, unknown>
             try {
-              parsed = JSON.parse(line.slice(6)) as Record<string, unknown>
+              parsed = JSON.parse(jsonStr) as Record<string, unknown>
             } catch {
               continue
             }
