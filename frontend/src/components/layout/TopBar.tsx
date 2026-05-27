@@ -15,7 +15,10 @@ export function TopBar({ title, subtitle }: TopBarProps) {
   const profile = useUserStore((s) => s.profile)
 
   return (
-    <header className="flex flex-col gap-2 border-b border-[var(--line-soft)] bg-[var(--topbar-surface)] px-3 py-3 backdrop-blur-xl sm:gap-3 sm:px-5 sm:py-4 md:px-8 md:py-5 lg:flex-row lg:items-center lg:justify-between lg:gap-5">
+    <header
+      className="flex flex-col gap-2 border-b border-[var(--line-soft)] bg-[var(--topbar-surface)] px-3 pb-3 backdrop-blur-xl sm:gap-3 sm:px-5 sm:pb-4 md:px-8 md:pb-5 lg:flex-row lg:items-center lg:justify-between lg:gap-5"
+      style={{ paddingTop: 'calc(env(safe-area-inset-top, 0px) + 0.75rem)' }}
+    >
       <div className="min-w-0">
         <p className="text-lg font-bold tracking-tight text-[var(--text-strong)] sm:text-xl md:text-2xl">{title}</p>
         <p className="mt-1 hidden text-xs text-[var(--text-muted)] sm:block sm:text-sm">{subtitle}</p>
