@@ -3,6 +3,7 @@ package com.badhabinot.backend.config;
 import com.nimbusds.jose.jwk.source.ImmutableSecret;
 import java.io.IOException;
 import java.util.Base64;
+import java.util.List;
 import javax.crypto.SecretKey;
 import javax.crypto.spec.SecretKeySpec;
 import jakarta.servlet.FilterChain;
@@ -29,6 +30,9 @@ import org.springframework.security.oauth2.server.resource.authentication.JwtAut
 import org.springframework.security.oauth2.server.resource.authentication.JwtGrantedAuthoritiesConverter;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.web.cors.CorsConfiguration;
+import org.springframework.web.cors.CorsConfigurationSource;
+import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 import org.springframework.web.filter.ForwardedHeaderFilter;
 import org.springframework.web.filter.OncePerRequestFilter;
 
@@ -50,6 +54,7 @@ public class SecurityConfiguration {
         authenticationConverter.setJwtGrantedAuthoritiesConverter(authoritiesConverter);
 
         http
+                .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .csrf(AbstractHttpConfigurer::disable)
                 .httpBasic(AbstractHttpConfigurer::disable)
                 .formLogin(AbstractHttpConfigurer::disable)
@@ -72,6 +77,49 @@ public class SecurityConfiguration {
                         .jwt(jwt -> jwt.decoder(jwtDecoder).jwtAuthenticationConverter(authenticationConverter)));
 
         return http.build();
+    }
+
+    @Bean
+    public CorsConfigurationSource corsConfigurationSource() {
+        CorsConfiguration config = new CorsConfiguration();
+
+        config.setAllowedOriginPatterns(List.of(
+            // ── LOCAL GELİŞTİRME — HTTP ────────────────────
+            "http://localhost",
+            "http://localhost:*",
+            "http://10.0.2.2",           // Android emülatör → host
+            "http://10.0.2.2:*",
+            "http://192.168.*.*",        // Aynı WiFi cihazlar (HTTP)
+            "http://192.168.*.*:*",
+            "http://172.16.*.*",         // Docker ağları
+            "http://172.16.*.*:*",
+
+            // ── LOCAL GELİŞTİRME — HTTPS ───────────────────
+            "https://localhost",
+            "https://localhost:*",
+            "https://192.168.*.*",       // Aynı WiFi cihazlar (HTTPS/kamera)
+            "https://192.168.*.*:*",
+            "https://172.16.*.*",
+            "https://172.16.*.*:*",
+
+            // ── NGROK TEST ─────────────────────────────────
+            "https://*.ngrok.io",
+            "https://*.ngrok-free.app"
+
+            // ── SUNUCU (şimdilik pasif, hazır) ─────────────
+            // "https://badhabinot.com",
+            // "https://www.badhabinot.com",
+            // "https://api.badhabinot.com"
+        ));
+
+        config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"));
+        config.setAllowedHeaders(List.of("*"));
+        config.setAllowCredentials(true);
+        config.setMaxAge(3600L);
+
+        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+        source.registerCorsConfiguration("/**", config);
+        return source;
     }
 
     @Bean
