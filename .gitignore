@@ -2,6 +2,10 @@
 # Monorepo genel
 # =========================
 CLAUDE.md
+AGENTS.md
+.claude/
+.cursor/
+.copilot/
 .DS_Store
 Thumbs.db
 *.swp
@@ -14,12 +18,19 @@ Thumbs.db
 # Gizli/yerel ortam dosyalari
 # =========================
 .env
+.env.prod
 .env.local
 .env.*.local
 *.secrets
 *.pem
 *.key
 *.crt
+
+# =========================
+# Firebase gizli anahtarlar
+# =========================
+firebase-service-account.json
+**/firebase-service-account.json
 
 # =========================
 # IDE/editor
@@ -50,6 +61,16 @@ frontend/coverage/
 **/.stylelintcache
 **/.turbo/
 **/.cache/
+
+# =========================
+# Capacitor / Android
+# =========================
+frontend/android/.gradle/
+frontend/android/app/build/
+frontend/android/build/
+frontend/android/.idea/
+frontend/android/local.properties
+frontend/android/app/google-services.json
 
 # =========================
 # Java / Maven / Spring

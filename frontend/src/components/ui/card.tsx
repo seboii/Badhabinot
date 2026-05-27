@@ -14,15 +14,15 @@ export function Card({ className, ...props }: HTMLAttributes<HTMLDivElement>) {
 }
 
 export function CardHeader({ className, ...props }: HTMLAttributes<HTMLDivElement>) {
-  return <div className={cn('flex items-start justify-between gap-4 p-6 pb-0', className)} {...props} />
+  return <div className={cn('flex items-start justify-between gap-3 p-4 pb-0 sm:gap-4 sm:p-6', className)} {...props} />
 }
 
 export function CardContent({ className, ...props }: HTMLAttributes<HTMLDivElement>) {
-  return <div className={cn('p-6', className)} {...props} />
+  return <div className={cn('p-4 sm:p-6', className)} {...props} />
 }
 
 export function CardTitle({ className, children }: PropsWithChildren<{ className?: string }>) {
-  return <h2 className={cn('text-lg font-bold tracking-tight text-[var(--text-strong)]', className)}>{children}</h2>
+  return <h2 className={cn('text-base font-bold tracking-tight text-[var(--text-strong)] sm:text-lg', className)}>{children}</h2>
 }
 
 export function CardDescription({ className, children }: PropsWithChildren<{ className?: string }>) {

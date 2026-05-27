@@ -16,6 +16,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { ActivityFeedSkeleton, LoadingCard, MetricCardSkeleton } from '@/components/ui/loading-state'
 import { useCamera } from '@/hooks/use-camera'
 import { useLanguage } from '@/i18n/language-provider'
+import { platform } from '@/lib/platform'
 import { behaviorLabel, formatMilliliters, postureLabel } from '@/lib/format'
 import type { AnalyzeFrameResponse } from '@/types/monitoring'
 
@@ -34,15 +35,15 @@ function MetricCard({
 }) {
   return (
     <Card className="h-full">
-      <CardContent className="p-5">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <p className="text-sm font-medium text-[var(--text-muted)]">{title}</p>
-            <p className="mt-4 text-2xl font-extrabold tracking-tight text-white sm:text-3xl">{value}</p>
-            <p className="mt-3 text-sm text-[var(--text-muted)]">{detail}</p>
+      <CardContent className="p-3 sm:p-5">
+        <div className="flex items-start justify-between gap-2 sm:gap-4">
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-xs font-medium text-[var(--text-muted)] sm:text-sm">{title}</p>
+            <p className="mt-2 text-lg font-extrabold tracking-tight text-white sm:mt-4 sm:text-2xl lg:text-3xl">{value}</p>
+            <p className="mt-1 hidden text-xs text-[var(--text-muted)] sm:mt-3 sm:block sm:text-sm">{detail}</p>
           </div>
-          <div className="flex size-12 items-center justify-center rounded-2xl" style={{ background: accent }}>
-            <Icon className="size-5 text-white" />
+          <div className="flex size-9 shrink-0 items-center justify-center rounded-xl sm:size-12 sm:rounded-2xl" style={{ background: accent }}>
+            <Icon className="size-4 text-white sm:size-5" />
           </div>
         </div>
       </CardContent>
@@ -371,17 +372,17 @@ export function DashboardPage() {
   if (dashboardQuery.isLoading || !dashboard) {
     return (
       <div className="space-y-6">
-        <div className="grid gap-4 lg:grid-cols-[minmax(0,1.7fr)_minmax(320px,0.9fr)] xl:grid-cols-[minmax(0,1.7fr)_minmax(360px,0.9fr)]">
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1.7fr)_minmax(320px,0.9fr)] xl:grid-cols-[minmax(0,1.7fr)_minmax(360px,0.9fr)]">
           <LoadingCard message={isTurkish ? 'Canli panel yukleniyor' : 'Loading live panel'} />
           <LoadingCard />
         </div>
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
           <MetricCardSkeleton />
           <MetricCardSkeleton />
           <MetricCardSkeleton />
           <MetricCardSkeleton />
         </div>
-        <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-[minmax(0,1.2fr)_minmax(360px,0.8fr)]">
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 xl:grid-cols-[minmax(0,1.2fr)_minmax(360px,0.8fr)]">
           <ActivityFeedSkeleton />
           <LoadingCard />
         </div>
@@ -392,8 +393,15 @@ export function DashboardPage() {
 
   return (
     <div className="space-y-6">
+      {platform.isNative && (
+        <div className="rounded-2xl border border-yellow-500/30 bg-yellow-500/10 px-4 py-3 text-sm text-yellow-300">
+          {isTurkish
+            ? '📱 Mobil uygulama: Kamera izleme ve YOLOv8 analizi web uygulamasında kullanılabilir. Bu ekrandan verilerinizi takip edebilirsiniz.'
+            : '📱 Mobile app: Camera monitoring and YOLOv8 analysis are available in the web app. You can track your data from this screen.'}
+        </div>
+      )}
       <FaceRegistrationBanner />
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,1.7fr)_minmax(320px,0.9fr)] xl:grid-cols-[minmax(0,1.7fr)_minmax(360px,0.9fr)]">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1.7fr)_minmax(320px,0.9fr)] xl:grid-cols-[minmax(0,1.7fr)_minmax(360px,0.9fr)]">
         <LiveMonitorPanel
           videoRef={videoRef}
           monitoringLive={monitoringLive}
@@ -421,7 +429,7 @@ export function DashboardPage() {
         <InsightPanel dashboard={dashboard} latestAnalysis={latestAnalysis} />
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
         <MetricCard
           title={isTurkish ? 'Seri' : 'Streak'}
           value={`${dashboard.streak_days}`}
@@ -456,31 +464,31 @@ export function DashboardPage() {
           accent="rgba(139, 92, 246, 0.18)"
         />
         <Card>
-          <CardContent className="p-5">
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <p className="text-sm font-medium text-[var(--text-muted)]">{isTurkish ? 'Su hedefi' : 'Water goal'}</p>
-                <p className="mt-4 text-2xl font-extrabold tracking-tight text-white sm:text-3xl">{formatMilliliters(dashboard.water_progress_ml, language)}</p>
-                <p className="mt-3 text-sm text-[var(--text-muted)]">
+          <CardContent className="p-3 sm:p-5">
+            <div className="flex items-start justify-between gap-2 sm:gap-4">
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-xs font-medium text-[var(--text-muted)] sm:text-sm">{isTurkish ? 'Su hedefi' : 'Water goal'}</p>
+                <p className="mt-2 text-xl font-extrabold tracking-tight text-white sm:mt-4 sm:text-2xl lg:text-3xl">{formatMilliliters(dashboard.water_progress_ml, language)}</p>
+                <p className="mt-1 hidden text-xs text-[var(--text-muted)] sm:mt-3 sm:block sm:text-sm">
                   {isTurkish ? 'Hedef' : 'Target'} {formatMilliliters(dashboard.water_goal_ml, language)}
                 </p>
               </div>
-              <div className="flex size-12 items-center justify-center rounded-2xl bg-[rgba(96,165,250,0.18)]">
-                <Droplets className="size-5 text-white" />
+              <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-[rgba(96,165,250,0.18)] sm:size-12 sm:rounded-2xl">
+                <Droplets className="size-4 text-white sm:size-5" />
               </div>
             </div>
-            <div className="mt-5 h-2 rounded-full bg-[var(--surface-muted)]">
-              <div className="h-2 rounded-full bg-[linear-gradient(90deg,var(--info),var(--primary))]" style={{ width: `${waterProgress}%` }} />
+            <div className="mt-3 h-1.5 rounded-full bg-[var(--surface-muted)] sm:mt-5 sm:h-2">
+              <div className="h-full rounded-full bg-[linear-gradient(90deg,var(--info),var(--primary))]" style={{ width: `${waterProgress}%` }} />
             </div>
-            <div className="mt-3 flex items-center justify-between text-xs text-[var(--text-muted)]">
-              <span>{Math.round(waterProgress)}% {isTurkish ? 'tamamlandi' : 'completed'}</span>
-              <Badge variant="info">{isTurkish ? 'Su takibi' : 'Hydration'}</Badge>
+            <div className="mt-2 flex items-center justify-between text-xs text-[var(--text-muted)] sm:mt-3">
+              <span>{Math.round(waterProgress)}%</span>
+              <Badge variant="info" className="hidden sm:inline-flex">{isTurkish ? 'Su takibi' : 'Hydration'}</Badge>
             </div>
           </CardContent>
         </Card>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-[minmax(0,1.2fr)_minmax(360px,0.8fr)]">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 xl:grid-cols-[minmax(0,1.2fr)_minmax(360px,0.8fr)]">
         {activitiesQuery.isLoading ? (
           <ActivityFeedSkeleton />
         ) : (

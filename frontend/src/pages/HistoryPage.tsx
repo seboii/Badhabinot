@@ -24,15 +24,15 @@ function SummaryCard({
 }) {
   return (
     <Card>
-      <CardContent className="p-5">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <p className="text-sm font-medium text-[var(--text-muted)]">{label}</p>
-            <p className="mt-4 text-2xl font-extrabold tracking-tight text-white sm:text-3xl">{value}</p>
-            <p className="mt-3 text-sm text-[var(--text-muted)]">{detail}</p>
+      <CardContent className="p-4 sm:p-5">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0 flex-1">
+            <p className="text-xs font-medium text-[var(--text-muted)] sm:text-sm">{label}</p>
+            <p className="mt-3 text-xl font-extrabold tracking-tight text-white sm:mt-4 sm:text-2xl">{value}</p>
+            <p className="mt-2 text-xs text-[var(--text-muted)] sm:mt-3 sm:text-sm">{detail}</p>
           </div>
-          <div className="flex size-12 items-center justify-center rounded-2xl bg-[rgba(255,255,255,0.06)]">
-            <Icon className="size-5 text-white" />
+          <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-[rgba(255,255,255,0.06)] sm:size-12 sm:rounded-2xl">
+            <Icon className="size-4 text-white sm:size-5" />
           </div>
         </div>
       </CardContent>
@@ -95,13 +95,13 @@ export function HistoryPage() {
                 : 'Choose the first day of the reporting window used for the trend chart and summary metrics.'}
             </p>
           </div>
-          <div className="w-full max-w-xs">
+          <div className="w-full sm:max-w-xs">
             <Input label={isTurkish ? 'Baslangic tarihi' : 'Start date'} type="date" value={from} onChange={(event) => setFrom(event.target.value)} />
           </div>
         </CardContent>
       </Card>
 
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid gap-3 sm:grid-cols-3 sm:gap-4">
         {weeklyTrendQuery.isLoading ? (
           <>
             <MetricCardSkeleton />

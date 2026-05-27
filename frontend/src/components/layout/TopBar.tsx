@@ -15,10 +15,10 @@ export function TopBar({ title, subtitle }: TopBarProps) {
   const profile = useUserStore((s) => s.profile)
 
   return (
-    <header className="flex flex-col gap-3 border-b border-[var(--line-soft)] bg-[var(--topbar-surface)] px-5 py-4 backdrop-blur-xl md:px-8 md:py-5 lg:flex-row lg:items-center lg:justify-between lg:gap-5">
+    <header className="flex flex-col gap-2 border-b border-[var(--line-soft)] bg-[var(--topbar-surface)] px-3 py-3 backdrop-blur-xl sm:gap-3 sm:px-5 sm:py-4 md:px-8 md:py-5 lg:flex-row lg:items-center lg:justify-between lg:gap-5">
       <div className="min-w-0">
-        <p className="text-xl font-bold tracking-tight text-[var(--text-strong)] sm:text-2xl">{title}</p>
-        <p className="mt-1 hidden text-sm text-[var(--text-muted)] sm:block">{subtitle}</p>
+        <p className="text-lg font-bold tracking-tight text-[var(--text-strong)] sm:text-xl md:text-2xl">{title}</p>
+        <p className="mt-1 hidden text-xs text-[var(--text-muted)] sm:block sm:text-sm">{subtitle}</p>
       </div>
 
       <div className="flex shrink-0 items-center gap-2 md:gap-3">
@@ -34,7 +34,7 @@ export function TopBar({ title, subtitle }: TopBarProps) {
         </Badge>
         {profile ? (
           <div className="shrink-0 rounded-xl border border-[var(--line-soft)] bg-[var(--surface)] px-3 py-2 sm:rounded-2xl md:px-4 md:py-3">
-            <p className="max-w-[90px] truncate text-xs font-semibold text-[var(--text-strong)] sm:max-w-none sm:text-sm">{profile.display_name}</p>
+            <p className="max-w-[72px] truncate text-xs font-semibold text-[var(--text-strong)] sm:max-w-none sm:text-sm">{profile.display_name}</p>
             <p className="hidden text-xs text-[var(--text-muted)] md:block">{profile.locale}</p>
           </div>
         ) : null}

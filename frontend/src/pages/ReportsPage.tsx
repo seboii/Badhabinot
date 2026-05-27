@@ -25,15 +25,15 @@ function ReportMetric({
 }) {
   return (
     <Card>
-      <CardContent className="p-5">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <p className="text-sm font-medium text-[var(--text-muted)]">{label}</p>
-            <p className="mt-4 text-2xl font-extrabold tracking-tight text-white sm:text-3xl">{value}</p>
-            <p className="mt-3 text-sm text-[var(--text-muted)]">{detail}</p>
+      <CardContent className="p-4 sm:p-5">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0 flex-1">
+            <p className="text-xs font-medium text-[var(--text-muted)] sm:text-sm">{label}</p>
+            <p className="mt-3 text-xl font-extrabold tracking-tight text-white sm:mt-4 sm:text-2xl">{value}</p>
+            <p className="mt-2 text-xs text-[var(--text-muted)] sm:mt-3 sm:text-sm">{detail}</p>
           </div>
-          <div className="flex size-12 items-center justify-center rounded-2xl bg-[rgba(255,255,255,0.06)]">
-            <Icon className="size-5 text-white" />
+          <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-[rgba(255,255,255,0.06)] sm:size-12 sm:rounded-2xl">
+            <Icon className="size-4 text-white sm:size-5" />
           </div>
         </div>
       </CardContent>
@@ -65,7 +65,7 @@ export function ReportsPage() {
                 : 'This report is generated from stored behavior events, reminders, hydration logs, and analysis sessions.'}
             </p>
           </div>
-          <div className="w-full max-w-xs">
+          <div className="w-full sm:max-w-xs">
             <Input
               label={isTurkish ? 'Rapor tarihi' : 'Report date'}
               type="date"
@@ -78,7 +78,7 @@ export function ReportsPage() {
 
       {reportQuery.isLoading || !report ? (
         <>
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
             <MetricCardSkeleton />
             <MetricCardSkeleton />
             <MetricCardSkeleton />
@@ -97,7 +97,7 @@ export function ReportsPage() {
 
       {report ? (
         <>
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
         <ReportMetric
           label={isTurkish ? 'Analizler' : 'Analyses'}
           value={`${report.analyses_completed}`}

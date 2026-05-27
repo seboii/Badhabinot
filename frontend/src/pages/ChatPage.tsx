@@ -263,7 +263,7 @@ export function ChatPage() {
 
   return (
     <div className="grid gap-4 lg:grid-cols-[minmax(0,1.2fr)_minmax(300px,0.8fr)] xl:grid-cols-[minmax(0,1.2fr)_minmax(340px,0.8fr)]">
-      <Card className="min-h-[480px] sm:min-h-[560px] lg:min-h-[620px]">
+      <Card>
         <CardHeader>
           <div className="flex items-start justify-between gap-3">
             <div>
@@ -299,7 +299,7 @@ export function ChatPage() {
             </Button>
           </div>
         </CardHeader>
-        <CardContent className="flex flex-col gap-4" style={{ height: 'calc(100% - 5.5rem)' }}>
+        <CardContent className="flex flex-col gap-3 sm:gap-4">
           {historyQuery.isError ? (
             <div className="rounded-[20px] border border-[rgba(245,158,11,0.4)] bg-[rgba(245,158,11,0.08)] p-3 text-sm text-[var(--text-muted)]">
               <div className="flex items-start gap-2">
@@ -323,7 +323,7 @@ export function ChatPage() {
 
           <div
             ref={historyContainerRef}
-            className="flex-1 space-y-3 overflow-y-auto rounded-[24px] border border-[var(--line-soft)] bg-[rgba(255,255,255,0.03)] p-4"
+            className="h-[280px] space-y-3 overflow-y-auto rounded-[20px] border border-[var(--line-soft)] bg-[rgba(255,255,255,0.03)] p-3 sm:h-[380px] sm:rounded-[24px] sm:p-4 lg:h-[460px]"
           >
             {messages.length === 0 && !isStreaming ? (
               <EmptyState
@@ -398,9 +398,26 @@ export function ChatPage() {
             </div>
           ) : null}
 
+          {/* Follow-up chips — horizontal scroll on mobile so they're visible without scrolling to sidebar */}
+          {followUps.length > 0 && (
+            <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none lg:hidden">
+              {followUps.map((suggestion) => (
+                <button
+                  key={suggestion}
+                  type="button"
+                  className="shrink-0 rounded-full border border-[var(--line-soft)] bg-[rgba(255,255,255,0.03)] px-3 py-1.5 text-xs text-[var(--text-muted)] transition hover:border-[var(--primary)] hover:text-white disabled:pointer-events-none disabled:opacity-50"
+                  disabled={isStreaming}
+                  onClick={() => setDraft(suggestion)}
+                >
+                  {suggestion}
+                </button>
+              ))}
+            </div>
+          )}
+
           <form className="space-y-3" onSubmit={handleSubmit}>
             <textarea
-              className="min-h-[88px] w-full rounded-[20px] border border-[var(--line-soft)] bg-[rgba(255,255,255,0.03)] px-4 py-3 text-sm text-white outline-none focus:border-[var(--primary)] sm:min-h-[112px] sm:rounded-[24px]"
+              className="min-h-[64px] w-full rounded-[20px] border border-[var(--line-soft)] bg-[rgba(255,255,255,0.03)] px-3 py-2.5 text-sm text-white outline-none focus:border-[var(--primary)] sm:min-h-[96px] sm:px-4 sm:py-3 sm:rounded-[24px]"
               placeholder={
                 isTurkish
                   ? 'Durus, su, hatirlatici, sigara-benzeri olaylar veya gunluk trend hakkinda sor.'

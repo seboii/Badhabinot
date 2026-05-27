@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { platform } from '@/lib/platform'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // MediaPipe — CDN paths (must match installed package version)
@@ -249,6 +250,9 @@ export function useMediaPipeLive(
   canvasRef: React.RefObject<HTMLCanvasElement | null>,
   active: boolean,
 ): MediaPipeLiveState {
+  // MediaPipe + ONNX are browser-only; disable on native (constant — safe to gate effects)
+  const effectiveActive = active && !platform.isNative
+
   const [state, setState] = useState<MediaPipeLiveState>({
     ready: false,
     loading: false,
@@ -264,7 +268,7 @@ export function useMediaPipeLive(
 
   // ── Load MediaPipe models ─────────────────────────────────────────────────
   useEffect(() => {
-    if (!active) return
+    if (!effectiveActive) return
     let cancelled = false
     setState(s => ({ ...s, loading: true, error: null }))
 
@@ -281,19 +285,19 @@ export function useMediaPipeLive(
       })
 
     return () => { cancelled = true }
-  }, [active])
+  }, [effectiveActive])
 
   // ── Load ONNX session (YOLOv8 pose) — independent of MediaPipe ───────────
   useEffect(() => {
-    if (!active) return
+    if (!effectiveActive) return
     ensureOrtSession().catch((err: unknown) =>
       console.error('[YOLOPose] ONNX session failed:', err),
     )
-  }, [active])
+  }, [effectiveActive])
 
   // ── YOLO inference loop — async, ~10 fps max ──────────────────────────────
   useEffect(() => {
-    if (!state.ready || !active) return
+    if (!state.ready || !effectiveActive) return
 
     // Offscreen canvas reused across inference calls to avoid GC pressure
     const offscreen = document.createElement('canvas')
@@ -338,11 +342,11 @@ export function useMediaPipeLive(
     }, 100) // 10 fps cap
 
     return () => window.clearInterval(id)
-  }, [state.ready, active, videoRef])
+  }, [state.ready, effectiveActive, videoRef])
 
   // ── rAF drawing loop — MediaPipe + YOLO pose drawn together ──────────────
   useEffect(() => {
-    if (!state.ready || !active) return
+    if (!state.ready || !effectiveActive) return
 
     const mp = mpRef.current!
 
@@ -434,7 +438,7 @@ export function useMediaPipeLive(
         canvas.getContext('2d')?.clearRect(0, 0, canvas.width, canvas.height)
       }
     }
-  }, [state.ready, active, canvasRef, videoRef])
+  }, [state.ready, effectiveActive, canvasRef, videoRef])
 
   return state
 }

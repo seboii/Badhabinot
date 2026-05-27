@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useLanguage } from '@/i18n/language-provider'
+import { platform } from '@/lib/platform'
 
 export type CameraPermissionState = 'idle' | 'requesting' | 'granted' | 'denied' | 'unsupported' | 'error'
 
@@ -62,6 +63,12 @@ export function useCamera() {
   }
 
   const requestCamera = async () => {
+    if (platform.isNative) {
+      setPermissionState('unsupported')
+      setErrorMessage(isTurkish ? 'Kamera izleme mobil uygulamada desteklenmiyor.' : 'Camera monitoring is not supported in the mobile app.')
+      return false
+    }
+
     if (!window.isSecureContext && !LOCALHOST_HOSTS.has(window.location.hostname)) {
       setPermissionState('unsupported')
       setErrorMessage(isTurkish ? 'Kamera erisimi HTTPS veya localhost gerektirir.' : 'Camera access requires HTTPS or localhost.')
@@ -78,12 +85,15 @@ export function useCamera() {
     setPermissionState('requesting')
     setErrorMessage(null)
 
+    // Reduce resolution on mobile to save bandwidth and CPU
+    const isMobileDevice = /mobile|android|iphone|ipad|ipod/i.test(navigator.userAgent)
+
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         video: {
           facingMode: 'user',
-          width: { ideal: 1280 },
-          height: { ideal: 720 },
+          width: { ideal: isMobileDevice ? 640 : 1280 },
+          height: { ideal: isMobileDevice ? 480 : 720 },
         },
         audio: false,
       })
@@ -147,7 +157,8 @@ export function useCamera() {
     }
 
     context.drawImage(video, 0, 0, canvas.width, canvas.height)
-    const dataUrl = canvas.toDataURL('image/jpeg', 0.86)
+    const quality = /mobile|android|iphone|ipad|ipod/i.test(navigator.userAgent) ? 0.80 : 0.86
+    const dataUrl = canvas.toDataURL('image/jpeg', quality)
     const imageBase64 = dataUrl.split(',')[1]
 
     if (!imageBase64) {
