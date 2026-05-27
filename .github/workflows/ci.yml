@@ -109,8 +109,8 @@ jobs:
       - name: Env hazirla
         run: cp .env.example .env
       - name: Compose config dogrula
-        run: docker compose -f infra/docker/compose/docker-compose.yml config > /dev/null
+        run: docker compose -f docker-compose.yml config > /dev/null
       - name: Build kontrol
         run: >
-          docker compose -f infra/docker/compose/docker-compose.yml build
+          docker compose -f docker-compose.yml build
           backend ai-service vision-service frontend-app
