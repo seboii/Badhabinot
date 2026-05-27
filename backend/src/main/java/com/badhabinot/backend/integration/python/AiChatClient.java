@@ -60,7 +60,7 @@ public class AiChatClient {
                         .flatMap(body -> Mono.error(new DownstreamServiceException("ai_chat_stream_error", body))))
                 .bodyToFlux(new ParameterizedTypeReference<ServerSentEvent<String>>() {})
                 .mapNotNull(ServerSentEvent::data)
-                .timeout(Duration.ofSeconds(120));
+                .timeout(Duration.ofSeconds(300));
     }
 
     public Map<String, Object> ollamaHealth(String baseUrl, String modelName) {

@@ -186,7 +186,7 @@ public class GroundedChatServiceImpl implements IGroundedChatService {
                     context.modelMode(), context.localModelName(), context.ollamaBaseUrl()));
         }));
 
-        SseEmitter emitter = new SseEmitter(120_000L);
+        SseEmitter emitter = new SseEmitter(300_000L);
         emitter.onTimeout(emitter::complete);
 
         final UUID finalUserId = userId;
@@ -213,7 +213,7 @@ public class GroundedChatServiceImpl implements IGroundedChatService {
                                 }
                             } catch (Exception ignored) {}
                         })
-                        .blockLast(Duration.ofSeconds(120));
+                        .blockLast(Duration.ofSeconds(300));
 
                 // Transaction 2: save assistant message
                 Map<String, Object> metadata = new LinkedHashMap<>();
