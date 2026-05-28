@@ -189,6 +189,16 @@ public class GroundedChatServiceImpl implements IGroundedChatService {
         SseEmitter emitter = new SseEmitter(300_000L);
         emitter.onTimeout(emitter::complete);
 
+        // Flush HTTP 200 response headers immediately so the browser's fetch() resolves
+        // before the first Ollama token arrives (which can take 5–30 s on cold start).
+        // The frontend ignores {"ping":true} events — it only processes "token" and "done".
+        try {
+            emitter.send(SseEmitter.event().data("{\"ping\":true}"));
+        } catch (java.io.IOException e) {
+            emitter.completeWithError(e);
+            return emitter;
+        }
+
         final UUID finalUserId = userId;
         final UUID finalConversationId = setup.conversationId();
         final AtomicReference<StringBuilder> accumulated = new AtomicReference<>(new StringBuilder());
