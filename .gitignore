@@ -2,10 +2,19 @@
 # Monorepo genel
 # =========================
 CLAUDE.md
+**/CLAUDE.md
 AGENTS.md
+**/AGENTS.md
 .claude/
+**/.claude/
 .cursor/
+.cursorrules
 .copilot/
+.windsurfrules
+.aider*
+.continue/
+.codeium/
+.roo/
 .DS_Store
 Thumbs.db
 *.swp
