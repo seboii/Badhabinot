@@ -1,5 +1,6 @@
 package com.badhabinot.backend.dto.monitoring;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
@@ -42,10 +43,10 @@ public record AiChatRequest(
             Map<String, Integer> recentEventTypeCounts,
             Map<String, Integer> recentReminderTypeCounts,
             List<SessionSnapshot> recentSessions,
-            int totalSessionsLast7Days,
-            int totalSessionMinutesLast7Days,
-            int hydrationLast7DaysMl,
-            int analysesCompletedLast7Days,
+            @JsonProperty("total_sessions_last_7_days") int totalSessionsLast7Days,
+            @JsonProperty("total_session_minutes_last_7_days") int totalSessionMinutesLast7Days,
+            @JsonProperty("hydration_last_7_days_ml") int hydrationLast7DaysMl,
+            @JsonProperty("analyses_completed_last_7_days") int analysesCompletedLast7Days,
             String comparisonToPreviousDay,
             List<String> dataGaps,
             List<BehavioralPattern> behavioralPatterns
@@ -58,7 +59,7 @@ public record AiChatRequest(
             int peakHourCount,
             String peakDayOfWeek,
             int peakDayCount,
-            int totalCountLast7Days,
+            @JsonProperty("total_count_last_7_days") int totalCountLast7Days,
             String intensityLabel,
             String trendLabel
     ) {
