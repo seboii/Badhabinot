@@ -58,7 +58,9 @@ class UserContextServiceTest {
                 ModelMode.API,
                 true,
                 "llama3.2:3b",
-                "http://localhost:11434"
+                "http://localhost:11434",
+                com.badhabinot.backend.model.user.ChatPersona.GENERAL_CHAT,
+                null
         );
         UserConsent consent = UserConsent.createDefault(userId);
         consent.update(true, true, true);

@@ -15,7 +15,9 @@ public record InternalUserAnalysisContext(
         String quietHoursEnd,
         boolean remoteInferenceAccepted,
         String localModelName,
-        String ollamaBaseUrl
+        String ollamaBaseUrl,
+        String chatPersona,
+        String customSystemPrompt
 ) {
 }
 

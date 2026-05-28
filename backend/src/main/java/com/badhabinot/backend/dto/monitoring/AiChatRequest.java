@@ -16,7 +16,9 @@ public record AiChatRequest(
         Context context,
         String aiMode,
         String localModelName,
-        String ollamaBaseUrl
+        String ollamaBaseUrl,
+        String chatPersona,
+        String customSystemPrompt
 ) {
     public record Message(
             String role,

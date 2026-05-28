@@ -1,5 +1,6 @@
 export type Sensitivity = 'LOW' | 'MEDIUM' | 'HIGH'
 export type ModelMode = 'API' | 'LOCAL'
+export type ChatPersona = 'GENERAL_CHAT' | 'BEHAVIOR_COACH' | 'CUSTOM'
 
 export type OllamaHealthResponse = {
   provider: string
@@ -31,6 +32,8 @@ export type SettingsResponse = {
   notifications_enabled: boolean
   local_model_name: string
   ollama_base_url: string
+  chat_persona: ChatPersona
+  custom_system_prompt: string | null
   updated_at: string
 }
 
@@ -71,6 +74,8 @@ export type UpdateSettingsRequest = {
   notifications_enabled: boolean
   local_model_name: string
   ollama_base_url: string
+  chat_persona: ChatPersona
+  custom_system_prompt?: string | null
 }
 
 export type UpdateConsentsRequest = {

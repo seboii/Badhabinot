@@ -97,7 +97,9 @@ public class UserContextServiceImpl implements IUserContextService {
                 request.modelMode(),
                 request.notificationsEnabled(),
                 request.localModelName(),
-                request.ollamaBaseUrl()
+                request.ollamaBaseUrl(),
+                request.chatPersona(),
+                request.customSystemPrompt()
         );
         return toSettingsResponse(userSettingsRepository.save(settings));
     }
@@ -188,7 +190,9 @@ public class UserContextServiceImpl implements IUserContextService {
                 settings.getQuietHoursEnd(),
                 consent.isRemoteInferenceAccepted(),
                 settings.getLocalModelName(),
-                settings.getOllamaBaseUrl()
+                settings.getOllamaBaseUrl(),
+                settings.getChatPersona(),
+                settings.getCustomSystemPrompt()
         );
     }
 
@@ -211,7 +215,9 @@ public class UserContextServiceImpl implements IUserContextService {
                 context.quietHoursEnd().toString(),
                 context.remoteInferenceAccepted(),
                 context.localModelName(),
-                context.ollamaBaseUrl()
+                context.ollamaBaseUrl(),
+                context.chatPersona() != null ? context.chatPersona().name() : "GENERAL_CHAT",
+                context.customSystemPrompt()
         );
     }
 
@@ -277,6 +283,8 @@ public class UserContextServiceImpl implements IUserContextService {
                 settings.isNotificationsEnabled(),
                 settings.getLocalModelName(),
                 settings.getOllamaBaseUrl(),
+                settings.getChatPersona(),
+                settings.getCustomSystemPrompt(),
                 settings.getUpdatedAt()
         );
     }
