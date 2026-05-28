@@ -97,6 +97,9 @@ app:
   password-reset:
     reset-url-template: ${PASSWORD_RESET_URL_TEMPLATE:http://localhost:3000/reset-password?token={token}}
 
+firebase:
+  service-account-key-path: ${FIREBASE_SERVICE_ACCOUNT_KEY_PATH:}
+
 integration:
   internal-api-key: ${INTERNAL_API_KEY:change-me-in-real-environments}
   vision-service:

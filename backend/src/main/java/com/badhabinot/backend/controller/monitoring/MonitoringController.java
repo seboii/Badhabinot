@@ -1,6 +1,9 @@
 package com.badhabinot.backend.controller.monitoring;
 
 import com.badhabinot.backend.dto.monitoring.AnalyzeFrameRequest;
+import com.badhabinot.backend.dto.monitoring.PushTokenRequest;
+import com.badhabinot.backend.dto.monitoring.PushDeviceResponse;
+import com.badhabinot.backend.service.monitoring.IPushNotificationService;
 import com.badhabinot.backend.dto.monitoring.AnalyzeFrameResponse;
 import com.badhabinot.backend.dto.monitoring.FaceRegisterRequest;
 import com.badhabinot.backend.dto.monitoring.FaceRegisterResponse;
@@ -41,6 +44,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -59,6 +63,7 @@ public class MonitoringController {
     private final VisionServiceClient visionServiceClient;
     private final AiChatClient aiChatClient;
     private final IUserContextService userContextService;
+    private final IPushNotificationService pushNotificationService;
 
     public MonitoringController(
             IAnalysisOrchestratorService analysisOrchestratorService,
@@ -68,7 +73,8 @@ public class MonitoringController {
             IGroundedChatService groundedChatService,
             VisionServiceClient visionServiceClient,
             AiChatClient aiChatClient,
-            IUserContextService userContextService
+            IUserContextService userContextService,
+            IPushNotificationService pushNotificationService
     ) {
         this.analysisOrchestratorService = analysisOrchestratorService;
         this.monitoringExperienceService = monitoringExperienceService;
@@ -78,6 +84,7 @@ public class MonitoringController {
         this.visionServiceClient = visionServiceClient;
         this.aiChatClient = aiChatClient;
         this.userContextService = userContextService;
+        this.pushNotificationService = pushNotificationService;
     }
 
     @PostMapping("/sessions/start")
@@ -218,5 +225,24 @@ public class MonitoringController {
         java.util.UUID userId = java.util.UUID.fromString(jwt.getSubject());
         com.badhabinot.backend.dto.monitoring.InternalUserAnalysisContext ctx = userContextService.getMonitoringAnalysisContext(userId);
         return aiChatClient.ollamaHealth(ctx.ollamaBaseUrl(), ctx.localModelName());
+    }
+
+    // ── Push Notifications ───────────────────────────────────────────────────
+
+    @PostMapping("/push/register")
+    @Operation(summary = "Register an FCM push token for this user", security = @SecurityRequirement(name = "bearerAuth"))
+    public PushDeviceResponse registerPushToken(@AuthenticationPrincipal Jwt jwt,
+                                                 @Valid @RequestBody PushTokenRequest request) {
+        java.util.UUID userId = java.util.UUID.fromString(jwt.getSubject());
+        pushNotificationService.registerToken(userId, request.getToken(),
+                request.getPlatform(), request.getDeviceName());
+        return new PushDeviceResponse(null, request.getPlatform(),
+                request.getDeviceName(), true, java.time.Instant.now());
+    }
+
+    @DeleteMapping("/push/unregister/{token}")
+    @Operation(summary = "Unregister an FCM push token", security = @SecurityRequirement(name = "bearerAuth"))
+    public void unregisterPushToken(@PathVariable("token") String token) {
+        pushNotificationService.unregisterToken(token);
     }
 }
