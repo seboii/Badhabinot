@@ -38,6 +38,16 @@ export function AppProviders({ children }: PropsWithChildren) {
 
 function AppToaster() {
   const { theme } = useTheme()
+  // top-center on mobile (≤639px), top-right on larger screens
+  const position =
+    typeof window !== 'undefined' && window.innerWidth < 640 ? 'top-center' : 'top-right'
 
-  return <Toaster richColors theme={theme} position="top-right" />
+  return (
+    <Toaster
+      richColors
+      theme={theme}
+      position={position}
+      toastOptions={{ duration: 4000 }}
+    />
+  )
 }

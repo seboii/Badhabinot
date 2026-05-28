@@ -174,7 +174,42 @@ body {
   overflow-x: hidden;
 }
 
-/* Safe-area padding helper for iPhone notch/home-indicator */
+/* Safe-area padding helpers for notched phones */
 .pb-safe {
   padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+.pt-safe {
+  padding-top: env(safe-area-inset-top, 0px);
+}
+.pl-safe {
+  padding-left: env(safe-area-inset-left, 0px);
+}
+.pr-safe {
+  padding-right: env(safe-area-inset-right, 0px);
+}
+
+/* Dynamic viewport height — avoids mobile browser chrome overlap */
+.h-dvh {
+  height: 100dvh;
+}
+.min-h-dvh {
+  min-height: 100dvh;
+}
+
+/* iOS Safari: prevent input zoom by enforcing 16px minimum */
+input,
+select,
+textarea {
+  font-size: max(16px, 1em);
+}
+
+/* Respect reduced-motion preference */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
 }
