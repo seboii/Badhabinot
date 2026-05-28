@@ -1,0 +1,4 @@
+# Toplanan değerlendirme verisi (kişisel kamera görüntüsü) ve sonuç dosyaları repoya girmez.
+data/
+*.results.json
+results.json
