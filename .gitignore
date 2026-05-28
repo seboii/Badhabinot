@@ -40,6 +40,9 @@ Thumbs.db
 # =========================
 firebase-service-account.json
 **/firebase-service-account.json
+infra/firebase/*.json
+**/*firebase-adminsdk*.json
+**/*firebase-adminsdk*.txt
 
 # =========================
 # IDE/editor
