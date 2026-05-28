@@ -166,3 +166,62 @@ pip install -r requirements-train.txt
 - **Pipeline entegrasyonu**: `UserBaseline.anomaly_score`'u
   `VisionAnalysisService` içine takıp olay severity'sini kişisel sapmayla
   ölçeklemek opsiyonel ileri adımdır; tez demosu için CLI çıktıları yeterlidir.
+
+---
+
+# Faz 4 — Multimodal Füzyon (LLM + Vision)
+
+Faz 4, vision çıktısının ham olay listesi olarak değil **yapılandırılmış sinyal**
+olarak LLM'e geçmesini sağlar. İki ayrı taraf vardır:
+
+- **Backend (Java) — zaman serisi örüntüsü**: `TemporalPatternAnalyzer`
+  davranış olaylarından her event_type için saat/gün piki ve trend
+  (artıyor/azalıyor/stabil) çıkarır. `AiChatRequest.Context.behavioralPatterns`
+  alanı LLM'e geçer; `OllamaProvider` "ZAMANSAL ÖRÜNTÜLER (SON 7 GÜN)"
+  bloğunu prompt'a ekler, grounded_facts/follow_up'ı bu örüntülerden besler.
+- **Vision (Python) — anlık özet**: `training/insights.py` →
+  `BehavioralInsight` Faz 2 model tahmini + Faz 3 saliency top_features +
+  Faz 3 kişisel anomaly_score + top_deviations'ı tek dataclass'ta toplar.
+  `to_dict()` ile JSON, `summary_tr` ile doğrudan Türkçe koçluk cümlesi.
+
+> Durum: İskelet hazır. `TemporalPatternAnalyzer` üretim akışındaki gerçek
+> olaylarla çalışır. `BehavioralInsight` pipeline'a entegre edilmemiş —
+> eğitilmiş model olunca `VisionAnalysisService`'in opsiyonel bir alanı
+> olarak gönderilebilir.
+
+## Neden örüntü, neden tek dataclass?
+
+- "Sigara-benzeri jest sabah 10-11 arası yoğun" cümlesini LLM tek başına
+  ham olay listesinden çıkarmaya zorlanmamalı; bu sayısal işin Java tarafında
+  deterministik yapılması hem ucuz hem güvenilirdir.
+- `BehavioralInsight` model + XAI + kişisel sapmayı tek payload'ta birleştirir;
+  LLM'in görmesi gereken **yalnızca yorumlanabilir özet** olur, ham
+  landmark vektörü değil → gizlilik tarafıyla da uyumlu.
+
+## Kullanım
+
+```python
+from training.insights import build_insight
+insight = build_insight(
+    predicted_label="smoking_like_gesture",
+    confidence=0.81,
+    top_features=[("hand0_near_mouth", 0.92), ("mar", 0.34)],
+    anomaly_score=2.3,
+    top_deviations=[("kp_left_wrist_y", 3.1)],
+)
+payload = insight.to_dict()           # LLM'e gönder
+print(insight.summary_tr)              # TR koçluk cümlesi
+```
+
+Backend tarafında değişiklik gerekmez — eğitim sonrası `VisionAnalysisService`
+opsiyonel `behavioral_insight: BehavioralInsight | None` alanını response'a
+ekleyebilir; backend bunu `AiChatRequest.Context`'e geçirir.
+
+## Test
+
+- `tests/test_insights.py` — 7 test (saf python, hep çalışır): confidence/anomaly
+  etiketleri, summary_tr içeriği, JSON serileştirme/yuvarlama, varsayılan
+  boş koleksiyonlar.
+- Backend tarafında `TemporalPatternAnalyzerTest` (Java/JUnit 5) — boş liste,
+  eşik altı dışlanma, peak hour/day doğruluğu, intensity etiketi, artan/azalan
+  trend, total count sıralaması.
