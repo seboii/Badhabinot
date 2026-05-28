@@ -1,0 +1,8 @@
+# Faz 2 — landmark sequence classifier eğitimi (OPSİYONEL).
+# Runtime ve CI'ye dahil DEĞİLDİR; yalnızca model eğitimi/çıkarımı için gerekir.
+#
+# CPU-only kurulum (önerilen, daha küçük):
+#   pip install torch --index-url https://download.pytorch.org/whl/cpu
+# veya bu dosyadan:
+#   pip install -r requirements-train.txt
+torch>=2.2
