@@ -245,6 +245,7 @@ class GroundedChatServiceTest {
                 9600,
                 124,
                 "Compared with 2026-04-07: posture alerts +1, hydration -200 ml, smoking-like cues +0.",
+                List.of(),
                 List.of()
         );
     }

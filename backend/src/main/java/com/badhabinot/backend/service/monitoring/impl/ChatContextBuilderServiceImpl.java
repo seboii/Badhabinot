@@ -139,6 +139,10 @@ public class ChatContextBuilderServiceImpl implements IChatContextBuilderService
                 comparison
         );
 
+        // Faz 4: ham olay listesinin üstüne zamansal örüntü çıkar → LLM yapılandırılmış sinyal görür.
+        List<AiChatRequest.BehavioralPattern> behavioralPatterns =
+                TemporalPatternAnalyzer.analyze(recentEvents, zoneId, reportDate);
+
         return new AiChatRequest.Context(
                 currentReport.hydrationProgressMl(),
                 currentReport.waterGoalMl(),
@@ -162,7 +166,8 @@ public class ChatContextBuilderServiceImpl implements IChatContextBuilderService
                 hydrationLast7DaysMl,
                 analysesCompletedLast7Days,
                 comparison,
-                dataGaps
+                dataGaps,
+                behavioralPatterns
         );
     }
 

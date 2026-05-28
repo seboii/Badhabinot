@@ -47,7 +47,20 @@ public record AiChatRequest(
             int hydrationLast7DaysMl,
             int analysesCompletedLast7Days,
             String comparisonToPreviousDay,
-            List<String> dataGaps
+            List<String> dataGaps,
+            List<BehavioralPattern> behavioralPatterns
+    ) {
+    }
+
+    public record BehavioralPattern(
+            String eventType,
+            int peakHourOfDay,
+            int peakHourCount,
+            String peakDayOfWeek,
+            int peakDayCount,
+            int totalCountLast7Days,
+            String intensityLabel,
+            String trendLabel
     ) {
     }
 

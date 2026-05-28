@@ -130,6 +130,7 @@ class AiChatClientTest {
                         9800,
                         120,
                         "Compared with 2026-04-07: posture alerts +2, hydration -300 ml, smoking-like cues +1.",
+                        List.of(),
                         List.of()
                 ),
                 "API",
