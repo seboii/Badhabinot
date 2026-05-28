@@ -64,6 +64,21 @@ class ChatSessionSnapshot(BaseModel):
     duration_minutes: int = 0
 
 
+class BehavioralPattern(BaseModel):
+    """Faz 4 — Zaman serisi tabanlı davranış örüntüsü (saat/gün piki + trend)."""
+
+    model_config = ConfigDict(protected_namespaces=())
+
+    event_type: str
+    peak_hour_of_day: int = Field(ge=0, le=23)
+    peak_hour_count: int = Field(ge=0)
+    peak_day_of_week: str
+    peak_day_count: int = Field(ge=0)
+    total_count_last_7_days: int = Field(ge=0)
+    intensity_label: str   # yogun | orta | az
+    trend_label: str       # artiyor | azaliyor | stabil
+
+
 class ChatContext(BaseModel):
     model_config = ConfigDict(protected_namespaces=())
 
@@ -90,6 +105,7 @@ class ChatContext(BaseModel):
     analyses_completed_last_7_days: int = 0
     comparison_to_previous_day: str = ""
     data_gaps: list[str] = Field(default_factory=list)
+    behavioral_patterns: list[BehavioralPattern] = Field(default_factory=list)
 
 
 class ChatRequest(BaseModel):

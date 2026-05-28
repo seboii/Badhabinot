@@ -475,6 +475,8 @@ class OllamaProvider:
             ]
             if ctx.comparison_to_previous_day:
                 grounded_facts.append(f"Dünle karşılaştırma: {ctx.comparison_to_previous_day}")
+            # Faz 4: zamansal örüntüler grounded_facts'e dahil.
+            grounded_facts.extend(self._pattern_grounded_facts(ctx.behavioral_patterns))
 
             follow_up_suggestions = []
             if ctx.poor_posture_ratio > 0.25:
@@ -483,6 +485,11 @@ class OllamaProvider:
                 follow_up_suggestions.append("Su içmemi artırmak için nasıl bir plan yapmalıyım?")
             if ctx.smoking_like_count >= 3:
                 follow_up_suggestions.append("El-yüz hareketlerimi azaltmak için ne yapabilirim?")
+            if ctx.behavioral_patterns and ctx.behavioral_patterns[0].trend_label == "artiyor":
+                top = ctx.behavioral_patterns[0]
+                follow_up_suggestions.append(
+                    f"{top.event_type} neden artıyor, hangi saatlerde dikkat etmeliyim?"
+                )
             follow_up_suggestions.append("Bu hafta genel trendim nasıl gidiyor?")
             follow_up_suggestions = follow_up_suggestions[:3]
 
@@ -528,6 +535,8 @@ class OllamaProvider:
         ]
         if ctx.comparison_to_previous_day:
             grounded_facts.append(f"Dünle karşılaştırma: {ctx.comparison_to_previous_day}")
+        # Faz 4: zamansal örüntüleri grounded_facts'e ekle.
+        grounded_facts.extend(self._pattern_grounded_facts(ctx.behavioral_patterns))
         follow_up_suggestions: list[str] = []
         if ctx.poor_posture_ratio > 0.25:
             follow_up_suggestions.append("Duruşumu günün geri kalanında nasıl düzeltebilirim?")
@@ -535,6 +544,13 @@ class OllamaProvider:
             follow_up_suggestions.append("Su içmemi artırmak için nasıl bir plan yapmalıyım?")
         if ctx.smoking_like_count >= 3:
             follow_up_suggestions.append("El-yüz hareketlerimi azaltmak için ne yapabilirim?")
+        # Trend-temelli takip sorusu — en güçlü trendi yakala.
+        if ctx.behavioral_patterns:
+            top_pattern = ctx.behavioral_patterns[0]
+            if top_pattern.trend_label == "artiyor":
+                follow_up_suggestions.append(
+                    f"{top_pattern.event_type} neden artıyor, hangi saatlerde dikkat etmeliyim?"
+                )
         follow_up_suggestions.append("Bu hafta genel trendim nasıl gidiyor?")
         return grounded_facts, follow_up_suggestions[:3]
 
@@ -683,6 +699,9 @@ class OllamaProvider:
                 f"Özet: {ctx.summary}\n"
                 f"Dünle karşılaştırma: {ctx.comparison_to_previous_day or 'Veri yok'}\n"
             )
+            pattern_block = self._format_pattern_block(ctx.behavioral_patterns)
+            if pattern_block:
+                summary_block = summary_block + pattern_block
             user_content = (
                 f"{summary_block}\n"
                 f"Soru: {request.message}\n\n"
@@ -693,6 +712,37 @@ class OllamaProvider:
             *history_lines,
             {"role": "user", "content": user_content},
         ]
+
+    # ── Faz 4: zamansal örüntüleri prompt + grounded_facts için biçimlendir ─────
+    _DAY_NAMES_TR: dict[str, str] = {
+        "MONDAY": "Pazartesi", "TUESDAY": "Salı", "WEDNESDAY": "Çarşamba",
+        "THURSDAY": "Perşembe", "FRIDAY": "Cuma", "SATURDAY": "Cumartesi", "SUNDAY": "Pazar",
+    }
+
+    @classmethod
+    def _format_pattern_block(cls, patterns: list[Any]) -> str:
+        if not patterns:
+            return ""
+        lines = ["=== ZAMANSAL ÖRÜNTÜLER (SON 7 GÜN) ==="]
+        for p in patterns[:5]:
+            day_tr = cls._DAY_NAMES_TR.get(p.peak_day_of_week, p.peak_day_of_week)
+            lines.append(
+                f"- {p.event_type}: {p.total_count_last_7_days} olay ({p.intensity_label}), "
+                f"pik saat {p.peak_hour_of_day:02d}:00 ({p.peak_hour_count} olay), "
+                f"pik gün {day_tr}, trend: {p.trend_label}"
+            )
+        return "\n".join(lines) + "\n"
+
+    @classmethod
+    def _pattern_grounded_facts(cls, patterns: list[Any]) -> list[str]:
+        out: list[str] = []
+        for p in patterns[:3]:
+            day_tr = cls._DAY_NAMES_TR.get(p.peak_day_of_week, p.peak_day_of_week)
+            out.append(
+                f"Örüntü ({p.event_type}): {p.total_count_last_7_days} olay, "
+                f"pik {day_tr} saat {p.peak_hour_of_day:02d}, trend: {p.trend_label}"
+            )
+        return out
 
     @staticmethod
     def _extract_json(text: str) -> dict[str, Any] | None:

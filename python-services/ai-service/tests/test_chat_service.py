@@ -388,3 +388,101 @@ async def test_chat_service_stream_local_mode_uses_per_request_ollama_url() -> N
                 events.append(json.loads(event_json))
 
     assert any(e.get("token") == "ok" for e in events)
+
+
+# ---------------------------------------------------------------------------
+# Faz 4 — Davranışsal örüntü (behavioral_patterns) testleri
+# ---------------------------------------------------------------------------
+
+def _context_with_patterns() -> dict:
+    base = _context()
+    base["behavioral_patterns"] = [
+        {
+            "event_type": "smoking_like_gesture",
+            "peak_hour_of_day": 10,
+            "peak_hour_count": 3,
+            "peak_day_of_week": "MONDAY",
+            "peak_day_count": 4,
+            "total_count_last_7_days": 12,
+            "intensity_label": "yogun",
+            "trend_label": "artiyor",
+        },
+        {
+            "event_type": "poor_posture",
+            "peak_hour_of_day": 19,
+            "peak_hour_count": 2,
+            "peak_day_of_week": "FRIDAY",
+            "peak_day_count": 3,
+            "total_count_last_7_days": 6,
+            "intensity_label": "orta",
+            "trend_label": "stabil",
+        },
+    ]
+    return base
+
+
+def _build_ollama_request_with_patterns(message: str) -> ChatRequest:
+    return ChatRequest(
+        conversation_id="cP",
+        user_id="uP",
+        timezone="Europe/Istanbul",
+        report_date="2026-05-28",
+        message=message,
+        history=[],
+        context=_context_with_patterns(),
+        ai_mode="LOCAL",
+        local_model_name="badhabinot:latest",
+        ollama_base_url="http://ollama:11434",
+    )
+
+
+def test_format_pattern_block_empty_returns_empty_string() -> None:
+    assert OllamaProvider._format_pattern_block([]) == ""
+
+
+def test_format_pattern_block_includes_event_type_and_peak() -> None:
+    request = _build_ollama_request_with_patterns("durusumum nasil")
+    block = OllamaProvider._format_pattern_block(request.context.behavioral_patterns)
+    assert "ZAMANSAL ÖRÜNTÜLER" in block
+    assert "smoking_like_gesture" in block
+    assert "Pazartesi" in block         # MONDAY → TR çevirisi
+    assert "Cuma" in block              # FRIDAY → TR çevirisi
+    assert "trend: artiyor" in block
+
+
+def test_build_messages_includes_pattern_block_for_data_query() -> None:
+    provider = OllamaProvider(base_url="http://ollama:11434", model_name="badhabinot:latest", timeout_seconds=5)
+    request = _build_ollama_request_with_patterns("bu hafta sigara hareketim nasil")
+    messages = provider._build_messages(request)
+    user_content = messages[-1]["content"]
+    assert "ZAMANSAL ÖRÜNTÜLER" in user_content
+    assert "smoking_like_gesture" in user_content
+
+
+@pytest.mark.asyncio
+async def test_ollama_respond_chat_includes_pattern_in_grounded_facts() -> None:
+    provider = OllamaProvider(base_url="http://ollama:11434", model_name="badhabinot:latest", timeout_seconds=5)
+
+    mock_response = MagicMock()
+    mock_response.raise_for_status = MagicMock()
+    mock_response.content = b'{"message": {"content": "Sigara benzeri hareketleriniz pazartesi sabahlari yogun."}}'
+
+    mock_client = AsyncMock()
+    mock_client.post = AsyncMock(return_value=mock_response)
+    mock_instance = MagicMock()
+    mock_instance.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_instance.__aexit__ = AsyncMock(return_value=None)
+
+    with patch("app.services.providers.httpx.AsyncClient", return_value=mock_instance):
+        result = await provider.respond_chat(
+            _build_ollama_request_with_patterns("bu hafta sigara hareketim ne durumda")
+        )
+
+    assert any("smoking_like_gesture" in f for f in result.grounded_facts)
+    assert any("Pazartesi" in f for f in result.grounded_facts)
+
+
+def test_default_context_has_empty_behavioral_patterns() -> None:
+    """Faz 4 alanı opsiyonel — eski context'ler bozulmamalı."""
+    request = build_request("Summarize my day.")
+    assert request.context.behavioral_patterns == []
