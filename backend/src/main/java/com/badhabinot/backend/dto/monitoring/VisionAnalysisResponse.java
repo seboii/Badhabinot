@@ -8,7 +8,6 @@ public record VisionAnalysisResponse(
         String postureState,
         double postureConfidence,
         List<Detection> detections,
-        Signals signals,
         Processing processing,
         // Phase 8 — new optional fields (null when not requested or deps unavailable)
         String annotatedFrameBase64,
@@ -48,29 +47,9 @@ public record VisionAnalysisResponse(
     ) {
     }
 
-    public record Signals(
-            double brightnessMean,
-            double edgeDensity,
-            double centerEdgeDensity,
-            double postureRiskScore,
-            double handFaceProximityScore,
-            double elongatedObjectScore,
-            double focusScore,
-            double postureConfidence,
-            double postureAlignmentScore,
-            double handMotionScore,
-            double repetitiveMotionScore,
-            double smokingGestureScore,
-            double faceSizeRatio
-    ) {
-    }
-
     public record Processing(
             int frameWidth,
             int frameHeight,
-            double brightnessMean,
-            double edgeDensity,
-            double focusScore,
             long visionLatencyMs
     ) {
     }

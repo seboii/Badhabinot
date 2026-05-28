@@ -5,7 +5,6 @@ from app.schemas.analysis import (
     AnalysisRequest,
     AnalysisSettings,
     VisionContext,
-    VisionSignals,
 )
 from app.services.providers import OpenAiCompatibleProvider, ProviderConfig, ProviderInvocationError
 
@@ -31,21 +30,6 @@ def build_request() -> AnalysisRequest:
             frame_width=128,
             frame_height=128,
             detections=[],
-            signals=VisionSignals(
-                brightness_mean=120.0,
-                edge_density=0.2,
-                center_edge_density=0.4,
-                posture_risk_score=0.25,
-                hand_face_proximity_score=0.55,
-                elongated_object_score=0.2,
-                focus_score=40.0,
-                posture_confidence=0.8,
-                posture_alignment_score=0.7,
-                hand_motion_score=0.6,
-                repetitive_motion_score=0.45,
-                smoking_gesture_score=0.1,
-                face_size_ratio=0.15,
-            ),
         ),
     )
 

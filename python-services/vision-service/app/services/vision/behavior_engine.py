@@ -110,12 +110,6 @@ class BehaviorFrameInput:
     cup_near_mouth: bool = False
     phone_detected: bool = False
 
-    # Legacy elongated object score (from feature_extraction.py)
-    elongated_object_score: float = 0.0
-
-    # Hand face proximity score (legacy)
-    hand_face_proximity_score: float = 0.0
-
     # ── Owner tracking signals (new) ──────────────────────────────────────
     owner_tracked: bool = True               # True = owner face identified this frame
     strangers_in_frame: int = 0              # count of non-owner faces in frame
@@ -235,11 +229,10 @@ class BehaviorStateStore:
 
         # ── Hand / object events (immediate) ──────────────────────────────
         if inputs.face_touch_detected:
-            conf = min(1.0, inputs.hand_face_proximity_score + 0.2)
             events.append(BehaviorEvent(
                 event_type="FACE_TOUCH",
                 severity=_EVENT_SEVERITY["FACE_TOUCH"],
-                confidence=round(conf, 4),
+                confidence=0.55,
                 detail="Hand near face detected",
             ))
 
@@ -259,22 +252,13 @@ class BehaviorStateStore:
                 detail="Cup near mouth",
             ))
 
-        # SMOKING: elongated object + hand near face + mouth touch
-        if (
-            inputs.elongated_object_score > 0.45
-            and inputs.hand_face_proximity_score > 0.45
-            and inputs.mouth_touch_detected
-        ):
-            smoke_conf = min(1.0,
-                inputs.elongated_object_score * 0.4
-                + inputs.hand_face_proximity_score * 0.4
-                + 0.2
-            )
+        # SMOKING: hand-to-mouth contact not explained by a drink/food object.
+        if inputs.mouth_touch_detected and not (inputs.bottle_near_mouth or inputs.cup_near_mouth):
             events.append(BehaviorEvent(
                 event_type="SMOKING",
                 severity=_EVENT_SEVERITY["SMOKING"],
-                confidence=round(smoke_conf, 4),
-                detail="Elongated object near mouth with hand-face contact",
+                confidence=0.6,
+                detail="Hand-to-mouth contact without a drink or food object",
             ))
 
         # FOREIGN_OBJECT: phone detected during session

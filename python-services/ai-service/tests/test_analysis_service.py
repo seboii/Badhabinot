@@ -9,7 +9,6 @@ from app.schemas.analysis import (
     VisionContext,
     VisionDetection,
     VisionEvidence,
-    VisionSignals,
 )
 from app.services.analysis_service import AnalysisService
 from app.services.providers import OpenAiCompatibleProvider, ProviderConfig
@@ -54,21 +53,6 @@ def build_request() -> AnalysisRequest:
                     ),
                 )
             ],
-            signals=VisionSignals(
-                brightness_mean=120.0,
-                edge_density=0.2,
-                center_edge_density=0.5,
-                posture_risk_score=0.72,
-                hand_face_proximity_score=0.8,
-                elongated_object_score=0.1,
-                focus_score=42.0,
-                posture_confidence=0.88,
-                posture_alignment_score=0.72,
-                hand_motion_score=0.38,
-                repetitive_motion_score=0.31,
-                smoking_gesture_score=0.22,
-                face_size_ratio=0.14,
-            ),
         ),
     )
 

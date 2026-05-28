@@ -30,27 +30,9 @@ class VisionServiceClientTest {
                   "postureState": "good",
                   "postureConfidence": 0.83,
                   "detections": [],
-                  "signals": {
-                    "brightnessMean": 122.1,
-                    "edgeDensity": 0.2,
-                    "centerEdgeDensity": 0.4,
-                    "postureRiskScore": 0.31,
-                    "handFaceProximityScore": 0.22,
-                    "elongatedObjectScore": 0.11,
-                    "focusScore": 0.73,
-                    "postureConfidence": 0.83,
-                    "postureAlignmentScore": 0.62,
-                    "handMotionScore": 0.15,
-                    "repetitiveMotionScore": 0.08,
-                    "smokingGestureScore": 0.02,
-                    "faceSizeRatio": 0.19
-                  },
                   "processing": {
                     "frameWidth": 1280,
                     "frameHeight": 720,
-                    "brightnessMean": 122.1,
-                    "edgeDensity": 0.2,
-                    "focusScore": 0.73,
                     "visionLatencyMs": 44
                   }
                 }
@@ -61,7 +43,6 @@ class VisionServiceClientTest {
         assertThat(response.requestId()).isEqualTo("req-1");
         assertThat(response.subjectPresent()).isTrue();
         assertThat(response.processing().visionLatencyMs()).isEqualTo(44);
-        assertThat(response.signals().postureRiskScore()).isEqualTo(0.31);
     }
 
     @Test

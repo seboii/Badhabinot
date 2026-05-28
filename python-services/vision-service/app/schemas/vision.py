@@ -44,32 +44,11 @@ class VisionDetection(BaseModel):
     evidence: DetectionEvidence
 
 
-class VisionSignals(BaseModel):
-    model_config = ConfigDict(protected_namespaces=())
-
-    brightness_mean: float = Field(ge=0.0, le=255.0)
-    edge_density: float = Field(ge=0.0, le=1.0)
-    center_edge_density: float = Field(ge=0.0, le=1.0)
-    posture_risk_score: float = Field(ge=0.0, le=1.0)
-    hand_face_proximity_score: float = Field(ge=0.0, le=1.0)
-    elongated_object_score: float = Field(ge=0.0, le=1.0)
-    focus_score: float = Field(ge=0.0)
-    posture_confidence: float = Field(ge=0.0, le=1.0)
-    posture_alignment_score: float = Field(ge=0.0, le=1.0)
-    hand_motion_score: float = Field(ge=0.0, le=1.0)
-    repetitive_motion_score: float = Field(ge=0.0, le=1.0)
-    smoking_gesture_score: float = Field(ge=0.0, le=1.0)
-    face_size_ratio: float = Field(ge=0.0, le=1.0)
-
-
 class ProcessingDetails(BaseModel):
     model_config = ConfigDict(protected_namespaces=())
 
     frame_width: int = Field(ge=1)
     frame_height: int = Field(ge=1)
-    brightness_mean: float = Field(ge=0.0, le=255.0)
-    edge_density: float = Field(ge=0.0, le=1.0)
-    focus_score: float = Field(ge=0.0)
     vision_latency_ms: int = Field(ge=0)
 
 
@@ -284,7 +263,6 @@ class VisionAnalysisResponse(BaseModel):
     posture_state: Literal["good", "poor", "unknown"]
     posture_confidence: float = Field(ge=0.0, le=1.0)
     detections: list[VisionDetection]
-    signals: VisionSignals
     processing: ProcessingDetails
 
     # ── New fields (all Optional for backward compat) ───────────

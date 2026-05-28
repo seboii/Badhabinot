@@ -27,8 +27,7 @@ public record AiAnalysisRequest(
             String postureState,
             int frameWidth,
             int frameHeight,
-            List<VisionDetection> detections,
-            VisionSignals signals
+            List<VisionDetection> detections
     ) {
     }
 
@@ -54,21 +53,5 @@ public record AiAnalysisRequest(
     ) {
     }
 
-    public record VisionSignals(
-            double brightnessMean,
-            double edgeDensity,
-            double centerEdgeDensity,
-            double postureRiskScore,
-            double handFaceProximityScore,
-            double elongatedObjectScore,
-            double focusScore,
-            double postureConfidence,
-            double postureAlignmentScore,
-            double handMotionScore,
-            double repetitiveMotionScore,
-            double smokingGestureScore,
-            double faceSizeRatio
-    ) {
-    }
 }
 

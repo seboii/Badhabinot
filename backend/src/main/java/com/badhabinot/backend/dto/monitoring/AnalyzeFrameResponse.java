@@ -31,10 +31,6 @@ public record AnalyzeFrameResponse(
     public record ProcessingDetails(
             int frameWidth,
             int frameHeight,
-            double brightnessMean,
-            double edgeDensity,
-            double focusScore,
-            double postureRiskScore,
             long visionLatencyMs,
             long aiLatencyMs,
             Map<String, Double> scores

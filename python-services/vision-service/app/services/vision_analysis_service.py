@@ -3,7 +3,6 @@ from __future__ import annotations
 import asyncio
 import base64
 import time
-from math import hypot
 
 import cv2
 import numpy as np
@@ -25,19 +24,14 @@ from app.schemas.vision import (
     VisionAnalysisRequest,
     VisionAnalysisResponse,
     VisionDetection,
-    VisionSignals,
     YoloDetectionData,
 )
-from app.services.vision import SessionStateStore, VisionDetectors, VisionFeatureExtractor
+from app.services.vision.behavior_engine import BehaviorFrameInput, BehaviorStateStore
+from app.services.vision.session_logger import log_frame_events
 from app.services.vision.session_state import (
     OwnerTrackingObservation,
     OwnerTrackingStateStore,
-    SessionObservation,
 )
-
-# New modules (each degrades gracefully if its dependencies are missing)
-from app.services.vision.behavior_engine import BehaviorFrameInput, BehaviorStateStore
-from app.services.vision.session_logger import log_frame_events
 from app.services.vision.vision_face_auth import OwnerFaceResult, VisionFaceAuth
 from app.services.vision.vision_face_mesh import GazeResult, VisionFaceMesh
 from app.services.vision.vision_hand_tracker import VisionHandTracker
@@ -45,15 +39,23 @@ from app.services.vision.vision_overlay import OverlayData, frame_to_base64, ren
 from app.services.vision.vision_pose_estimator import VisionPoseEstimator
 from app.services.vision.vision_yolo_detector import VisionYoloDetector
 
+# Posture score (0-100 from YOLOv8-pose) at or below this is classified "poor".
+_POOR_POSTURE_SCORE = 70
+# Confidence floors so bridged detections clear the backend's 0.45 persistence gate.
+_HAND_MOVEMENT_CONFIDENCE = 0.55
+_SMOKING_LIKE_CONFIDENCE = 0.60
+
 
 class VisionAnalysisService:
-    def __init__(self) -> None:
-        # Legacy pipeline (always active)
-        self.feature_extractor = VisionFeatureExtractor()
-        self.detectors = VisionDetectors()
-        self.session_state = SessionStateStore()
+    """Frame analysis built entirely on the modern ML modules.
 
-        # New modules (gracefully degrade if deps missing)
+    subject_present, posture_state and the legacy 3-type ``detections`` contract
+    are derived from MediaPipe face mesh / hands and YOLOv8 pose + objects, so the
+    backend, AI service and frontend keep working without any hand-tuned OpenCV
+    heuristics (Haar cascade, skin-colour, edge-aspect smoking guess).
+    """
+
+    def __init__(self) -> None:
         self.face_auth = VisionFaceAuth()
         self.face_mesh = VisionFaceMesh()
         self.hand_tracker = VisionHandTracker()
@@ -65,38 +67,17 @@ class VisionAnalysisService:
     async def analyze(self, request: VisionAnalysisRequest, *, render_overlay: bool = False) -> VisionAnalysisResponse:
         started = time.perf_counter()
         image = self._decode_image(request.image_base64)
+        height, width = image.shape[:2]
 
         # ── Phase 1: Parallel — independent modules ───────────────────────
-        # feature_extractor, identify_owner (replaces face_auth), face_mesh, and
-        # pose_estimator have no mutual dependencies and run simultaneously.
-        features_raw, owner_quad, mesh_result, pose_result = await asyncio.gather(
-            asyncio.to_thread(self.feature_extractor.extract, image),
+        owner_quad, mesh_result, pose_result = await asyncio.gather(
             asyncio.to_thread(self._run_identify_owner, request.user_id, image),
             asyncio.to_thread(self.face_mesh.analyze, image),
             asyncio.to_thread(self.pose_estimator.analyze, image),
         )
-        features, _, _ = features_raw
         face_authenticated, auth_confidence, auth_status, owner_result = owner_quad
 
-        # ── Phase 2: Session state + detectors (need features) ────────────
-        frame_diagonal = hypot(features.frame_width, features.frame_height)
-        dominant_hand = features.dominant_hand_region
-        temporal = self.session_state.update(
-            request.session_id,
-            SessionObservation(
-                captured_at=request.captured_at,
-                hand_centroid_x=None if dominant_hand is None else dominant_hand.center_x,
-                hand_centroid_y=None if dominant_hand is None else dominant_hand.center_y,
-                hand_face_proximity_score=features.hand_face_proximity_score,
-                elongated_object_score=features.elongated_object_score,
-                frame_diagonal=frame_diagonal,
-            ),
-        )
-        posture_state, posture_confidence, detections, signals = self.detectors.detect(
-            features, temporal
-        )
-
-        # ── Phase 3: Build face mesh data + mouth region ──────────────────
+        # ── Phase 2: Build face mesh data + mouth region ──────────────────
         face_mesh_data: FaceMeshData | None = None
         face_landmarks_list = None
         if mesh_result is not None:
@@ -114,15 +95,14 @@ class VisionAnalysisService:
             )
         mouth_region = self._compute_mouth_region(face_landmarks_list)
 
-        # ── Phase 4: Parallel — hand tracker + YOLO + gaze ───────────────
-        # All three depend only on results from Phase 1/3; they run simultaneously.
+        # ── Phase 3: Parallel — hand tracker + YOLO + gaze ───────────────
         hand_result, yolo_result, gaze_result = await asyncio.gather(
             asyncio.to_thread(self.hand_tracker.analyze, image, face_landmarks_list),
             asyncio.to_thread(self.yolo_detector.detect, image, mouth_region),
             asyncio.to_thread(self._run_gaze, image, owner_result.owner_bbox),
         )
 
-        # ── Phase 4.5: Owner tracking state update ────────────────────────
+        # ── Phase 3.5: Owner tracking state update ────────────────────────
         owner_state = self.owner_tracking_store.update(
             request.session_id,
             OwnerTrackingObservation(
@@ -182,7 +162,6 @@ class VisionAnalysisService:
         bottle_near_mouth = False
         cup_near_mouth = False
         phone_detected = False
-
         if yolo_result is not None:
             bottle_near_mouth = yolo_result.bottle_near_mouth
             cup_near_mouth = yolo_result.cup_near_mouth
@@ -202,12 +181,30 @@ class VisionAnalysisService:
                 phone_detected=yolo_result.phone_detected,
             )
 
+        # ── Subject presence & posture from modern modules ────────────────
+        face_detected = mesh_result is not None
+        subject_present = (
+            face_detected
+            or (pose_result is not None and pose_result.person_bbox is not None)
+            or (hand_data is not None and len(hand_data.hands) > 0)
+        )
+
+        if pose_result is not None:
+            posture_state = "poor" if (is_slouching or posture_score_int <= _POOR_POSTURE_SCORE) else "good"
+            posture_confidence = round(
+                (100 - posture_score_int) / 100.0 if posture_state == "poor" else posture_score_int / 100.0,
+                4,
+            )
+        else:
+            posture_state = "unknown"
+            posture_confidence = 0.0
+
         # ── Module F: Behavioral Event System ────────────────────────────
         behavior_inputs = BehaviorFrameInput(
             captured_at=request.captured_at,
             session_id=request.session_id,
             user_id=request.user_id,
-            face_detected=features.face_region is not None or (mesh_result is not None),
+            face_detected=face_detected,
             face_authenticated=face_authenticated,
             auth_confidence=auth_confidence,
             ear=mesh_result.ear if mesh_result else 0.3,
@@ -222,9 +219,6 @@ class VisionAnalysisService:
             bottle_near_mouth=bottle_near_mouth,
             cup_near_mouth=cup_near_mouth,
             phone_detected=phone_detected,
-            elongated_object_score=features.elongated_object_score,
-            hand_face_proximity_score=features.hand_face_proximity_score,
-            # Owner tracking signals
             owner_tracked=owner_result.owner_found,
             strangers_in_frame=owner_result.strangers_count,
             owner_gaze_looking_at_screen=(
@@ -243,43 +237,21 @@ class VisionAnalysisService:
             for ev in behavior_events_raw
         ]
 
-        # ── Build response ────────────────────────────────────────────────
+        # ── Legacy 3-type detection contract, bridged from modern signals ─
+        response_detections = self._build_detections(
+            posture_state=posture_state,
+            posture_confidence=posture_confidence,
+            face_detected=face_detected,
+            pose_result=pose_result,
+            hand_result=hand_result,
+            hand_count=len(hand_data.hands) if hand_data else 0,
+            bottle_near_mouth=bottle_near_mouth,
+            cup_near_mouth=cup_near_mouth,
+        )
+
         vision_latency_ms = int((time.perf_counter() - started) * 1000)
 
-        response_detections = [
-            VisionDetection(
-                event_type=detection.event_type,
-                confidence=detection.confidence,
-                severity=detection.severity,
-                recommendation_hint=detection.recommendation_hint,
-                evidence=DetectionEvidence(
-                    face_detected=bool(detection.evidence.get("face_detected", False)),
-                    upper_body_detected=bool(detection.evidence.get("upper_body_detected", False)),
-                    hand_count=int(detection.evidence.get("hand_count", 0)),
-                    posture_alignment_score=self._optional_float(
-                        detection.evidence.get("posture_alignment_score")
-                    ),
-                    hand_face_proximity_score=self._optional_float(
-                        detection.evidence.get("hand_face_proximity_score")
-                    ),
-                    hand_motion_score=self._optional_float(
-                        detection.evidence.get("hand_motion_score")
-                    ),
-                    repetitive_motion_score=self._optional_float(
-                        detection.evidence.get("repetitive_motion_score")
-                    ),
-                    repeated_hand_to_face_score=self._optional_float(
-                        detection.evidence.get("repeated_hand_to_face_score")
-                    ),
-                    elongated_object_score=self._optional_float(
-                        detection.evidence.get("elongated_object_score")
-                    ),
-                ),
-            )
-            for detection in detections
-        ]
-
-        # ── Phase 8: Annotated frame (optional) ──────────────────────────
+        # ── Phase 4: Annotated frame (optional) ──────────────────────────
         annotated_b64: str | None = None
         if render_overlay:
             try:
@@ -292,7 +264,7 @@ class VisionAnalysisService:
                     username=request.user_id if face_authenticated else None,
                     authenticated=face_authenticated,
                     posture_score=posture_score_int,
-                    fps=0.0,  # fps not tracked server-side
+                    fps=0.0,
                 )
                 annotated = render_annotated_frame(image, overlay_data)
                 annotated_b64 = frame_to_base64(annotated)
@@ -325,34 +297,15 @@ class VisionAnalysisService:
 
         return VisionAnalysisResponse(
             request_id=request.request_id,
-            subject_present=features.subject_present,
+            subject_present=subject_present,
             posture_state=posture_state,
             posture_confidence=posture_confidence,
             detections=response_detections,
-            signals=VisionSignals(
-                brightness_mean=signals["brightness_mean"],
-                edge_density=signals["edge_density"],
-                center_edge_density=signals["center_edge_density"],
-                posture_risk_score=signals["posture_risk_score"],
-                hand_face_proximity_score=signals["hand_face_proximity_score"],
-                elongated_object_score=signals["elongated_object_score"],
-                focus_score=signals["focus_score"],
-                posture_confidence=signals["posture_confidence"],
-                posture_alignment_score=signals["posture_alignment_score"],
-                hand_motion_score=signals["hand_motion_score"],
-                repetitive_motion_score=signals["repetitive_motion_score"],
-                smoking_gesture_score=signals["smoking_gesture_score"],
-                face_size_ratio=signals["face_size_ratio"],
-            ),
             processing=ProcessingDetails(
-                frame_width=features.frame_width,
-                frame_height=features.frame_height,
-                brightness_mean=features.brightness_mean,
-                edge_density=features.edge_density,
-                focus_score=features.focus_score,
+                frame_width=width,
+                frame_height=height,
                 vision_latency_ms=vision_latency_ms,
             ),
-            # New fields
             auth=auth_status,
             face_mesh=face_mesh_data,
             hands=hand_data,
@@ -362,6 +315,77 @@ class VisionAnalysisService:
             owner_tracking=owner_tracking_data,
             annotated_frame_base64=annotated_b64,
         )
+
+    def _build_detections(
+        self,
+        *,
+        posture_state: str,
+        posture_confidence: float,
+        face_detected: bool,
+        pose_result: object | None,
+        hand_result: object | None,
+        hand_count: int,
+        bottle_near_mouth: bool,
+        cup_near_mouth: bool,
+    ) -> list[VisionDetection]:
+        """Derive the legacy poor_posture / hand_movement_pattern / smoking_like_gesture
+        contract from modern landmark + pose signals (no OpenCV heuristics)."""
+        upper_body_detected = pose_result is not None and getattr(pose_result, "person_bbox", None) is not None
+        detections: list[VisionDetection] = []
+
+        if posture_state == "poor":
+            detections.append(VisionDetection(
+                event_type="poor_posture",
+                confidence=round(posture_confidence, 4),
+                severity=self._severity(posture_confidence),
+                recommendation_hint="Roll the shoulders back and bring the head above the spine.",
+                evidence=DetectionEvidence(
+                    face_detected=face_detected,
+                    upper_body_detected=upper_body_detected,
+                    hand_count=hand_count,
+                ),
+            ))
+
+        if hand_result is not None and getattr(hand_result, "face_touch_detected", False):
+            detections.append(VisionDetection(
+                event_type="hand_movement_pattern",
+                confidence=_HAND_MOVEMENT_CONFIDENCE,
+                severity=self._severity(_HAND_MOVEMENT_CONFIDENCE),
+                recommendation_hint="Pause briefly and rest the hands away from the face.",
+                evidence=DetectionEvidence(
+                    face_detected=face_detected,
+                    upper_body_detected=upper_body_detected,
+                    hand_count=hand_count,
+                ),
+            ))
+
+        # Smoking-like: hand-to-mouth contact that is NOT explained by a drink/food object.
+        if (
+            hand_result is not None
+            and getattr(hand_result, "mouth_touch_detected", False)
+            and not (bottle_near_mouth or cup_near_mouth)
+        ):
+            detections.append(VisionDetection(
+                event_type="smoking_like_gesture",
+                confidence=_SMOKING_LIKE_CONFIDENCE,
+                severity=self._severity(_SMOKING_LIKE_CONFIDENCE),
+                recommendation_hint="Treat this as a smoking-like cue and confirm with more frames before acting strongly.",
+                evidence=DetectionEvidence(
+                    face_detected=face_detected,
+                    upper_body_detected=upper_body_detected,
+                    hand_count=hand_count,
+                ),
+            ))
+
+        return detections
+
+    @staticmethod
+    def _severity(confidence: float) -> str:
+        if confidence >= 0.80:
+            return "high"
+        if confidence >= 0.62:
+            return "medium"
+        return "low"
 
     def _decode_image(self, image_base64: str) -> np.ndarray:
         try:
@@ -383,9 +407,6 @@ class VisionAnalysisService:
     ) -> tuple[bool, float, FaceAuthStatus, OwnerFaceResult]:
         """Identify the owner face across all detected faces in *image*.
 
-        Replaces ``_run_face_auth``: one DeepFace.represent() call now provides
-        both authentication status and multi-face owner localisation.
-
         Returns (face_authenticated, auth_confidence, FaceAuthStatus, OwnerFaceResult).
         When no face profile exists, authentication is not enforced (owner assumed
         present with confidence 1.0) and owner_bbox is None.
@@ -403,7 +424,6 @@ class VisionAnalysisService:
             )
             return owner_result.owner_found, owner_result.owner_confidence, auth_status, owner_result
 
-        # No profile registered — authentication not enforced
         no_profile_result = OwnerFaceResult(
             owner_found=True,
             owner_bbox=None,
@@ -443,11 +463,3 @@ class VisionAnalysisService:
             max(ml[78][0], ml[308][0]),
             max(ml[13][1], ml[14][1]),
         )
-
-    def _optional_float(self, value: object) -> float | None:
-        if value is None:
-            return None
-        try:
-            return round(float(value), 4)
-        except (TypeError, ValueError):
-            return None

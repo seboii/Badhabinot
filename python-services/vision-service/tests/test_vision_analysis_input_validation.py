@@ -53,4 +53,4 @@ async def test_analyze_accepts_data_url_prefixed_base64() -> None:
 
     assert response.processing.frame_width == 48
     assert response.processing.frame_height == 32
-    assert response.signals.focus_score >= 0.0
+    assert response.processing.vision_latency_ms >= 0

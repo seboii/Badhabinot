@@ -163,10 +163,6 @@ public class AnalysisOrchestratorServiceImpl implements IAnalysisOrchestratorSer
                     new AnalyzeFrameResponse.ProcessingDetails(
                             visionResponse.processing().frameWidth(),
                             visionResponse.processing().frameHeight(),
-                            visionResponse.processing().brightnessMean(),
-                            visionResponse.processing().edgeDensity(),
-                            visionResponse.processing().focusScore(),
-                            visionResponse.signals().postureRiskScore(),
                             visionResponse.processing().visionLatencyMs(),
                             aiInvocation.latencyMs(),
                             aiResponse.scores()
@@ -299,22 +295,7 @@ public class AnalysisOrchestratorServiceImpl implements IAnalysisOrchestratorSer
                                                 detection.evidence().elongatedObjectScore()
                                         )
                                 ))
-                                .toList(),
-                        new AiAnalysisRequest.VisionSignals(
-                                visionResponse.signals().brightnessMean(),
-                                visionResponse.signals().edgeDensity(),
-                                visionResponse.signals().centerEdgeDensity(),
-                                visionResponse.signals().postureRiskScore(),
-                                visionResponse.signals().handFaceProximityScore(),
-                                visionResponse.signals().elongatedObjectScore(),
-                                visionResponse.signals().focusScore(),
-                                visionResponse.signals().postureConfidence(),
-                                visionResponse.signals().postureAlignmentScore(),
-                                visionResponse.signals().handMotionScore(),
-                                visionResponse.signals().repetitiveMotionScore(),
-                                visionResponse.signals().smokingGestureScore(),
-                                visionResponse.signals().faceSizeRatio()
-                        )
+                                .toList()
                 )
         ));
     }

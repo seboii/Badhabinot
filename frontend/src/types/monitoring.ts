@@ -39,10 +39,6 @@ export type AnalyzeFrameResponse = {
   processing: {
     frame_width: number
     frame_height: number
-    brightness_mean: number
-    edge_density: number
-    focus_score: number
-    posture_risk_score: number
     vision_latency_ms: number
     ai_latency_ms: number
     scores: Record<string, number>

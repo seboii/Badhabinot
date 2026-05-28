@@ -734,26 +734,15 @@ class MockProvider:
             "HIGH": 0.46,
         }
         threshold = threshold_map[request.settings.sensitivity]
-        signals = request.vision.signals
         detections = {item.event_type: item for item in request.vision.detections}
 
-        hand_score = max(
-            float(detections.get("hand_movement_pattern").confidence) if "hand_movement_pattern" in detections else 0.0,
-            min(
-                1.0,
-                signals.hand_motion_score * 0.45
-                + signals.repetitive_motion_score * 0.35
-                + signals.hand_face_proximity_score * 0.20,
-            ),
+        hand_score = (
+            float(detections["hand_movement_pattern"].confidence)
+            if "hand_movement_pattern" in detections else 0.0
         )
-        smoking_score = max(
-            float(detections.get("smoking_like_gesture").confidence) if "smoking_like_gesture" in detections else 0.0,
-            min(
-                1.0,
-                signals.smoking_gesture_score * 0.55
-                + signals.elongated_object_score * 0.25
-                + signals.hand_face_proximity_score * 0.20,
-            ),
+        smoking_score = (
+            float(detections["smoking_like_gesture"].confidence)
+            if "smoking_like_gesture" in detections else 0.0
         )
 
         behavior_type: AllowedBehavior = "none"
@@ -767,13 +756,11 @@ class MockProvider:
 
         grounded_facts = []
         if request.vision.posture_state == "poor":
-            grounded_facts.append(
-                f"Poor posture state was reported with posture risk score {signals.posture_risk_score:.2f}."
-            )
-        if signals.hand_motion_score > 0:
-            grounded_facts.append(f"Hand motion score reached {signals.hand_motion_score:.2f}.")
-        if signals.smoking_gesture_score > 0:
-            grounded_facts.append(f"Smoking-like gesture score reached {signals.smoking_gesture_score:.2f}.")
+            grounded_facts.append("Poor posture was reported by the pose estimator for this frame.")
+        if hand_score > 0:
+            grounded_facts.append(f"Hand-to-face movement confidence reached {hand_score:.2f}.")
+        if smoking_score > 0:
+            grounded_facts.append(f"Smoking-like hand-to-mouth confidence reached {smoking_score:.2f}.")
 
         return ProviderResult(
             behavior_type=behavior_type,
