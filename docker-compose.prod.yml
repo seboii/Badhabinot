@@ -1,0 +1,55 @@
+# docker-compose.prod.yml
+# ─────────────────────────────────────────────────────────
+# SUNUCU OVERRIDE
+#
+# ŞU AN KULLANILMIYOR — yorumda hazır.
+#
+# Aktif etmek için:
+#   1. Alan adını ayarla: api.badhabinot.com → sunucu IP'si
+#   2. SSL sertifikası al: sudo certbot certonly --standalone -d api.badhabinot.com
+#   3. .env.prod dosyasını doldur (.env.prod.example şablonundan)
+#   4. Aşağıdaki YAML'ı uncomment et
+#   5. Sunucuda çalıştır:
+#      docker compose -f docker-compose.yml -f docker-compose.prod.yml --env-file .env.prod up -d
+#      veya:  make prod-up
+#
+# ─────────────────────────────────────────────────────────
+
+# services:
+#
+#   nginx:
+#     image: nginx:1.25-alpine
+#     restart: unless-stopped
+#     init: true
+#     depends_on:
+#       backend:
+#         condition: service_healthy
+#       frontend-app:
+#         condition: service_healthy
+#     volumes:
+#       - ./infra/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+#       - ./infra/nginx/prod.conf:/etc/nginx/conf.d/default.conf:ro
+#       # SSL sertifikaları — Let's Encrypt
+#       - /etc/letsencrypt:/etc/letsencrypt:ro
+#       - /var/www/certbot:/var/www/certbot:ro
+#     ports:
+#       - "80:80"      # HTTP → HTTPS yönlendirme
+#       - "443:443"    # HTTPS — SSL burada sonlandırılır
+#     networks:
+#       - platform
+#
+#   # Sunucuda debug portları AÇILMAZ — güvenlik riski
+#   # postgres, redis, backend, vision, ai portları kapalı kalır
+#
+#   certbot:
+#     image: certbot/certbot:latest
+#     volumes:
+#       - /etc/letsencrypt:/etc/letsencrypt
+#       - /var/www/certbot:/var/www/certbot
+#     # İlk sertifika almak için (domain aktif olduktan sonra):
+#     # docker compose run --rm certbot certonly --webroot \
+#     #   --webroot-path=/var/www/certbot \
+#     #   -d api.badhabinot.com -d badhabinot.com \
+#     #   --email admin@badhabinot.com --agree-tos --no-eff-email
+#     networks:
+#       - platform
