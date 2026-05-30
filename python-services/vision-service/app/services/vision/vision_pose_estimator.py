@@ -79,8 +79,17 @@ class VisionPoseEstimator:
     # Public API                                                           #
     # ------------------------------------------------------------------ #
 
-    def analyze(self, image: np.ndarray) -> PoseResult | None:
+    def analyze(
+        self,
+        image: np.ndarray,
+        owner_bbox: tuple[int, int, int, int] | None = None,
+    ) -> PoseResult | None:
         """Run pose estimation on *image* (BGR, uint8).
+
+        When *owner_bbox* (the owner's face bbox in pixels) is given and several
+        people are detected, the person whose body box contains the owner's face
+        centre is analysed instead of YOLO's most-confident detection — so a
+        stranger's posture is never attributed to the owner.
 
         Returns None if ultralytics is unavailable or no person detected.
         """
@@ -100,9 +109,26 @@ class VisionPoseEstimator:
         if kps is None or len(kps.xy) == 0:
             return None
 
-        # Take the most confident person (first result from YOLO, already sorted)
-        kp_xy = kps.xy[0].cpu().numpy()   # (17, 2) pixel coords
-        kp_conf = kps.conf[0].cpu().numpy() if kps.conf is not None else np.ones(17)
+        # Select which detected person to analyse. Default: most confident
+        # (YOLO index 0). With an owner_bbox + multiple people: the person whose
+        # body box contains the owner's face centre.
+        person_idx = 0
+        if (
+            owner_bbox is not None
+            and boxes is not None
+            and boxes.xyxyn is not None
+            and len(boxes.xyxyn) > 1
+        ):
+            owner_center = (
+                (owner_bbox[0] + owner_bbox[2] / 2.0) / w,
+                (owner_bbox[1] + owner_bbox[3] / 2.0) / h,
+            )
+            person_idx = self._select_person_index(boxes.xyxyn.cpu().numpy(), owner_center)
+        if person_idx >= len(kps.xy):
+            person_idx = 0
+
+        kp_xy = kps.xy[person_idx].cpu().numpy()   # (17, 2) pixel coords
+        kp_conf = kps.conf[person_idx].cpu().numpy() if kps.conf is not None else np.ones(17)
 
         # Normalize to [0, 1]
         keypoints: list[PoseKeypoint | None] = []
@@ -125,10 +151,10 @@ class VisionPoseEstimator:
         posture_score = self._posture_score(spine_tilt, shoulder_tilt)
         is_slouching = spine_tilt > _SLOUCH_ANGLE_DEG
 
-        # Person bounding box (normalized)
+        # Person bounding box (normalized) — same person selected above
         person_bbox = None
-        if boxes is not None and len(boxes.xyxyn) > 0:
-            b = boxes.xyxyn[0].cpu().numpy()
+        if boxes is not None and len(boxes.xyxyn) > person_idx:
+            b = boxes.xyxyn[person_idx].cpu().numpy()
             person_bbox = (round(float(b[0]), 4), round(float(b[1]), 4),
                            round(float(b[2]), 4), round(float(b[3]), 4))
 
@@ -150,6 +176,35 @@ class VisionPoseEstimator:
             logger.info("Loading YOLOv8-pose model (%s)…", _POSE_MODEL_NAME)
             self._model = YOLO(_POSE_MODEL_NAME)
         return self._model
+
+    @staticmethod
+    def _select_person_index(
+        boxes_xyxyn: "np.ndarray",
+        owner_center: tuple[float, float],
+    ) -> int:
+        """Pick the person box that contains the owner's face centre.
+
+        If several boxes contain it, choose the smallest (most specific). If none
+        contains it, choose the box whose centre is nearest to the owner centre.
+        ``boxes_xyxyn`` rows are normalized (x1, y1, x2, y2).
+        """
+        ocx, ocy = owner_center
+        containing: list[tuple[int, float]] = []
+        for i, b in enumerate(boxes_xyxyn):
+            x1, y1, x2, y2 = float(b[0]), float(b[1]), float(b[2]), float(b[3])
+            if x1 <= ocx <= x2 and y1 <= ocy <= y2:
+                containing.append((i, (x2 - x1) * (y2 - y1)))
+        if containing:
+            return min(containing, key=lambda t: t[1])[0]
+
+        best_i, best_d = 0, float("inf")
+        for i, b in enumerate(boxes_xyxyn):
+            cx = (float(b[0]) + float(b[2])) / 2.0
+            cy = (float(b[1]) + float(b[3])) / 2.0
+            d = (cx - ocx) ** 2 + (cy - ocy) ** 2
+            if d < best_d:
+                best_d, best_i = d, i
+        return best_i
 
     @staticmethod
     def _compute_angles(kps: list[PoseKeypoint | None]) -> tuple[float, float]:

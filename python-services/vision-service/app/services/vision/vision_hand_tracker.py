@@ -82,11 +82,15 @@ class VisionHandTracker:
         self,
         image: np.ndarray,
         face_landmarks: list[tuple[float, float, float]] | None = None,
+        owner_person_bbox: tuple[float, float, float, float] | None = None,
     ) -> HandTrackingResult | None:
         """Detect hands in *image*.
 
         *face_landmarks*: optional 468-point list from VisionFaceMesh — used
         to compute accurate hand-face and hand-mouth proximity.
+        *owner_person_bbox*: optional normalized (x1, y1, x2, y2) body box of the
+        owner. When given, hands whose centre falls outside this (padded) box are
+        dropped, so another person's hands are never attributed to the owner.
         Returns None if MediaPipe is unavailable.
         """
         if not _MP_AVAILABLE:
@@ -125,6 +129,13 @@ class VisionHandTracker:
                 near_face=near_face,
                 near_mouth=near_mouth,
             ))
+
+        # Restrict to the owner's hands when a body box is provided.
+        if owner_person_bbox is not None:
+            hand_results = [
+                h for h in hand_results
+                if self._hand_in_region(h.center_x, h.center_y, owner_person_bbox)
+            ]
 
         face_touch = any(h.near_face for h in hand_results)
         mouth_touch = any(h.near_mouth for h in hand_results)
@@ -186,3 +197,18 @@ class VisionHandTracker:
                 break
 
         return near_face, near_mouth
+
+    @staticmethod
+    def _hand_in_region(
+        cx: float,
+        cy: float,
+        person_bbox: tuple[float, float, float, float],
+        pad: float = 0.1,
+    ) -> bool:
+        """True if a hand centre falls within the owner's (padded) body box.
+
+        Coordinates are normalized [0,1]. ``pad`` widens the box so a hand at the
+        edge of the owner's body still counts. Filters out other people's hands.
+        """
+        x1, y1, x2, y2 = person_bbox
+        return (x1 - pad) <= cx <= (x2 + pad) and (y1 - pad) <= cy <= (y2 + pad)

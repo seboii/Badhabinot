@@ -69,13 +69,29 @@ class VisionAnalysisService:
         image = self._decode_image(request.image_base64)
         height, width = image.shape[:2]
 
-        # ── Phase 1: Parallel — independent modules ───────────────────────
-        owner_quad, mesh_result, pose_result = await asyncio.gather(
-            asyncio.to_thread(self._run_identify_owner, request.user_id, image),
-            asyncio.to_thread(self.face_mesh.analyze, image),
-            asyncio.to_thread(self.pose_estimator.analyze, image),
+        # ── Phase 1: Identify the owner FIRST — its bbox restricts all analysis ─
+        face_authenticated, auth_confidence, auth_status, owner_result = await asyncio.to_thread(
+            self._run_identify_owner, request.user_id, image
         )
-        face_authenticated, auth_confidence, auth_status, owner_result = owner_quad
+        has_profile = auth_status.enabled
+        owner_bbox = owner_result.owner_bbox
+
+        # ── Phase 1b: Face mesh + pose, RESTRICTED to the owner when enrolled ──
+        #   profile + owner found  → crop mesh to owner, pick owner's pose person
+        #   profile + owner absent → suppress (never analyse a stranger as the owner)
+        #   no profile             → legacy full-frame analysis (auth disabled)
+        if has_profile and owner_result.owner_found and owner_bbox is not None:
+            mesh_result, pose_result = await asyncio.gather(
+                asyncio.to_thread(self.face_mesh.analyze_in_bbox, image, owner_bbox),
+                asyncio.to_thread(self.pose_estimator.analyze, image, owner_bbox),
+            )
+        elif has_profile and not owner_result.owner_found:
+            mesh_result, pose_result = None, None
+        else:
+            mesh_result, pose_result = await asyncio.gather(
+                asyncio.to_thread(self.face_mesh.analyze, image),
+                asyncio.to_thread(self.pose_estimator.analyze, image),
+            )
 
         # ── Phase 2: Build face mesh data + mouth region ──────────────────
         face_mesh_data: FaceMeshData | None = None
@@ -95,9 +111,17 @@ class VisionAnalysisService:
             )
         mouth_region = self._compute_mouth_region(face_landmarks_list)
 
+        # Owner's body box (from the owner-selected pose) restricts hand tracking
+        # to the owner's hands; None in the no-profile path keeps legacy behaviour.
+        owner_person_bbox = (
+            pose_result.person_bbox
+            if (has_profile and owner_result.owner_found and pose_result is not None)
+            else None
+        )
+
         # ── Phase 3: Parallel — hand tracker + YOLO + gaze ───────────────
         hand_result, yolo_result, gaze_result = await asyncio.gather(
-            asyncio.to_thread(self.hand_tracker.analyze, image, face_landmarks_list),
+            asyncio.to_thread(self.hand_tracker.analyze, image, face_landmarks_list, owner_person_bbox),
             asyncio.to_thread(self.yolo_detector.detect, image, mouth_region),
             asyncio.to_thread(self._run_gaze, image, owner_result.owner_bbox),
         )

@@ -122,6 +122,7 @@ class VisionFaceMesh:
     def __init__(self) -> None:
         self._mesh: object | None = None
         self._gaze_mesh: object | None = None  # separate instance for crop-based gaze
+        self._owner_mesh: object | None = None  # separate instance for owner-crop analysis
 
     # ------------------------------------------------------------------ #
     # Public API                                                           #
@@ -157,6 +158,87 @@ class VisionFaceMesh:
 
         mar = self._mar(landmarks)
         yaw, pitch, roll = self._head_pose(landmarks, w, h)
+        gaze_off = abs(yaw) > 30.0 or abs(pitch) > 25.0
+
+        return FaceMeshResult(
+            landmarks=landmarks,
+            ear_left=round(ear_left, 4),
+            ear_right=round(ear_right, 4),
+            ear=round(ear, 4),
+            is_drowsy=ear < _EAR_DROWSY_THRESHOLD,
+            mar=round(mar, 4),
+            is_yawning=mar > _MAR_YAWN_THRESHOLD,
+            yaw=round(yaw, 2),
+            pitch=round(pitch, 2),
+            roll=round(roll, 2),
+            gaze_off_screen=gaze_off,
+        )
+
+    def analyze_in_bbox(
+        self,
+        frame: np.ndarray,
+        owner_bbox: tuple[int, int, int, int],
+    ) -> FaceMeshResult | None:
+        """Run face mesh ONLY on the owner's face region.
+
+        Crops *frame* to *owner_bbox* (padded), runs MediaPipe on the crop so no
+        other face in the frame can be selected, then remaps the landmarks back to
+        full-frame normalized coordinates. Downstream consumers (mouth region, hand
+        proximity, overlay) therefore keep working unchanged — they always receive
+        full-frame coordinates, only now guaranteed to belong to the owner.
+
+        Args:
+            frame:      Full BGR frame (uint8).
+            owner_bbox: (x, y, w, h) pixel bounding box of the owner's face.
+
+        Returns:
+            :class:`FaceMeshResult` or ``None`` when MediaPipe is unavailable, the
+            bbox is degenerate, or no face is found in the crop.
+        """
+        if not _MP_AVAILABLE:
+            return None
+
+        x, y, bw, bh = owner_bbox
+        if bw <= 0 or bh <= 0:
+            return None
+
+        frame_h, frame_w = frame.shape[:2]
+        # Expand the crop by 20 % on each side for robust landmark detection
+        pad = int(max(bw, bh) * 0.20)
+        x1 = max(0, x - pad)
+        y1 = max(0, y - pad)
+        x2 = min(frame_w, x + bw + pad)
+        y2 = min(frame_h, y + bh + pad)
+        if x2 <= x1 or y2 <= y1:
+            return None
+
+        crop = frame[y1:y2, x1:x2]
+        if crop.size == 0:
+            return None
+        crop_w = x2 - x1
+        crop_h = y2 - y1
+
+        rgb = cv2.cvtColor(crop, cv2.COLOR_BGR2RGB)
+        results = self._get_owner_mesh().process(rgb)
+        if not results.multi_face_landmarks:
+            return None
+
+        face_lm = results.multi_face_landmarks[0]
+        # Crop-relative [0,1] → full-frame [0,1]:  X = (x1 + lx*crop_w) / frame_w
+        landmarks = [
+            (
+                round((x1 + lm.x * crop_w) / frame_w, 5),
+                round((y1 + lm.y * crop_h) / frame_h, 5),
+                round(lm.z, 5),
+            )
+            for lm in face_lm.landmark
+        ]
+
+        ear_left = self._ear(landmarks, _LEFT_EYE)
+        ear_right = self._ear(landmarks, _RIGHT_EYE)
+        ear = (ear_left + ear_right) / 2.0
+        mar = self._mar(landmarks)
+        yaw, pitch, roll = self._head_pose(landmarks, frame_w, frame_h)
         gaze_off = abs(yaw) > 30.0 or abs(pitch) > 25.0
 
         return FaceMeshResult(
@@ -290,6 +372,23 @@ class VisionFaceMesh:
                 min_tracking_confidence=0.5,
             )
         return self._gaze_mesh
+
+    def _get_owner_mesh(self) -> object:
+        """Dedicated FaceMesh for the owner-cropped analysis path.
+
+        Separate instance from the full-frame ``_mesh`` and the iris ``_gaze_mesh``
+        so their internal tracking states never interfere within a single frame.
+        ``refine_landmarks=True`` keeps landmark indexing identical to ``analyze``.
+        """
+        if self._owner_mesh is None:
+            self._owner_mesh = _mp_face_mesh.FaceMesh(
+                static_image_mode=False,
+                max_num_faces=1,
+                refine_landmarks=True,
+                min_detection_confidence=0.5,
+                min_tracking_confidence=0.5,
+            )
+        return self._owner_mesh
 
     @staticmethod
     def _eye_gaze(
