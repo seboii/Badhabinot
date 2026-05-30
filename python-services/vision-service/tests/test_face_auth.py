@@ -301,3 +301,57 @@ def test_profile_path_sanitises_user_id(
     auth.delete_profile("../../../etc/passwd")
     # No exception means sanitisation didn't crash; the traversal was neutralised
     assert auth.frame_count("../../../etc/passwd") == 0
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 7. Faz A — multi-face: registration/verification picks the LARGEST face,
+#    not whichever DeepFace returns first (avoids enrolling a stranger).
+# ─────────────────────────────────────────────────────────────────────────────
+
+def test_largest_face_picks_biggest_area() -> None:
+    faces = [
+        {"embedding": [1.0], "facial_area": {"x": 0, "y": 0, "w": 10, "h": 10}},
+        {"embedding": [2.0], "facial_area": {"x": 0, "y": 0, "w": 50, "h": 40}},  # biggest
+        {"embedding": [3.0], "facial_area": {"x": 0, "y": 0, "w": 20, "h": 20}},
+    ]
+    assert VisionFaceAuth._largest_face(faces)["embedding"] == [2.0]
+
+
+def test_largest_face_empty_returns_none() -> None:
+    assert VisionFaceAuth._largest_face([]) is None
+
+
+def test_largest_face_missing_area_does_not_crash() -> None:
+    faces = [{"embedding": [1.0]}, {"embedding": [2.0]}]  # no facial_area → area 0
+    assert VisionFaceAuth._largest_face(faces) is not None
+
+
+def test_register_frame_enrolls_largest_face_not_first(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """İki yüz varsa kayıt, listedeki ilk (küçük/yabancı) yüzü değil en büyük
+    (öndeki/sahip) yüzü kaydetmeli."""
+    import app.services.vision.vision_face_auth as m
+    monkeypatch.setattr(m, "_DATA_ROOT", tmp_path)
+    monkeypatch.setattr(m, "_DEEPFACE_AVAILABLE", True)
+
+    small_stranger = _unit_vec(direction=1, sign=1.0)  # ilk sırada, küçük alan
+    large_owner = _unit_vec(direction=0, sign=1.0)      # ikinci sırada, en büyük alan
+
+    class FakeDeepFace:
+        @staticmethod
+        def represent(**_: Any) -> list[dict]:
+            return [
+                {"embedding": small_stranger.tolist(), "facial_area": {"x": 0, "y": 0, "w": 30, "h": 30}},
+                {"embedding": large_owner.tolist(), "facial_area": {"x": 100, "y": 50, "w": 120, "h": 120}},
+            ]
+
+    monkeypatch.setattr(m, "DeepFace", FakeDeepFace, raising=False)
+    auth = VisionFaceAuth()
+
+    assert auth.register_frame("multi", _blank_image()) is True
+    stored = np.load(str(tmp_path / "multi" / "face_embeddings.npy"))
+    assert stored.shape[0] == 1
+    # Kaydedilen embedding büyük (sahip) yüz olmalı: onunla kosinüs ~1, yabancıyla ~0.
+    assert float(stored[0] @ large_owner) > 0.99
+    assert abs(float(stored[0] @ small_stranger)) < 0.01

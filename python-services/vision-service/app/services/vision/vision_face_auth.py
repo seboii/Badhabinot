@@ -22,9 +22,13 @@ logger = logging.getLogger(__name__)
 try:
     from deepface import DeepFace  # type: ignore[import-untyped]
     _DEEPFACE_AVAILABLE = True
-except ImportError:  # pragma: no cover
+except Exception as _deepface_exc:  # pragma: no cover
+    # ImportError VEYA bağımlılık zinciri hatası (ör. retinaface/tf-keras uyumsuzluğu).
+    # Niyet: opsiyonel deepface kullanılamıyorsa modül import'ta çökmesin, yüz
+    # doğrulama zarifçe devre dışı kalsın.
+    DeepFace = None  # type: ignore[assignment]
     _DEEPFACE_AVAILABLE = False
-    logger.warning("deepface not installed — face authentication disabled")
+    logger.warning("deepface unavailable — face authentication disabled (%s)", _deepface_exc)
 
 _DATA_ROOT = Path(os.getenv("FACE_DATA_DIR", "data/users"))
 _EMBED_FILENAME = "face_embeddings.npy"
@@ -330,7 +334,10 @@ class VisionFaceAuth:
             )
             if not result:
                 return None
-            vec = np.array(result[0]["embedding"], dtype=np.float32)
+            face = self._largest_face(result)
+            if face is None:
+                return None
+            vec = np.array(face["embedding"], dtype=np.float32)
             norm = float(np.linalg.norm(vec))
             if norm > 0:
                 vec = vec / norm
@@ -338,6 +345,23 @@ class VisionFaceAuth:
         except Exception:
             logger.debug("DeepFace embedding extraction failed", exc_info=True)
             return None
+
+    @staticmethod
+    def _largest_face(results: list[dict]) -> dict | None:
+        """En büyük ``facial_area``'ya sahip yüzü seç (kayıt/doğrulamada ilk yüzü
+        değil en belirgin/öndeki yüzü al → arkadaki bir yabancıyı yanlışlıkla
+        kaydetmemek için). facial_area yoksa listedeki ilk yüze düşer."""
+        if not results:
+            return None
+
+        def _area(face: dict) -> float:
+            area = face.get("facial_area") or {}
+            try:
+                return float(area.get("w", 0)) * float(area.get("h", 0))
+            except (TypeError, ValueError):
+                return 0.0
+
+        return max(results, key=_area)
 
     @staticmethod
     def _best_cosine_similarity(live: np.ndarray, stored: np.ndarray) -> float:
