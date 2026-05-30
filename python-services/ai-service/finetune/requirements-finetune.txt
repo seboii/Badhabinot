@@ -1,0 +1,20 @@
+# Yalnızca chatbot fine-tune (QLoRA) için — runtime/CI'ye DAHİL DEĞİLDİR.
+#
+# CUDA gerektirir. PyTorch'u CUDA derlemesiyle ayrı kur:
+#   pip install torch --index-url https://download.pytorch.org/whl/cu121
+# Sonra:
+#   pip install -r finetune/requirements-finetune.txt
+#
+# VRAM: local-6gb profili (Qwen2.5-1.5B) RTX 4050 6 GB'a sığar.
+#       7B için cloud-16gb profili + T4/A10 (>=16 GB) gerekir.
+
+torch>=2.2                 # CUDA build (yukarıdaki index-url ile)
+transformers>=4.44
+peft>=0.12
+trl>=0.12                  # SFTConfig/SFTTrainer API'si
+bitsandbytes>=0.43         # 4-bit QLoRA (Windows >=0.43 ile desteklenir)
+datasets>=2.20
+accelerate>=0.33
+sentencepiece>=0.2
+# GGUF dışa aktarımı llama.cpp deposu ister (ayrı; pip paketi değil):
+#   git clone https://github.com/ggerganov/llama.cpp

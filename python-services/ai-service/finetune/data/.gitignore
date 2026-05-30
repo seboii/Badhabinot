@@ -1,0 +1,4 @@
+# Veri setleri, hazırlanmış tensörler ve büyük çıktılar versiyonlanmaz.
+# Yalnızca bu .gitignore izlenir; gerçek veri yerelde/ayrı saklanır (KVKK).
+*
+!.gitignore

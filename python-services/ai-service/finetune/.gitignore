@@ -1,0 +1,4 @@
+# Eğitim çıktıları (adaptör, birleşik model, GGUF, checkpoint'ler) versiyonlanmaz.
+outputs/
+__pycache__/
+*.gguf
