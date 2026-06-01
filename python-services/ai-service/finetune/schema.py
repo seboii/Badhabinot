@@ -56,8 +56,28 @@ class BehavioralPattern:
 
 
 @dataclass
+class EventLite:
+    """ChatContext.recent_events'in prompt'a giren alt kümesi (davranış olayı)."""
+
+    event_type: str           # SLOUCHING | DROWSY | SMOKING | FACE_TOUCH | YAWNING | ...
+    severity: str = "low"     # low | medium | high
+    confidence: float = 0.0   # 0-1
+    interpretation: str = ""
+    occurred_hour: int = 12   # saat (0-23)
+
+
+@dataclass
+class ReminderLite:
+    """ChatContext.recent_reminders'in prompt'a giren alt kümesi."""
+
+    reminder_type: str        # hydration | exercise | posture | ...
+    message: str = ""
+    occurred_hour: int = 12
+
+
+@dataclass
 class MonitoringContext:
-    """ChatContext'in prompt'a giren alt kümesi (summary_block için yeterli)."""
+    """ChatContext'in prompt'a giren alt kümesi (üretim providers.py ile hizalı)."""
 
     report_date: str  # ISO: YYYY-MM-DD
     hydration_progress_ml: int = 0
@@ -70,6 +90,15 @@ class MonitoringContext:
     summary: str = ""
     comparison_to_previous_day: str = ""
     behavioral_patterns: list[BehavioralPattern] = field(default_factory=list)
+    # ── Zengin sinyaller (programın gerçekten gönderdiği veri) ───────────────
+    recent_events: list[EventLite] = field(default_factory=list)
+    recent_reminders: list[ReminderLite] = field(default_factory=list)
+    recent_event_type_counts: dict[str, int] = field(default_factory=dict)
+    total_sessions_last_7_days: int = 0
+    total_session_minutes_last_7_days: int = 0
+    hydration_last_7_days_ml: int = 0
+    analyses_completed_last_7_days: int = 0
+    data_gaps: list[str] = field(default_factory=list)
 
     def validate(self) -> None:
         if not 0.0 <= self.poor_posture_ratio <= 1.0:
@@ -78,13 +107,21 @@ class MonitoringContext:
             raise ValueError("water_goal_ml negatif olamaz")
         for p in self.behavioral_patterns:
             p.validate()
+        for e in self.recent_events:
+            if not 0 <= e.occurred_hour <= 23:
+                raise ValueError(f"occurred_hour 0-23 olmalı: {e.occurred_hour}")
 
     @classmethod
     def from_dict(cls, d: dict) -> "MonitoringContext":
         patterns = [BehavioralPattern(**p) for p in d.get("behavioral_patterns", [])]
-        known = {f for f in cls.__dataclass_fields__ if f != "behavioral_patterns"}
+        events = [EventLite(**e) for e in d.get("recent_events", [])]
+        reminders = [ReminderLite(**r) for r in d.get("recent_reminders", [])]
+        nested = {"behavioral_patterns", "recent_events", "recent_reminders"}
+        known = {f for f in cls.__dataclass_fields__ if f not in nested}
         return cls(
             behavioral_patterns=patterns,
+            recent_events=events,
+            recent_reminders=reminders,
             **{k: v for k, v in d.items() if k in known},
         )
 

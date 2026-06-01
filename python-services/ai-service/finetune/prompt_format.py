@@ -1,19 +1,27 @@
-"""ÜRETİM promptuyla birebir aynı mesaj formatı.
+"""ÜRETİM promptuyla BİREBİR aynı mesaj formatı.
 
 KRİTİK: Fine-tune sırasında modele gösterilen prompt, çıkarımda (inference)
 gördüğüyle AYNI olmalı; aksi halde model üretimde dağılır. Bu modül,
-``app/services/providers.py`` içindeki persona sistem promptlarını ve
-``_compose_user_message`` / ``_build_messages`` özet bloğunu yeniden üretir.
+``app/services/providers.py`` içindeki ``OllamaProvider._build_messages``
+mantığını birebir yeniden üretir:
 
-providers.py değişirse burası da güncellenmeli (tek doğruluk kaynağı orası;
-bu kopya, eğitim verisini üretim formatına kilitlemek içindir).
+- Persona sistem promptları (GENERAL_CHAT / BEHAVIOR_COACH / CUSTOM)
+- GENERAL_CHAT/CUSTOM → BASİT özet bloğu; BEHAVIOR_COACH → ZENGİN özet bloğu
+- Zamansal örüntü bloğu (`format_pattern_block`)
+- Zengin sinyal bloğu (olay/hatırlatıcı/7-gün/boşluk) — providers.py ile AYNI
+  paylaşılan fonksiyon (`app.services.chat_context_blocks.format_recent_signals`)
 
-Saf python — torch/transformers gerekmez.
+providers.py değişirse burası da güncellenmeli. Zengin sinyal bloğu tek doğruluk
+kaynağından geldiği için orada drift olmaz; özet/persona blokları elle senkron tutulur.
+
+Saf python — torch/transformers gerekmez (app.services.chat_context_blocks de stdlib).
 """
 
 from __future__ import annotations
 
-from .schema import BehavioralPattern, CoachingExample, MonitoringContext
+from app.services.chat_context_blocks import format_recent_signals
+
+from .schema import CoachingExample, MonitoringContext
 
 # ── Persona sistem promptları (providers.py ile birebir) ────────────────────
 GENERAL_CHAT_SYSTEM_PROMPT = (
@@ -70,7 +78,9 @@ def includes_data_block(example: CoachingExample) -> bool:
     return any(kw in lower for kw in _GENERAL_CHAT_DATA_KEYWORDS)
 
 
-def format_pattern_block(patterns: list[BehavioralPattern]) -> str:
+# ── Blok biçimleyiciler (providers.py ile birebir) ──────────────────────────
+def format_pattern_block(patterns: list) -> str:
+    """providers.py _format_pattern_block ile birebir (trailing \\n dahil)."""
     if not patterns:
         return ""
     lines = ["=== ZAMANSAL ÖRÜNTÜLER (SON 7 GÜN) ==="]
@@ -84,13 +94,27 @@ def format_pattern_block(patterns: list[BehavioralPattern]) -> str:
     return "\n".join(lines) + "\n"
 
 
-def format_summary_block(ctx: MonitoringContext) -> str:
-    """providers.py _compose_user_message özet bloğuyla aynı biçim."""
+def format_rich_signals(ctx: MonitoringContext) -> str:
+    """MonitoringContext'i paylaşılan formatlayıcıya verir (providers._rich_signals ile aynı çıktı)."""
+    events = [
+        (e.event_type, e.severity, e.confidence, e.interpretation, e.occurred_hour)
+        for e in ctx.recent_events
+    ]
+    reminders = [(r.reminder_type, r.message) for r in ctx.recent_reminders]
+    return format_recent_signals(
+        events, reminders, ctx.recent_event_type_counts,
+        ctx.total_sessions_last_7_days, ctx.total_session_minutes_last_7_days,
+        ctx.hydration_last_7_days_ml, ctx.analyses_completed_last_7_days, ctx.data_gaps,
+    )
+
+
+def simple_summary_block(ctx: MonitoringContext) -> str:
+    """providers.py GENERAL_CHAT/CUSTOM basit özet (trailing \\n YOK)."""
     hydration_pct = round(
         (ctx.hydration_progress_ml / ctx.water_goal_ml * 100) if ctx.water_goal_ml > 0 else 0, 1
     )
     posture_score = round((1.0 - ctx.poor_posture_ratio) * 100, 1)
-    block = (
+    return (
         f"Bugünün özeti ({ctx.report_date}):\n"
         f"- Hidrasyon: {ctx.hydration_progress_ml}/{ctx.water_goal_ml} ml (%{hydration_pct})\n"
         f"- Duruş skoru: {posture_score}/100 (uyarı: {ctx.posture_alert_count})\n"
@@ -98,28 +122,79 @@ def format_summary_block(ctx: MonitoringContext) -> str:
         f"- Tamamlanan analiz: {ctx.analyses_completed}\n"
         f"- Karşılaştırma: {ctx.comparison_to_previous_day or 'Veri yok'}"
     )
-    if ctx.behavioral_patterns:
-        block += "\n- Zamansal örüntüler:"
-        for p in ctx.behavioral_patterns[:3]:
-            block += (
-                f"\n  • {p.event_type}: {p.total_count_last_7_days} olay "
-                f"(pik saat {p.peak_hour_of_day:02d}, trend: {p.trend_label})"
-            )
-    return block
+
+
+def rich_summary_block(ctx: MonitoringContext) -> str:
+    """providers.py BEHAVIOR_COACH zengin özet (durum etiketleri, temizlik, %kötü duruş; trailing \\n)."""
+    posture_score = round((1.0 - ctx.poor_posture_ratio) * 100, 1)
+    hydration_pct = round(
+        (ctx.hydration_progress_ml / ctx.water_goal_ml * 100) if ctx.water_goal_ml > 0 else 0, 1
+    )
+    cleanliness_score = max(0, round(100 - ctx.smoking_like_count * 20 - ctx.hand_movement_count * 5, 1))
+    posture_status = "Mükemmel" if ctx.poor_posture_ratio < 0.10 else ("Dikkat" if ctx.poor_posture_ratio < 0.25 else "Kötü")
+    hydration_status = "Yeterli" if hydration_pct >= 90 else ("Orta" if hydration_pct >= 60 else "Yetersiz")
+    smoking_status = "Sorunsuz" if ctx.smoking_like_count == 0 else ("Uyarı" if ctx.smoking_like_count <= 2 else "Kötü")
+    return (
+        f"=== BUGÜNÜN PERFORMANS ÖZETİ ({ctx.report_date}) ===\n"
+        f"Duruş skoru: {posture_score}/100 ({posture_status}) — kötü duruş oranı %{round(ctx.poor_posture_ratio * 100, 1)}, uyarı: {ctx.posture_alert_count}\n"
+        f"Hidrasyon skoru: {hydration_pct}/100 ({hydration_status}) — {ctx.hydration_progress_ml}/{ctx.water_goal_ml} ml\n"
+        f"Temizlik skoru: {cleanliness_score}/100 ({smoking_status}) — sigara benzeri: {ctx.smoking_like_count}, el hareketi: {ctx.hand_movement_count}\n"
+        f"Tamamlanan analiz: {ctx.analyses_completed}\n"
+        f"Özet: {ctx.summary}\n"
+        f"Dünle karşılaştırma: {ctx.comparison_to_previous_day or 'Veri yok'}\n"
+    )
+
+
+def grounding_reference_text(ctx: MonitoringContext) -> str:
+    """Modelin görebileceği TÜM sayıları içeren referans metin (grounding denetimi için).
+
+    Zengin özet (en geniş sayı kümesi: %kötü duruş, temizlik skoru dahil) + örüntü +
+    zengin sinyaller. evaluate.allowed_numbers bunu kullanır.
+    """
+    return rich_summary_block(ctx) + format_pattern_block(ctx.behavioral_patterns) + format_rich_signals(ctx)
 
 
 def compose_user_message(example: CoachingExample) -> str:
-    """Persona kuralına göre soruya monitoring özeti ekler (ya da eklemez)."""
+    """providers.py OllamaProvider._build_messages user_content'i ile birebir."""
+    persona = (example.persona or "GENERAL_CHAT").upper()
+    msg = example.question
+
+    if persona == "BEHAVIOR_COACH":
+        if example.kind == "casual":
+            return f"Soru: {msg}\n\nKısa, samimi ve Türkçe yanıt ver. Sadece düz metin yaz."
+        if example.kind == "refuse":
+            return (f"Soru: {msg}\n\n"
+                    "Bu bir sistem/gizlilik sorusu. Kural gereği reddet ve davranış verilerine yönlendir.")
+        block = rich_summary_block(example.context)
+        pattern_block = format_pattern_block(example.context.behavioral_patterns)
+        if pattern_block:
+            block = block + pattern_block
+        rich_block = format_rich_signals(example.context)
+        if rich_block:
+            block = block + rich_block + "\n"
+        return (f"{block}\n"
+                f"Soru: {msg}\n\n"
+                "TÜRKÇE, 2-4 cümle, düz metin yaz. JSON veya kod bloğu kullanma.")
+
+    # GENERAL_CHAT / CUSTOM
     if not includes_data_block(example):
-        return example.question
-    return f"{format_summary_block(example.context)}\n\nSoru: {example.question}"
+        return msg
+    block = simple_summary_block(example.context)
+    pattern_block = format_pattern_block(example.context.behavioral_patterns)
+    if pattern_block:
+        block = block + "\n" + pattern_block
+    rich_block = format_rich_signals(example.context)
+    if rich_block:
+        block = block + "\n" + rich_block
+    return f"{block}\n\nSoru: {msg}"
 
 
 def build_chat_messages(example: CoachingExample) -> list[dict[str, str]]:
     """Eğitim için tam mesaj listesi: [system, *history, user, assistant].
 
-    train_lora.py bunu tokenizer.apply_chat_template'e verir; son ``assistant``
-    mesajı (ideal_answer) eğitim hedefidir.
+    Son ``assistant`` mesajı (ideal_answer) eğitim hedefidir. (Üretimde BEHAVIOR_COACH
+    sistem promptu Ollama Modelfile'dan gelir; fine-tune'da açıkça veririz ki model
+    sistem+veri→yanıt eşlemesini öğrensin — merge_and_export Modelfile'ı buna hizalı.)
     """
     messages: list[dict[str, str]] = [
         {"role": "system", "content": persona_system_prompt(example)},

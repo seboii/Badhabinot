@@ -23,11 +23,12 @@ def _coach_example() -> CoachingExample:
     )
 
 
-def test_behavior_coach_always_includes_data_block():
+def test_behavior_coach_uses_rich_summary_block():
     ex = _coach_example()
     assert includes_data_block(ex) is True
     user_msg = compose_user_message(ex)
-    assert "Bugünün özeti" in user_msg
+    assert "PERFORMANS ÖZETİ" in user_msg          # BEHAVIOR_COACH zengin blok
+    assert "kötü duruş oranı" in user_msg          # yalnızca zengin blokta var
     assert "Soru: Bugün duruşum nasıldı?" in user_msg
 
 

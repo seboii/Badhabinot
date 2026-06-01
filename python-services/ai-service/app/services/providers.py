@@ -8,6 +8,7 @@ import httpx
 
 from app.schemas.analysis import AllowedBehavior, AnalysisRequest
 from app.schemas.chat import ChatRequest
+from app.services.chat_context_blocks import format_recent_signals
 
 
 class ProviderConfigurationError(RuntimeError):
@@ -893,6 +894,9 @@ class OllamaProvider:
                 pattern_block = self._format_pattern_block(ctx.behavioral_patterns)
                 if pattern_block:
                     summary_block = summary_block + "\n" + pattern_block
+                rich_block = self._rich_signals(ctx)
+                if rich_block:
+                    summary_block = summary_block + "\n" + rich_block
                 user_content = f"{summary_block}\n\nSoru: {request.message}"
             else:
                 user_content = request.message
@@ -936,6 +940,9 @@ class OllamaProvider:
             pattern_block = self._format_pattern_block(ctx.behavioral_patterns)
             if pattern_block:
                 summary_block = summary_block + pattern_block
+            rich_block = self._rich_signals(ctx)
+            if rich_block:
+                summary_block = summary_block + rich_block + "\n"
             user_content = (
                 f"{summary_block}\n"
                 f"Soru: {request.message}\n\n"
@@ -966,6 +973,22 @@ class OllamaProvider:
                 f"pik gün {day_tr}, trend: {p.trend_label}"
             )
         return "\n".join(lines) + "\n"
+
+    @staticmethod
+    def _rich_signals(ctx: Any) -> str:
+        """ChatContext'in zengin sinyallerini (olay/hatırlatıcı/7-gün/boşluk)
+        paylaşılan biçimleyiciye verir. finetune.prompt_format AYNI fonksiyonu
+        çağırır → eğitim promptu = çıkarım promptu."""
+        events = [
+            (e.event_type, e.severity, e.confidence, e.interpretation, e.occurred_at.hour)
+            for e in ctx.recent_events
+        ]
+        reminders = [(r.reminder_type, r.message) for r in ctx.recent_reminders]
+        return format_recent_signals(
+            events, reminders, ctx.recent_event_type_counts,
+            ctx.total_sessions_last_7_days, ctx.total_session_minutes_last_7_days,
+            ctx.hydration_last_7_days_ml, ctx.analyses_completed_last_7_days, ctx.data_gaps,
+        )
 
     @classmethod
     def _pattern_grounded_facts(cls, patterns: list[Any]) -> list[str]:

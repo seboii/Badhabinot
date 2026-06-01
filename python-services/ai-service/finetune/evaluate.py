@@ -28,7 +28,7 @@ import re
 import sys
 from pathlib import Path
 
-from .prompt_format import build_inference_messages, format_summary_block
+from .prompt_format import build_inference_messages, grounding_reference_text
 from .schema import CoachingExample, MonitoringContext, load_jsonl
 
 _NUM_RE = re.compile(r"\d+(?:[.,]\d+)?")
@@ -51,24 +51,39 @@ def is_turkish(text: str) -> bool:
     return (en_hits / len(words)) < 0.15
 
 
-def allowed_numbers(ctx: MonitoringContext) -> set[str]:
-    """Bağlamda geçen + özet bloğunda türetilen tüm sayılar (grounding referansı)."""
-    text = format_summary_block(ctx)
-    nums = set(_NUM_RE.findall(text))
+def _to_float(token: str) -> float | None:
+    try:
+        return float(token.replace(",", "."))
+    except ValueError:
+        return None
+
+
+def allowed_numbers(ctx: MonitoringContext) -> set[float]:
+    """Bağlamda geçen + tüm prompt bloklarında türetilen sayılar (grounding referansı)."""
+    text = grounding_reference_text(ctx)
+    vals: set[float] = set()
+    for tok in _NUM_RE.findall(text):
+        f = _to_float(tok)
+        if f is not None:
+            vals.add(f)
     # ham alanlar da serbest
     for v in (ctx.hydration_progress_ml, ctx.water_goal_ml, ctx.posture_alert_count,
               ctx.smoking_like_count, ctx.hand_movement_count, ctx.analyses_completed):
-        nums.add(str(v))
-    return {n.replace(",", ".") for n in nums}
+        vals.add(float(v))
+    return vals
 
 
 def grounding_score(answer: str, ctx: MonitoringContext) -> float:
-    """Yanıttaki sayıların bağlamda bulunma oranı (1.0 = uydurma yok). Sayı yoksa 1.0."""
-    answer_nums = [n.replace(",", ".") for n in _NUM_RE.findall(answer)]
+    """Yanıttaki sayıların bağlamda bulunma oranı (1.0 = uydurma yok). Sayı yoksa 1.0.
+
+    Sayılar float olarak karşılaştırılır (80 == 80.0); ondalık/yuvarlama farkı
+    yanlış cezaya yol açmaz.
+    """
+    answer_nums = [f for f in (_to_float(t) for t in _NUM_RE.findall(answer)) if f is not None]
     if not answer_nums:
         return 1.0
     allowed = allowed_numbers(ctx)
-    grounded = sum(1 for n in answer_nums if n in allowed or n.rstrip(".0") in {a.rstrip(".0") for a in allowed})
+    grounded = sum(1 for f in answer_nums if any(abs(f - a) < 1e-6 for a in allowed))
     return round(grounded / len(answer_nums), 4)
 
 
@@ -98,7 +113,7 @@ def _load_generator(model_path: str):
         prompt = tok.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
         inputs = tok(prompt, return_tensors="pt").to(model.device)
         with torch.no_grad():
-            out = model.generate(**inputs, max_new_tokens=256, do_sample=False,
+            out = model.generate(**inputs, max_new_tokens=160, do_sample=False,
                                   pad_token_id=tok.eos_token_id)
         return tok.decode(out[0][inputs["input_ids"].shape[1]:], skip_special_tokens=True).strip()
 
