@@ -4,9 +4,13 @@ Bu paket, Badhabinot sohbet asistanını **prompt mühendisliğinden** çıkarı
 **fine-tune edilmiş, ölçülmüş bir modele** taşıyan uçtan uca iskelettir.
 Vision tarafındaki `training/` + `evaluation/` desenini izler.
 
-> **Durum:** İskelet hazır. Gerçek bir model için **veri seti büyütülmeli** ve
-> fine-tune **çalıştırılmalıdır**. Karşılaştırma taban model (prompt-only) baseline'ına
-> karşı yapılır — tezin "chatbot eğitildi ve baseline'ı geçti" anlatısı budur.
+> **Durum (2026-06-01): fine-tune ÇALIŞTIRILDI ve deploy edildi.** Qwen2.5-1.5B-Instruct
+> üzerinde QLoRA (4-bit) + **completion-only loss** ile eğitildi; merge → GGUF → Ollama
+> (`badhabinot-coach:latest`) ile yüklenip üretim prompt formatıyla doğrulandı. Taban model
+> (prompt-only) baseline'ına karşı dört metrikle ölçüldü (`finetune/outputs/*.json`).
+> **Değerlendirme held-out (eğitimde olmayan) set üzerindedir** (`eval_heldout.jsonl`);
+> in-sample `eval.jsonl` eğitimle örtüşür, yalnızca ablation/kıyas için. Sonuç tabloları:
+> tez §5. Daha fazla grounding kazanımı için **gold veri büyütülmeli** (veri = tavan).
 
 ---
 

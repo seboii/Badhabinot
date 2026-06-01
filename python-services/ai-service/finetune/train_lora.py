@@ -24,8 +24,10 @@ from .config import FinetuneConfig
 
 
 def train(config: FinetuneConfig) -> str:
-    import torch  # noqa: PLC0415
+    # NOT (Windows): datasets/pyarrow torch'tan ÖNCE yüklenmeli; torch önce
+    # yüklenirse 'import datasets' native çöker (DLL yükleme-sırası çakışması).
     from datasets import load_from_disk  # noqa: PLC0415
+    import torch  # noqa: PLC0415
     from peft import LoraConfig, prepare_model_for_kbit_training  # noqa: PLC0415
     from transformers import (  # noqa: PLC0415
         AutoModelForCausalLM,
@@ -63,6 +65,10 @@ def train(config: FinetuneConfig) -> str:
     model.config.use_cache = False
     if config.load_in_4bit:
         model = prepare_model_for_kbit_training(model)
+    else:
+        # fp16/bf16 LoRA yolu (bitsandbytes yok): gradient checkpointing +
+        # LoRA'nın çalışması için girdi gradyanlarını aç.
+        model.enable_input_require_grads()
 
     lora_config = LoraConfig(
         r=config.lora_r,
@@ -87,9 +93,10 @@ def train(config: FinetuneConfig) -> str:
         save_total_limit=2,
         bf16=True,
         gradient_checkpointing=True,
-        max_seq_length=config.max_seq_len,
-        dataset_text_field="text",
-        packing=False,
+        gradient_checkpointing_kwargs={"use_reentrant": False},
+        max_length=config.max_seq_len,  # trl 1.x: max_seq_length -> max_length
+        completion_only_loss=True,       # kayıp yalnız asistan tamamlamasında (prompt maskeli)
+        packing=False,                   # completion_only_loss ile packing kapalı olmalı
         seed=config.seed,
         report_to=[],
     )
@@ -118,6 +125,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--epochs", type=float, default=None)
     ap.add_argument("--lr", type=float, default=None)
     ap.add_argument("--lora-r", type=int, default=None)
+    ap.add_argument("--no-4bit", action="store_true",
+                    help="4-bit QLoRA yerine fp16/bf16 LoRA (bitsandbytes gerekmez)")
+    ap.add_argument("--max-seq-len", type=int, default=None, help="Sekans uzunluğu (OOM'da düşür)")
     args = ap.parse_args(argv)
 
     overrides: dict[str, object] = {}
@@ -127,6 +137,10 @@ def main(argv: list[str] | None = None) -> int:
         overrides["learning_rate"] = args.lr
     if args.lora_r is not None:
         overrides["lora_r"] = args.lora_r
+    if args.no_4bit:
+        overrides["load_in_4bit"] = False
+    if args.max_seq_len is not None:
+        overrides["max_seq_len"] = args.max_seq_len
 
     config = FinetuneConfig.from_profile(args.profile, **overrides)
     print(config.to_json())

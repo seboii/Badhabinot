@@ -1,8 +1,10 @@
-"""JSONL veri setini tokenizer chat-template ile metne çevirir ve böler.
+"""JSONL veri setini tokenizer chat-template ile prompt/completion'a çevirir ve böler.
 
-Çıktı: ``prepared/`` altına kaydedilmiş bir HF DatasetDict (train/val), "text"
-sütunu modelin sohbet şablonuna göre biçimlenmiş tam diyalogu içerir. train_lora.py
-bunu doğrudan SFTTrainer'a verir.
+Çıktı: ``prepared/`` altına kaydedilmiş bir HF DatasetDict (train/val). İki sütun:
+``prompt`` ([system,*history,user] + üretim-promptu) ve ``completion`` (asistan
+hedef yanıtı + <|im_end|>). Bu prompt-completion biçimi sayesinde SFTTrainer kaybı
+YALNIZCA asistan tamamlamasında hesaplar (completion_only_loss); model prompt'taki
+bağlam/sayı dağılımını ezberlemek yerine doğru yanıtı üretmeyi öğrenir.
 
 KULLANIM:
     python -m finetune.prepare                     # varsayılan profil + yollar
@@ -17,7 +19,7 @@ import argparse
 import sys
 
 from .config import FinetuneConfig
-from .prompt_format import build_chat_messages
+from .prompt_format import build_chat_messages, build_inference_messages
 from .schema import load_jsonl
 
 
@@ -32,14 +34,26 @@ def prepare(config: FinetuneConfig) -> str:
 
     tokenizer = AutoTokenizer.from_pretrained(config.base_model, trust_remote_code=True)
 
-    texts: list[str] = []
+    # Prompt-completion biçimi: kayıp YALNIZCA asistan tamamlamasında hesaplanır.
+    # prompt    = apply_chat_template([system,*history,user], add_generation_prompt=True)
+    # full      = apply_chat_template([...,assistant], add_generation_prompt=False)
+    # completion = full[len(prompt):]  → asistan yanıtı + <|im_end|> (EOS öğrenilir)
+    # Şablon deterministik olduğundan prompt, full'ün strict ön ekidir; dilimleme güvenli.
+    prompts: list[str] = []
+    completions: list[str] = []
     for ex in examples:
-        messages = build_chat_messages(ex)
-        # add_generation_prompt=False → asistan cevabı zaten messages'ta (eğitim hedefi)
-        text = tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=False)
-        texts.append(text)
+        full = tokenizer.apply_chat_template(
+            build_chat_messages(ex), tokenize=False, add_generation_prompt=False)
+        prompt = tokenizer.apply_chat_template(
+            build_inference_messages(ex), tokenize=False, add_generation_prompt=True)
+        if not full.startswith(prompt):
+            raise SystemExit(
+                "Prompt, tam metnin ön eki değil — sohbet şablonu beklenmedik; "
+                "completion_only_loss güvenli uygulanamaz.")
+        prompts.append(prompt)
+        completions.append(full[len(prompt):])
 
-    ds = Dataset.from_dict({"text": texts})
+    ds = Dataset.from_dict({"prompt": prompts, "completion": completions})
     split = ds.train_test_split(test_size=config.val_ratio, seed=config.seed)
     dataset = DatasetDict({"train": split["train"], "val": split["test"]})
     dataset.save_to_disk(str(config.prepared_dir))
