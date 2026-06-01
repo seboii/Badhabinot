@@ -121,6 +121,13 @@ pip-wheel-metadata/
 *.egg-info/
 
 # =========================
+# ML model agirliklari (buyuk ikili; repoya girmez, runtime'da indirilir/uretilir)
+# =========================
+*.pt
+*.gguf
+*.safetensors
+
+# =========================
 # Test/coverage raporlari
 # =========================
 coverage/
