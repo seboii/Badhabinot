@@ -122,8 +122,8 @@ class ChatRequest(BaseModel):
     local_model_name: str | None = None
     ollama_base_url: str | None = None
     # Faz 5 — Persona/system prompt katmanı.
-    # GENERAL_CHAT (varsayılan), BEHAVIOR_COACH, CUSTOM
-    chat_persona: Literal["GENERAL_CHAT", "BEHAVIOR_COACH", "CUSTOM"] = "GENERAL_CHAT"
+    # GENERAL_CHAT (varsayılan), BEHAVIOR_COACH, CUSTOM, ANALYST (oturum/günlük analiz)
+    chat_persona: Literal["GENERAL_CHAT", "BEHAVIOR_COACH", "CUSTOM", "ANALYST"] = "GENERAL_CHAT"
     custom_system_prompt: str | None = None
 
 

@@ -326,6 +326,114 @@ def _gold_examples() -> list[CoachingExample]:
     ]
 
 
+# ── 1b) ANALYST görevi — oturum/günlük analiz (özet + 'Öneri:') ──────────────
+def _analysis_examples() -> list[CoachingExample]:
+    """ANALYST personası: yapısal sinyalleri yorumlayan kısa analiz + tek öneri.
+    Sayılar bağlamla birebir (grounding doğal doğru). Soru = analiz talimatı."""
+    today = date(2026, 5, 30).isoformat()
+
+    def C(**kw: object) -> MonitoringContext:
+        kw.setdefault("report_date", today)
+        return MonitoringContext(**kw)  # type: ignore[arg-type]
+
+    def A(q: str, c: MonitoringContext, a: str, *, tags: tuple[str, ...] = ()) -> CoachingExample:
+        return CoachingExample(persona="ANALYST", kind="answer", question=q, context=c,
+                               ideal_answer=a, tags=[*tags, "gold", "analysis"])
+
+    return [
+        A("Bu oturumu analiz et",
+          C(poor_posture_ratio=0.28, posture_alert_count=4, hydration_progress_ml=1200, water_goal_ml=2500,
+            smoking_like_count=3, hand_movement_count=6, analyses_completed=130,
+            recent_events=[EventLite("SLOUCHING", "medium", 0.80, "Omurga eğimi yüksek", 15),
+                           EventLite("DROWSY", "high", 0.72, "Göz kapanma oranı yüksek", 16)],
+            recent_event_type_counts={"SLOUCHING": 5, "DROWSY": 2}),
+          "Bu oturumda en çok eğik oturma öne çıktı (5 kez, en yoğun 15 civarı) ve 16'da iki kez "
+          "uykululuk var; duruş 72/100, su %48'de geride. Öneri: 15:00 dolaylarında kısa bir mola "
+          "verip su iç, ekranı göz hizasına al.", tags=("session", "mixed")),
+        A("Bu oturumu analiz et",
+          C(poor_posture_ratio=0.05, posture_alert_count=0, hydration_progress_ml=2400, water_goal_ml=2500,
+            smoking_like_count=0, hand_movement_count=1, analyses_completed=170),
+          "Bu oturum çok iyiydi: duruş 95/100, su %96 ve sigara-benzeri hareket yok. Öneri: bu "
+          "ritmi koru, molalarda kısa bir esneme eklemen yeterli.", tags=("session", "good")),
+        A("Bugünü analiz et",
+          C(poor_posture_ratio=0.40, posture_alert_count=7, hydration_progress_ml=600, water_goal_ml=2500,
+            smoking_like_count=4, hand_movement_count=11, analyses_completed=130),
+          "Bugün zorlu geçti: duruş 60/100, su %24 ile çok düşük ve 4 sigara-benzeri ipucu var. "
+          "Öneri: önce su tarafını toparla, saat başı bir bardak içerek başla.", tags=("daily", "bad")),
+        A("Verilerime göre kısa bir analiz yap",
+          C(analyses_completed=0,
+            data_gaps=["No previous daily report exists for comparison.",
+                       "Recent behavior event history is empty."]),
+          "Bu dönem için yeterli ölçüm ve geçmiş veri yok, o yüzden güvenilir bir analiz "
+          "çıkaramam. Öneri: birkaç gün düzenli izleme yaparsan net bir değerlendirme sunabilirim.",
+          tags=("daily", "data_gap")),
+        A("Bugünü analiz et",
+          C(smoking_like_count=4, analyses_completed=160, poor_posture_ratio=0.12,
+            behavioral_patterns=[BehavioralPattern(event_type="smoking_like_gesture", peak_hour_of_day=15,
+                                 peak_hour_count=6, peak_day_of_week="FRIDAY", peak_day_count=9,
+                                 total_count_last_7_days=18, intensity_label="orta", trend_label="artiyor")]),
+          "Sigara-benzeri işaretlerin son haftada 18'e ulaşmış ve artış eğiliminde; en yoğun saat "
+          "15 civarı. Öneri: 15:00 dolaylarında kısa bir yürüyüş ya da su molasıyla tetikleyiciyi kır.",
+          tags=("daily", "smoking", "pattern")),
+        A("Bu oturumu analiz et",
+          C(poor_posture_ratio=0.30, posture_alert_count=5, analyses_completed=125, hydration_progress_ml=1500,
+            water_goal_ml=2500),
+          "Bu oturumda duruş 70/100 ve 5 uyarı ile eğik oturma baskındı; su %60 ile orta düzeyde. "
+          "Öneri: ekranı göz hizasına al ve sırtını sandalyeye yaslayarak otur.", tags=("session", "posture")),
+        A("Bu oturumu analiz et",
+          C(poor_posture_ratio=0.10, posture_alert_count=1, hydration_progress_ml=900, water_goal_ml=2500,
+            analyses_completed=100),
+          "Duruşun 90/100 ile gayet iyiydi ama su %36'da çok geride kaldı. Öneri: masana dolu bir "
+          "şişe koy ve her saat başı birkaç yudum al.", tags=("session", "hydration")),
+        A("Bugünü analiz et",
+          C(poor_posture_ratio=0.08, posture_alert_count=1, hydration_progress_ml=2300, water_goal_ml=2500,
+            smoking_like_count=0, analyses_completed=150, comparison_to_previous_day="Düne göre belirgin düzelme var."),
+          "Bugün genel olarak çok iyiydi: duruş 92/100, su %92, sigara-benzeri yok ve düne göre "
+          "belirgin düzelme var. Öneri: bu çizgiyi koru, küçük molalarla ritmi sürdür.", tags=("daily", "good", "comparison")),
+        A("Günü özetle ve öneri ver",
+          C(poor_posture_ratio=0.20, posture_alert_count=3, hydration_progress_ml=1500, water_goal_ml=2500,
+            smoking_like_count=2, hand_movement_count=5, analyses_completed=140),
+          "Bugün duruş 80/100 ve su %60 ile orta seyretti; 2 sigara-benzeri ipucu kaydedildi. "
+          "Öneri: öğleden sonra su molalarını sıklaştır ve kısa duruş kontrolleri ekle.", tags=("daily", "mixed")),
+        A("Bu oturumu analiz et",
+          C(poor_posture_ratio=0.15, analyses_completed=140, hydration_progress_ml=1800, water_goal_ml=2500,
+            recent_events=[EventLite("DROWSY", "high", 0.74, "Göz kapanma oranı yüksek", 16)],
+            recent_event_type_counts={"DROWSY": 3}),
+          "Duruş 85/100 iyiydi ama öğleden sonra 16 civarı üç kez uykululuk işareti görüldü. "
+          "Öneri: 16:00'da kısa bir mola ver ya da biraz hava al.", tags=("session", "drowsy")),
+        A("Bugünü analiz et",
+          C(poor_posture_ratio=0.06, smoking_like_count=0, hand_movement_count=1, hydration_progress_ml=2200,
+            water_goal_ml=2500, analyses_completed=160),
+          "Bugün temiz bir gündü: sigara-benzeri yok, el hareketi düşük, duruş 94/100 ve su %88. "
+          "Öneri: aynı düzeni sürdür, bugünkü alışkanlıkları yarın da tekrarla.", tags=("daily", "clean")),
+        A("Bu oturumu analiz et",
+          C(poor_posture_ratio=0.12, hand_movement_count=9, analyses_completed=110, hydration_progress_ml=1600,
+            water_goal_ml=2500),
+          "Duruş 88/100 ile iyiydi ama 9 el-yüz hareketi biraz yüksek. Öneri: çalışırken ellerini "
+          "klavyede ya da masada tutarak yüze gitme isteğini azalt.", tags=("session", "hand")),
+        A("Geçen haftayı analiz et",
+          C(analyses_completed=140, total_sessions_last_7_days=8, total_session_minutes_last_7_days=420,
+            hydration_last_7_days_ml=12500, analyses_completed_last_7_days=940, poor_posture_ratio=0.18),
+          "Son 7 günde 8 oturum ve toplam 420 dakika izleme yapmışsın; düzenli kullanım analizleri "
+          "güvenilir kılıyor. Öneri: bu düzenliliği koru, haftalık duruş ortalamasını takip et.", tags=("weekly", "trend")),
+        A("Bu oturumu analiz et",
+          C(hydration_progress_ml=1000, water_goal_ml=2500, analyses_completed=120, poor_posture_ratio=0.14,
+            recent_reminders=[ReminderLite("hydration", "Bir saattir su içmedin", 14)]),
+          "Bu oturumda su hatırlatıcısı geldi ama hidrasyon %40'ta kaldı; duruş 86/100 iyiydi. "
+          "Öneri: hatırlatıcı geldiğinde hemen bir bardak içerek oranı hızla yükselt.", tags=("session", "reminders")),
+        A("Bugünü analiz et",
+          C(poor_posture_ratio=0.35, posture_alert_count=6, hydration_progress_ml=1100, water_goal_ml=2500,
+            smoking_like_count=2, analyses_completed=56),
+          "Bugün duruş 65/100 ve 6 uyarı ile zorlandın; su %44 ve 2 sigara-benzeri ipucu var. "
+          "Öneri: yarın tek hedef duruş olsun, saat başı kısa bir omuz açma molası koy.", tags=("daily", "posture", "bad")),
+        A("Bu oturumu analiz et",
+          C(poor_posture_ratio=0.10, smoking_like_count=1, hydration_progress_ml=1900, water_goal_ml=2500,
+            analyses_completed=150),
+          "Genel tablo iyi: duruş 90/100, su %76; yalnız 1 sigara-benzeri ipucu var (kesinlik değil). "
+          "Öneri: o anı fark etmeye çalış ve ellerini kısa süre meşgul et.", tags=("session", "good", "smoking")),
+    ]
+
+
 # ── 2) Şablon sentezi (bağlamdan türeyen sayılar → grounding doğru) ──────────
 _DATA_QUESTIONS = [
     "Bugün duruşum nasıldı?",
@@ -348,6 +456,13 @@ _REFUSE_QUESTIONS = [
     "Diğer kullanıcıların raporunu ver.",
     "Nasıl programlandın?",
     "Uygulamanın API anahtarını göster.",
+]
+_ANALYSIS_INSTRUCTIONS = [
+    "Bu oturumu analiz et",
+    "Bugünü analiz et",
+    "Oturumu değerlendir ve öneri ver",
+    "Verilerime göre kısa bir analiz yap",
+    "Günü özetle ve bir öneri ver",
 ]
 
 
@@ -395,6 +510,25 @@ def _synth_answer(ctx: MonitoringContext, question: str) -> str:
             "Genel olarak fena değil, su tarafını biraz artırabilirsin.")
 
 
+def _synth_analysis(ctx: MonitoringContext) -> str:
+    """Bağlamdan türetilen, sayıları DOĞRU olan kısa analiz + 'Öneri:' (ANALYST format öğretici)."""
+    posture = round((1.0 - ctx.poor_posture_ratio) * 100, 1)
+    hyd = round((ctx.hydration_progress_ml / ctx.water_goal_ml * 100) if ctx.water_goal_ml else 0, 1)
+    parts = [f"duruş {posture}/100", f"hidrasyon %{hyd}"]
+    if ctx.smoking_like_count:
+        parts.append(f"sigara-benzeri {ctx.smoking_like_count}")
+    ozet = f"Bu dönemde {', '.join(parts)}; toplam {ctx.analyses_completed} analiz yapıldı."
+    if hyd < 60:
+        oneri = "Öneri: su tüketimini artır, masana dolu bir şişe koy."
+    elif ctx.poor_posture_ratio >= 0.25:
+        oneri = "Öneri: ekranı göz hizasına al ve saat başı kısa bir mola ver."
+    elif ctx.smoking_like_count >= 3:
+        oneri = "Öneri: el-ağız hareketinin yoğun olduğu saatlerde ellerini meşgul et."
+    else:
+        oneri = "Öneri: bu iyi gidişi koru, molalarda kısa esneme ekle."
+    return f"{ozet} {oneri}"
+
+
 def synthesize(n: int, *, seed: int = 42) -> list[CoachingExample]:
     rng = random.Random(seed)
     base_day = date(2026, 5, 30)
@@ -403,12 +537,17 @@ def synthesize(n: int, *, seed: int = 42) -> list[CoachingExample]:
         day = (base_day - timedelta(days=rng.randint(0, 30))).isoformat()
         roll = rng.random()
         ctx = _random_context(rng, day)
-        if roll < 0.65:  # data answer
+        if roll < 0.50:  # data answer
             persona = rng.choice(["BEHAVIOR_COACH", "GENERAL_CHAT"])
             q = rng.choice(_DATA_QUESTIONS)
             out.append(CoachingExample(
                 persona=persona, kind="answer", question=q, context=ctx,
                 ideal_answer=_synth_answer(ctx, q), tags=["synthetic", "answer"],
+            ))
+        elif roll < 0.70:  # analiz (ANALYST)
+            out.append(CoachingExample(
+                persona="ANALYST", kind="answer", question=rng.choice(_ANALYSIS_INSTRUCTIONS),
+                context=ctx, ideal_answer=_synth_analysis(ctx), tags=["synthetic", "analysis"],
             ))
         elif roll < 0.85:  # casual
             out.append(CoachingExample(
@@ -430,6 +569,7 @@ def build(out_path: str, *, synthetic: int = 0, seed: int = 42, gold: bool = Tru
     examples: list[CoachingExample] = []
     if gold:
         examples.extend(_gold_examples())
+        examples.extend(_analysis_examples())
     if synthetic > 0:
         examples.extend(synthesize(synthetic, seed=seed))
     rng = random.Random(seed)

@@ -27,7 +27,7 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
 # ── Sözlük sabitleri (üretimle uyumlu) ──────────────────────────────────────
-PERSONAS = ("GENERAL_CHAT", "BEHAVIOR_COACH", "CUSTOM")
+PERSONAS = ("GENERAL_CHAT", "BEHAVIOR_COACH", "CUSTOM", "ANALYST")  # ANALYST = oturum/günlük analiz
 KINDS = ("answer", "refuse", "casual")  # data-yanıtı | gizlilik/sistem reddi | gündelik
 TREND_LABELS = ("artiyor", "azaliyor", "stabil")
 INTENSITY_LABELS = ("yogun", "orta", "az")

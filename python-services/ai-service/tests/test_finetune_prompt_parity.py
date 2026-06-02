@@ -125,3 +125,16 @@ def test_parity_general_chat_data():
     assert train == _prod_user_content(message, "GENERAL_CHAT")
     assert "Bugünün özeti" in train
     assert "HATIRLATICILAR" in train
+
+
+def test_parity_analyst():
+    message = "Bu oturumu analiz et"
+    train = compose_user_message(CoachingExample(
+        persona="ANALYST", kind="answer", question=message,
+        ideal_answer="x", context=_training_context()))
+    assert train == _prod_user_content(message, "ANALYST")
+    # ANALYST = zengin blok + 'Görev:' + özet/Öneri talimatı
+    assert "BUGÜNÜN PERFORMANS ÖZETİ" in train
+    assert "Görev: Bu oturumu analiz et" in train
+    assert "'Öneri:'" in train
+    assert "SON DAVRANIŞ OLAYLARI" in train  # zengin sinyaller de giriyor
