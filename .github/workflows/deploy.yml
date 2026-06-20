@@ -1,0 +1,102 @@
+name: Deploy
+
+# master'a push olunca: 4 servis imajını GHCR'a derle/push et, sonra Azure VM'e SSH ile çek+ayağa kaldır.
+# Gerekli repo secret'ları:
+#   VM_HOST     → Azure VM public IP veya FQDN
+#   VM_USER     → VM kullanıcı adı (ör. azureuser)
+#   VM_SSH_KEY  → VM'e erişen private SSH anahtarı (PEM içeriği)
+#   GHCR_USER   → GHCR kullanıcı adı (GitHub kullanıcı adı, ör. seboii)
+#   GHCR_PAT    → read:packages yetkili GitHub PAT (VM'in imaj çekmesi için)
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-prod
+  cancel-in-progress: false
+
+env:
+  REGISTRY: ghcr.io
+  OWNER: seboii
+
+jobs:
+  build-push:
+    name: Build & push (${{ matrix.svc.name }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        svc:
+          - name: backend
+            image: badhabinot-backend
+            dockerfile: infra/docker/dockerfiles/spring-service.Dockerfile
+            args: ""
+          - name: ai-service
+            image: badhabinot-ai-service
+            dockerfile: infra/docker/dockerfiles/python-service.Dockerfile
+            args: |
+              SERVICE_PATH=python-services/ai-service
+              APP_PORT=8092
+          - name: vision-service
+            image: badhabinot-vision-service
+            dockerfile: infra/docker/dockerfiles/python-service.Dockerfile
+            args: |
+              SERVICE_PATH=python-services/vision-service
+              APP_PORT=8091
+          - name: frontend
+            image: badhabinot-frontend
+            dockerfile: infra/docker/dockerfiles/frontend-app.Dockerfile
+            args: ""
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: GHCR login
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build & push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ matrix.svc.dockerfile }}
+          push: true
+          build-args: ${{ matrix.svc.args }}
+          tags: |
+            ghcr.io/${{ env.OWNER }}/${{ matrix.svc.image }}:latest
+            ghcr.io/${{ env.OWNER }}/${{ matrix.svc.image }}:${{ github.sha }}
+          cache-from: type=gha,scope=${{ matrix.svc.name }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.svc.name }}
+
+  deploy:
+    name: Deploy to Azure VM
+    needs: build-push
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: SSH → pull & up
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.VM_HOST }}
+          username: ${{ secrets.VM_USER }}
+          key: ${{ secrets.VM_SSH_KEY }}
+          script_stop: true
+          script: |
+            set -e
+            cd ~/Badhabinot
+            git pull --ff-only
+            echo "${{ secrets.GHCR_PAT }}" | docker login ghcr.io -u "${{ secrets.GHCR_USER }}" --password-stdin
+            export IMAGE_TAG=latest
+            COMPOSE="docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.ghcr.yml --env-file .env.prod"
+            $COMPOSE pull backend ai-service vision-service frontend-app
+            $COMPOSE up -d
+            docker image prune -f

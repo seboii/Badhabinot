@@ -1,0 +1,34 @@
+# docker-compose.ghcr.yml — VM ÜRETİM OVERLAY (GHCR'dan çek, build YAPMA)
+# ─────────────────────────────────────────────────────────
+# 8 GB RAM'li Azure VM'de imajları DERLEMEK yerine GitHub Actions'ın
+# önceden derleyip GHCR'a push ettiği imajları ÇEKER. Böylece VM build
+# sırasında OOM olmaz ve deploy saniyeler sürer.
+#
+# Kullanım (VM'de — docker-compose.prod.yml ile birlikte):
+#   docker login ghcr.io -u <kullanıcı> -p <PAT>
+#   export IMAGE_TAG=latest
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.ghcr.yml \
+#       --env-file .env.prod pull backend ai-service vision-service frontend-app
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.ghcr.yml \
+#       --env-file .env.prod up -d
+#
+# GHCR_OWNER ve IMAGE_TAG .env.prod'dan gelir (varsayılan: seboii / latest).
+# image: tanımı base'deki build: ile birleşir; "pull" imajı çektiği için "up" build etmez.
+# ─────────────────────────────────────────────────────────
+
+services:
+  backend:
+    image: ghcr.io/${GHCR_OWNER:-seboii}/badhabinot-backend:${IMAGE_TAG:-latest}
+    pull_policy: always
+
+  ai-service:
+    image: ghcr.io/${GHCR_OWNER:-seboii}/badhabinot-ai-service:${IMAGE_TAG:-latest}
+    pull_policy: always
+
+  vision-service:
+    image: ghcr.io/${GHCR_OWNER:-seboii}/badhabinot-vision-service:${IMAGE_TAG:-latest}
+    pull_policy: always
+
+  frontend-app:
+    image: ghcr.io/${GHCR_OWNER:-seboii}/badhabinot-frontend:${IMAGE_TAG:-latest}
+    pull_policy: always
