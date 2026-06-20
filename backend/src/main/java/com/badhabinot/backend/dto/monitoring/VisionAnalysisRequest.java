@@ -9,7 +9,9 @@ public record VisionAnalysisRequest(
         String frameId,
         Instant capturedAt,
         String imageBase64,
-        String imageContentType
+        String imageContentType,
+        // Kullanıcının hassasiyet ayarı (LOW/MEDIUM/HIGH) — vision-service postür eşiğine uygular.
+        String sensitivity
 ) {
 }
 

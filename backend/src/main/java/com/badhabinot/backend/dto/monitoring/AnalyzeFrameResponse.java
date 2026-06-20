@@ -26,7 +26,10 @@ public record AnalyzeFrameResponse(
         // Module A — face authentication result (null when no profile registered)
         FaceAuthDetail faceAuth,
         // Module G — owner tracking and iris gaze (null when face auth disabled)
-        OwnerTrackingDetail ownerTracking
+        OwnerTrackingDetail ownerTracking,
+        // Module E — çok-sinyalli postür: baskın kategori + Türkçe öneri (null güvenli)
+        String postureCategory,
+        String postureReason
 ) {
     public record ProcessingDetails(
             int frameWidth,

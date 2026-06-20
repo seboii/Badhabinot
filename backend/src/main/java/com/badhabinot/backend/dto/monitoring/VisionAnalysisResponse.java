@@ -121,7 +121,15 @@ public record VisionAnalysisResponse(
             double shoulderTiltAngle,
             int postureScore,
             boolean isSlouching,
-            List<Double> personBbox
+            List<Double> personBbox,
+            // Çok-sinyalli postür alanları (yeni; null güvenli, eski yanıtlarda yok)
+            String postureCategory,
+            String postureReason,
+            Double forwardHeadRatio,
+            Double lateralOffset,
+            Double headRoll,
+            Double headDownRatio,
+            Double proximityRatio
     ) {
     }
 

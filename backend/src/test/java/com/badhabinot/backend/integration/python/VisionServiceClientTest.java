@@ -106,7 +106,8 @@ class VisionServiceClientTest {
                 "frame-1",
                 Instant.parse("2026-04-08T09:00:00Z"),
                 "ZmFrZQ==",
-                "image/jpeg"
+                "image/jpeg",
+                "MEDIUM"
         );
     }
 }

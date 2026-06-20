@@ -82,7 +82,8 @@ public class AnalysisOrchestratorServiceImpl implements IAnalysisOrchestratorSer
                     request.frameId(),
                     request.capturedAt(),
                     request.imageBase64(),
-                    request.imageContentType()
+                    request.imageContentType(),
+                    context.sensitivity()
             );
 
             VisionAnalysisResponse visionResponse = visionServiceClient.analyze(visionRequest);
@@ -147,6 +148,14 @@ public class AnalysisOrchestratorServiceImpl implements IAnalysisOrchestratorSer
                         ot.ownerTracked(), gazeDetail, ot.strangersInFrame());
             }
 
+            // Çok-sinyalli postür: baskın kategori + Türkçe öneri (null güvenli)
+            String postureCategory = null;
+            String postureReason = null;
+            if (visionResponse.pose() != null) {
+                postureCategory = visionResponse.pose().postureCategory();
+                postureReason = visionResponse.pose().postureReason();
+            }
+
             AnalyzeFrameResponse response = new AnalyzeFrameResponse(
                     job.getId(),
                     request.sessionId(),
@@ -175,7 +184,9 @@ public class AnalysisOrchestratorServiceImpl implements IAnalysisOrchestratorSer
                     visionResponse.annotatedFrameBase64(),
                     visionBehaviorEvents,
                     faceAuth,
-                    ownerTracking
+                    ownerTracking,
+                    postureCategory,
+                    postureReason
             );
             analysisJobStateStore.markCompleted(job, response);
             return response;
