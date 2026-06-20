@@ -86,8 +86,11 @@ services:
       OLLAMA_HOST: http://ollama:11434
       OLLAMA_MODEL_NAME: ${OLLAMA_BASE_MODEL_NAME:-llama3.2:3b}
       BADHABINOT_MODEL_NAME: ${OLLAMA_MODEL_NAME:-badhabinot:latest}
+      COACH_MODEL_NAME: ${AI_OLLAMA_MODEL_NAME:-badhabinot-coach:latest}
     volumes:
       - ./infra/ollama:/modelfiles:ro
+      # Fine-tune edilmis GGUF artefaktlari (gitignore'lu; yerelde uretilir). Dosya yoksa adim atlanir.
+      - ./python-services/ai-service/finetune/outputs:/models:ro
     entrypoint: ["sh", "/modelfiles/build-model.sh"]
     networks:
       - platform
@@ -160,7 +163,9 @@ services:
       # Use Ollama running in the Docker network as the default LLM provider
       AI_PROVIDER: ${AI_PROVIDER:-ollama}
       OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://ollama:11434}
-      OLLAMA_MODEL_NAME: ${OLLAMA_MODEL_NAME:-badhabinot:latest}
+      # Varsayilan = fine-tune edilmis kullanici modeli (Qwen2.5-1.5B QLoRA).
+      # 7B base'e donmek icin: AI_OLLAMA_MODEL_NAME=badhabinot:latest
+      OLLAMA_MODEL_NAME: ${AI_OLLAMA_MODEL_NAME:-badhabinot-coach:latest}
       # OpenAI-compatible fallback (used only if AI_PROVIDER=openai-compatible)
       AI_API_BASE_URL: ${AI_API_BASE_URL:-https://api.openai.com/v1}
       AI_API_KEY: ${AI_API_KEY:-}
