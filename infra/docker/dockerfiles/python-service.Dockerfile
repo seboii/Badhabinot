@@ -70,6 +70,19 @@ COPY --from=build /workspace/${SERVICE_PATH}/app ./app
 # Harmless for ai-service (directories simply stay empty)
 RUN mkdir -p /app/data/users /app/logs/sessions
 
+# Pre-bake DeepFace Facenet weights into the image (vision-service only).
+# Otherwise DeepFace lazy-downloads facenet_weights.h5 (~92 MB) to $HOME/.deepface
+# on the first face-auth request. That path is NOT a persisted volume, so every
+# container recreate re-downloads it — and concurrent requests trigger parallel
+# downloads that previously corrupted memory and core-dumped the worker
+# ("corrupted double-linked list" -> vision_service_unavailable). Baking the single
+# weights file makes face-auth deterministic and offline-safe (incl. Azure deploy).
+RUN if [ "${SERVICE_PATH}" = "python-services/vision-service" ]; then \
+        mkdir -p /app/.deepface/weights && \
+        python -c "import urllib.request; urllib.request.urlretrieve('https://github.com/serengil/deepface_models/releases/download/v1.0/facenet_weights.h5', '/app/.deepface/weights/facenet_weights.h5')" && \
+        cd /app && python -c "from ultralytics import YOLO; YOLO('yolov8n.pt'); YOLO('yolov8n-pose.pt')"; \
+    fi
+
 RUN addgroup --system app \
     && adduser --system --ingroup app app \
     && chown -R app:app /app
