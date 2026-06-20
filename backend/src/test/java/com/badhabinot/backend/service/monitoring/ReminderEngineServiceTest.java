@@ -16,6 +16,7 @@ import com.badhabinot.backend.model.monitoring.ReminderEvent;
 import com.badhabinot.backend.repository.monitoring.ActivityFeedRepository;
 import com.badhabinot.backend.repository.monitoring.HydrationLogRepository;
 import com.badhabinot.backend.repository.monitoring.ReminderEventRepository;
+import com.badhabinot.backend.service.monitoring.IPushNotificationService;
 import com.badhabinot.backend.service.monitoring.impl.ReminderEngineServiceImpl;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.Instant;
@@ -40,6 +41,9 @@ class ReminderEngineServiceTest {
     @Mock
     private HydrationLogRepository hydrationLogRepository;
 
+    @Mock
+    private IPushNotificationService pushNotificationService;
+
     private ReminderEngineServiceImpl ReminderEngineServiceImpl;
 
     @BeforeEach
@@ -48,7 +52,8 @@ class ReminderEngineServiceTest {
                 reminderEventRepository,
                 activityFeedRepository,
                 hydrationLogRepository,
-                new ObjectMapper().findAndRegisterModules()
+                new ObjectMapper().findAndRegisterModules(),
+                pushNotificationService
         );
     }
 

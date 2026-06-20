@@ -10,6 +10,7 @@ import com.badhabinot.backend.model.monitoring.ReminderEvent;
 import com.badhabinot.backend.repository.monitoring.ActivityFeedRepository;
 import com.badhabinot.backend.repository.monitoring.HydrationLogRepository;
 import com.badhabinot.backend.repository.monitoring.ReminderEventRepository;
+import com.badhabinot.backend.service.monitoring.IPushNotificationService;
 import com.badhabinot.backend.service.monitoring.IReminderEngineService;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -36,17 +37,20 @@ public class ReminderEngineServiceImpl implements IReminderEngineService {
     private final ActivityFeedRepository activityFeedRepository;
     private final HydrationLogRepository hydrationLogRepository;
     private final ObjectMapper objectMapper;
+    private final IPushNotificationService pushNotificationService;
 
     public ReminderEngineServiceImpl(
             ReminderEventRepository reminderEventRepository,
             ActivityFeedRepository activityFeedRepository,
             HydrationLogRepository hydrationLogRepository,
-            ObjectMapper objectMapper
+            ObjectMapper objectMapper,
+            IPushNotificationService pushNotificationService
     ) {
         this.reminderEventRepository = reminderEventRepository;
         this.activityFeedRepository = activityFeedRepository;
         this.hydrationLogRepository = hydrationLogRepository;
         this.objectMapper = objectMapper;
+        this.pushNotificationService = pushNotificationService;
     }
 
     @Override
@@ -227,6 +231,19 @@ public class ReminderEngineServiceImpl implements IReminderEngineService {
                 null,
                 occurredAt
         ));
+
+        // Mobil cihaza anlık bildirim (alarm). Firebase yapılandırılmamışsa ya da
+        // kullanıcının kayıtlı tokenı yoksa sessizce atlanır; push hatası hatırlatıcıyı bozmaz.
+        try {
+            pushNotificationService.sendToUser(
+                    userId,
+                    titleFor(reminderType),
+                    message,
+                    Map.of("type", reminderType, "severity", severity)
+            );
+        } catch (Exception ignored) {
+            // non-fatal
+        }
 
         return toResponse(reminderEvent);
     }
