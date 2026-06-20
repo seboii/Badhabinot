@@ -11,8 +11,6 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { LoadingCard } from '@/components/ui/loading-state'
-import { AiModeForm } from '@/features/settings/components/AiModeForm'
-import { ChatPersonaForm } from '@/features/settings/components/ChatPersonaForm'
 import { ConsentForm } from '@/features/settings/components/ConsentForm'
 import { PasswordChangeForm } from '@/features/settings/components/PasswordChangeForm'
 import { ProfileForm } from '@/features/settings/components/ProfileForm'
@@ -149,45 +147,7 @@ export function SettingsPage() {
           })
         }
       />
-      <AiModeForm
-        settings={user.settings}
-        isSaving={settingsMutation.isPending}
-        onSubmit={(aiValues) =>
-          settingsMutation.mutate({
-            sensitivity: user.settings.sensitivity,
-            water_goal_ml: user.settings.water_goal_ml,
-            water_interval_min: user.settings.water_interval_min,
-            exercise_interval_min: user.settings.exercise_interval_min,
-            quiet_hours_enabled: user.settings.quiet_hours_enabled,
-            quiet_hours_start: user.settings.quiet_hours_start,
-            quiet_hours_end: user.settings.quiet_hours_end,
-            notifications_enabled: user.settings.notifications_enabled,
-            chat_persona: user.settings.chat_persona,
-            custom_system_prompt: user.settings.custom_system_prompt,
-            ...aiValues,
-          })
-        }
-      />
-      <ChatPersonaForm
-        settings={user.settings}
-        isSaving={settingsMutation.isPending}
-        onSubmit={(personaValues) =>
-          settingsMutation.mutate({
-            sensitivity: user.settings.sensitivity,
-            water_goal_ml: user.settings.water_goal_ml,
-            water_interval_min: user.settings.water_interval_min,
-            exercise_interval_min: user.settings.exercise_interval_min,
-            quiet_hours_enabled: user.settings.quiet_hours_enabled,
-            quiet_hours_start: user.settings.quiet_hours_start,
-            quiet_hours_end: user.settings.quiet_hours_end,
-            notifications_enabled: user.settings.notifications_enabled,
-            model_mode: user.settings.model_mode,
-            local_model_name: user.settings.local_model_name,
-            ollama_base_url: user.settings.ollama_base_url,
-            ...personaValues,
-          })
-        }
-      />
+      {/* AI modu ve sohbet personasi yalnizca admin panelinden yonetilir. */}
       <ConsentForm
         consents={user.consents}
         isSaving={consentMutation.isPending}

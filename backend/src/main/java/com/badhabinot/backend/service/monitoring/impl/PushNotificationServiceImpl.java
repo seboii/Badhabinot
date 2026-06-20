@@ -3,6 +3,8 @@ package com.badhabinot.backend.service.monitoring.impl;
 import com.badhabinot.backend.model.monitoring.PushToken;
 import com.badhabinot.backend.repository.monitoring.PushTokenRepository;
 import com.badhabinot.backend.service.monitoring.IPushNotificationService;
+import com.google.firebase.messaging.AndroidConfig;
+import com.google.firebase.messaging.AndroidNotification;
 import com.google.firebase.messaging.FirebaseMessaging;
 import com.google.firebase.messaging.Message;
 import com.google.firebase.messaging.Notification;
@@ -74,6 +76,15 @@ public class PushNotificationServiceImpl implements IPushNotificationService {
                         .setNotification(Notification.builder()
                                 .setTitle(title)
                                 .setBody(body)
+                                .build())
+                        // Android: yuksek oncelik + sesli bildirim, boylece uygulama arka
+                        // planda/Doze modunda olsa bile hatirlatici telefonu uyarir (alarm).
+                        .setAndroidConfig(AndroidConfig.builder()
+                                .setPriority(AndroidConfig.Priority.HIGH)
+                                .setNotification(AndroidNotification.builder()
+                                        .setDefaultSound(true)
+                                        .setDefaultVibrateTimings(true)
+                                        .build())
                                 .build());
                 if (data != null) {
                     data.forEach(builder::putData);

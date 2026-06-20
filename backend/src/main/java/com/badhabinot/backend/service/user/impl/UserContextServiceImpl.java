@@ -86,6 +86,9 @@ public class UserContextServiceImpl implements IUserContextService {
         ensureProfile(claims.userId(), claims.email());
         ensureConsent(claims.userId());
         UserSettings settings = ensureSettings(claims.userId());
+        // AI/sohbet alanlari (model modu, persona, yerel model, ollama URL, ozel prompt)
+        // kullanici tarafindan DEGISTIRILEMEZ; yalnizca admin paneli yonetir. Bu yuzden
+        // istekteki degerler yok sayilip mevcut DB degerleri korunur (defense-in-depth).
         settings.update(
                 request.sensitivity(),
                 request.waterGoalMl(),
@@ -94,12 +97,12 @@ public class UserContextServiceImpl implements IUserContextService {
                 request.quietHoursEnabled(),
                 request.quietHoursStart(),
                 request.quietHoursEnd(),
-                request.modelMode(),
+                settings.getModelMode(),
                 request.notificationsEnabled(),
-                request.localModelName(),
-                request.ollamaBaseUrl(),
-                request.chatPersona(),
-                request.customSystemPrompt()
+                settings.getLocalModelName(),
+                settings.getOllamaBaseUrl(),
+                settings.getChatPersona(),
+                settings.getCustomSystemPrompt()
         );
         return toSettingsResponse(userSettingsRepository.save(settings));
     }
