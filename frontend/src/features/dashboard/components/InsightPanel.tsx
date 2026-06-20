@@ -33,6 +33,17 @@ function scoreBarColor(value: number): string {
   return 'linear-gradient(90deg,var(--primary),var(--accent))'
 }
 
+function postureColor(state: string | null | undefined): string {
+  switch ((state || '').toLowerCase()) {
+    case 'good':
+      return 'text-[var(--success)]'
+    case 'poor':
+      return 'text-[var(--danger)]'
+    default:
+      return 'text-white'
+  }
+}
+
 export function InsightPanel({ dashboard, latestAnalysis }: InsightPanelProps) {
   const { language, isTurkish } = useLanguage()
 
@@ -115,7 +126,13 @@ export function InsightPanel({ dashboard, latestAnalysis }: InsightPanelProps) {
               <Activity className="size-4" />
               {isTurkish ? 'Duruş durumu' : 'Posture state'}
             </div>
-            <p className="mt-3 text-xl font-bold text-white">{postureLabel(latestAnalysis?.posture_state, language)}</p>
+            <p className={`mt-3 text-xl font-bold ${postureColor(latestAnalysis?.posture_state)}`}>
+              {postureLabel(latestAnalysis?.posture_state, language)}
+            </p>
+            {/* Çok-sinyalli postür gerekçesi — vision-service'ten gelen Türkçe öneri */}
+            {latestAnalysis?.posture_reason ? (
+              <p className="mt-2 text-xs leading-5 text-[var(--text-muted)]">{latestAnalysis.posture_reason}</p>
+            ) : null}
           </div>
           <div className="rounded-[24px] border border-[var(--line-soft)] bg-[rgba(255,255,255,0.03)] p-4">
             <div className="flex items-center gap-2 text-sm text-[var(--text-muted)]">

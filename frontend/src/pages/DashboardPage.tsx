@@ -5,8 +5,6 @@ import { toast } from 'sonner'
 import { monitoringApi } from '@/api/monitoring'
 import { toErrorMessage } from '@/api/client'
 import { ActivityFeedCard } from '@/features/dashboard/components/ActivityFeedCard'
-import { FaceRegistrationBanner } from '@/features/dashboard/FaceRegistrationBanner'
-import { FaceRegistrationModal } from '@/features/dashboard/components/FaceRegistrationModal'
 import { InsightPanel } from '@/features/dashboard/components/InsightPanel'
 import { LiveMonitorPanel } from '@/features/dashboard/components/LiveMonitorPanel'
 import { QuickActionsCard } from '@/features/dashboard/components/QuickActionsCard'
@@ -58,7 +56,6 @@ export function DashboardPage() {
   const [latestAnalysis, setLatestAnalysis] = useState<AnalyzeFrameResponse | null>(null)
   const [autoScan, setAutoScan] = useState(true)
   const [showOverlay, setShowOverlay] = useState(true)
-  const [faceRegOpen, setFaceRegOpen] = useState(false)
   const [pendingAction, setPendingAction] = useState<'water' | 'water_reminder' | 'break' | undefined>(undefined)
   const inFlightRef = useRef(false)
   const baseIntervalMs = useMemo(() => {
@@ -400,7 +397,6 @@ export function DashboardPage() {
             : '📱 Mobile app: Camera monitoring and YOLOv8 analysis are available in the web app. You can track your data from this screen.'}
         </div>
       )}
-      <FaceRegistrationBanner />
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1.7fr)_minmax(320px,0.9fr)] xl:grid-cols-[minmax(0,1.7fr)_minmax(360px,0.9fr)]">
         <LiveMonitorPanel
           videoRef={videoRef}
@@ -424,7 +420,6 @@ export function DashboardPage() {
           onAnalyzeNow={handleAnalyze}
           onToggleAutoScan={setAutoScan}
           onToggleOverlay={setShowOverlay}
-          onOpenFaceRegistration={() => setFaceRegOpen(true)}
         />
         <InsightPanel dashboard={dashboard} latestAnalysis={latestAnalysis} />
       </div>
@@ -530,8 +525,6 @@ export function DashboardPage() {
           onLoadMore={() => void eventsQuery.fetchNextPage()}
         />
       )}
-
-      {faceRegOpen ? <FaceRegistrationModal onClose={() => setFaceRegOpen(false)} /> : null}
     </div>
   )
 }

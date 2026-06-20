@@ -1,11 +1,13 @@
-import { History, LayoutDashboard, MessageSquare, ScrollText, Settings } from 'lucide-react'
+import { History, LayoutDashboard, MessageSquare, ScrollText, Settings, ShieldCheck } from 'lucide-react'
 import { NavLink } from 'react-router-dom'
 import { cn } from '@/lib/cn'
+import { useAuth } from '@/hooks/use-auth'
 import { useLanguage } from '@/i18n/language-provider'
 import { useKeyboardHeight } from '@/hooks/use-keyboard-height'
 
 export function MobileNav() {
   const { isTurkish } = useLanguage()
+  const { isAdmin } = useAuth()
   const keyboardOpen = useKeyboardHeight()
   const items = [
     { to: '/dashboard', label: isTurkish ? 'Panel' : 'Dashboard', icon: LayoutDashboard },
@@ -13,6 +15,7 @@ export function MobileNav() {
     { to: '/reports', label: isTurkish ? 'Raporlar' : 'Reports', icon: ScrollText },
     { to: '/chat', label: isTurkish ? 'Sohbet' : 'Chat', icon: MessageSquare },
     { to: '/settings', label: isTurkish ? 'Ayarlar' : 'Settings', icon: Settings },
+    ...(isAdmin ? [{ to: '/admin', label: isTurkish ? 'Yonetim' : 'Admin', icon: ShieldCheck }] : []),
   ]
 
   return (

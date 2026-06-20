@@ -29,6 +29,9 @@ export type AnalyzeFrameResponse = {
   frame_id: string
   subject_present: boolean
   posture_state: string
+  // Çok-sinyalli postür: baskın bozukluk kategorisi + Türkçe öneri (null güvenli)
+  posture_category?: string | null
+  posture_reason?: string | null
   behavior_type: string
   confidence: number
   processed_at: string

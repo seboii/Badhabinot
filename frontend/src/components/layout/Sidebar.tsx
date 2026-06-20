@@ -1,17 +1,20 @@
-import { History, LayoutDashboard, MessageSquare, ScrollText, Settings } from 'lucide-react'
+import { History, LayoutDashboard, MessageSquare, ScrollText, Settings, ShieldCheck } from 'lucide-react'
 import { NavLink } from 'react-router-dom'
 import { cn } from '@/lib/cn'
+import { useAuth } from '@/hooks/use-auth'
 import { useLanguage } from '@/i18n/language-provider'
 import type { UserContextResponse } from '@/types/user'
 
 export function Sidebar({ user }: { user: UserContextResponse }) {
   const { isTurkish } = useLanguage()
+  const { isAdmin } = useAuth()
   const navigationItems = [
     { to: '/dashboard', label: isTurkish ? 'Panel' : 'Dashboard', icon: LayoutDashboard },
     { to: '/history', label: isTurkish ? 'Gecmis' : 'History', icon: History },
     { to: '/reports', label: isTurkish ? 'Raporlar' : 'Reports', icon: ScrollText },
     { to: '/chat', label: isTurkish ? 'Sohbet' : 'Chat', icon: MessageSquare },
     { to: '/settings', label: isTurkish ? 'Ayarlar' : 'Settings', icon: Settings },
+    ...(isAdmin ? [{ to: '/admin', label: isTurkish ? 'Yonetim' : 'Admin', icon: ShieldCheck }] : []),
   ]
 
   return (

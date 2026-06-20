@@ -24,6 +24,7 @@ export function useAuth() {
     session,
     hasHydrated,
     isAuthenticated: Boolean(session?.access_token),
+    isAdmin: (session?.user.role ?? '').toUpperCase() === 'ADMIN',
     setSession,
     clearSession,
   }

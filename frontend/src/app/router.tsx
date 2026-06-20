@@ -57,6 +57,11 @@ const SettingsPage = lazy(async () => {
   return { default: module.SettingsPage }
 })
 
+const AdminPage = lazy(async () => {
+  const module = await import('@/pages/AdminPage')
+  return { default: module.AdminPage }
+})
+
 const KvkkPage = lazy(async () => {
   const module = await import('@/pages/KvkkPage')
   return { default: module.KvkkPage }
@@ -104,6 +109,7 @@ export function AppRouter() {
             <Route path="/reports" element={<LazyRoute message={loadingMessage}><ReportsPage /></LazyRoute>} />
             <Route path="/chat" element={<LazyRoute message={loadingMessage}><ChatPage /></LazyRoute>} />
             <Route path="/settings" element={<LazyRoute message={loadingMessage}><SettingsPage /></LazyRoute>} />
+            <Route path="/admin" element={<LazyRoute message={loadingMessage}><AdminPage /></LazyRoute>} />
           </Route>
         </Route>
 

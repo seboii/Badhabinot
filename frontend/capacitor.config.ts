@@ -1,15 +1,19 @@
 import type { CapacitorConfig } from '@capacitor/cli'
 
+// Geliştirmede canlı sunucuya bağlanmak için CAP_SERVER_URL ortam değişkenini ver:
+//   CAP_SERVER_URL=http://192.168.1.26 npm run android:sync
+// (emülatör için http://10.0.2.2). Üretim APK'sı için CAP_SERVER_URL'i BOŞ bırak →
+// `dist` klasörü APK'ya gömülür ve uygulama sunucusuz/çevrimdışı çalışır.
+const devServerUrl = process.env.CAP_SERVER_URL?.trim()
+
 const config: CapacitorConfig = {
   appId: 'com.badhabinot.app',
   appName: 'Badhabinot',
   webDir: 'dist',
-  // For local development: points webview to the running Vite/Nginx dev server.
-  // Remove (or comment out) server.url before a production release build.
-  server: {
-    url: 'http://192.168.1.26',
-    cleartext: true,
-  },
+  // server bloğu yalnızca CAP_SERVER_URL verildiğinde eklenir.
+  ...(devServerUrl
+    ? { server: { url: devServerUrl, cleartext: true } }
+    : {}),
   plugins: {
     SplashScreen: {
       launchShowDuration: 2000,

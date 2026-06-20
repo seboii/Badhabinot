@@ -1,6 +1,6 @@
 import { useRef } from 'react'
 import type { RefObject } from 'react'
-import { Camera, Loader2, Play, ScanFace, Square, UserRound, VideoOff } from 'lucide-react'
+import { Camera, Loader2, Play, ScanFace, Square, VideoOff } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -32,7 +32,6 @@ type LiveMonitorPanelProps = {
   onAnalyzeNow: () => void
   onToggleAutoScan: (checked: boolean) => void
   onToggleOverlay: (checked: boolean) => void
-  onOpenFaceRegistration: () => void
 }
 
 export function LiveMonitorPanel({
@@ -57,7 +56,6 @@ export function LiveMonitorPanel({
   onAnalyzeNow,
   onToggleAutoScan,
   onToggleOverlay,
-  onOpenFaceRegistration,
 }: LiveMonitorPanelProps) {
   const { isTurkish } = useLanguage()
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
@@ -235,14 +233,6 @@ export function LiveMonitorPanel({
             disabled={!canAnalyze}
           >
             {isTurkish ? 'Simdi analiz et' : 'Analyze now'}
-          </Button>
-
-          <Button
-            variant="ghost"
-            iconLeft={<UserRound className="size-4" />}
-            onClick={onOpenFaceRegistration}
-          >
-            {isTurkish ? 'Yüz kaydı' : 'Face registration'}
           </Button>
         </div>
 
