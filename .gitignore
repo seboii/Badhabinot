@@ -24,10 +24,18 @@ Thumbs.db
 *.bak
 
 # =========================
-# Dokumanlar / raporlar — gite YUKLENMEZ (tez, durum raporlari vb.)
+# Dokuman RAPORLARI — gite YUKLENMEZ (tez, durum, onam, etiketleme vb.)
+# Mimari/api/decisions/setup/workflows dokumanlari git'te KALIR.
 # =========================
-docs/
-**/docs/
+docs/TEZ-ISKELET.md
+docs/LITERATUR-TARAMASI.md
+docs/PROJE-DURUM-RAPORU.md
+docs/GONULLU-ONAM-FORMU.md
+docs/ETIKETLEME-PROTOKOLU.md
+docs/BITIRME-YOL-HARITASI.md
+docs/CUSTOM-PERSONA-ORNEKLERI.md
+docs/MIMARI-DIYAGRAM.md
+docs/BACKEND-DETAYLI-RAPOR.md
 
 # =========================
 # Gizli/yerel ortam dosyalari
