@@ -1,0 +1,16 @@
+# Caddy — üretim TLS sonlandırma + reverse proxy.
+# PUBLIC_DOMAIN için Let's Encrypt sertifikasını OTOMATİK alır/yeniler.
+# Tüm trafiği frontend-app'e iletir; frontend-app kendi nginx'i ile SPA'yı sunar
+# ve /api, /actuator, SSE akışını backend'e proxy'ler (aynı-köken → CORS yok).
+{
+	email {$TLS_EMAIL}
+}
+
+{$PUBLIC_DOMAIN} {
+	encode zstd gzip
+
+	# flush_interval -1 → yanıtları anında akıt (SSE / sohbet token akışı için).
+	reverse_proxy frontend-app:80 {
+		flush_interval -1
+	}
+}
