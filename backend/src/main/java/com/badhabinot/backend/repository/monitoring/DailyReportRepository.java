@@ -15,6 +15,11 @@ public interface DailyReportRepository extends JpaRepository<DailyReport, UUID> 
 
     Optional<DailyReport> findFirstByUserIdAndReportDateBeforeOrderByReportDateDesc(UUID userId, LocalDate reportDate);
 
+    // ── Admin paneli ─────────────────────────────────────────────────────
+    List<DailyReport> findByUserIdOrderByReportDateDesc(UUID userId, org.springframework.data.domain.Pageable pageable);
+
+    long countByUserId(UUID userId);
+
     void deleteByUserId(UUID userId);
 }
 

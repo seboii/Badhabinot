@@ -39,6 +39,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.cache.Cache;
 import org.springframework.cache.CacheManager;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.transaction.PlatformTransactionManager;
 
 @ExtendWith(MockitoExtension.class)
 class AccountDeletionServiceTest {
@@ -60,6 +61,10 @@ class AccountDeletionServiceTest {
     @Mock private VisionServiceClient visionServiceClient;
     @Mock private CacheManager cacheManager;
     @Mock private Cache mockCache;
+    // Çapraz-DB silme için transaction yöneticileri (TransactionTemplate sarmalar).
+    @Mock private PlatformTransactionManager authTxManager;
+    @Mock private PlatformTransactionManager userTxManager;
+    @Mock private PlatformTransactionManager monitoringTxManager;
 
     @InjectMocks
     private AccountDeletionServiceImpl AccountDeletionServiceImpl;
@@ -72,6 +77,11 @@ class AccountDeletionServiceTest {
         when(authUserRepository.findById(userId)).thenReturn(Optional.of(user));
         when(passwordEncoder.matches("correct-pw", "hashed-pw")).thenReturn(true);
         when(cacheManager.getCache(any())).thenReturn(mockCache);
+        // Silmeden önce varlık kontrolü yapılır — satırlar mevcut varsayılır.
+        when(userConsentRepository.existsById(userId)).thenReturn(true);
+        when(userSettingsRepository.existsById(userId)).thenReturn(true);
+        when(userProfileRepository.existsById(userId)).thenReturn(true);
+        when(authUserRepository.existsById(userId)).thenReturn(true);
 
         AccountDeletionServiceImpl.deleteAccount(userId, "correct-pw");
 
@@ -136,6 +146,7 @@ class AccountDeletionServiceTest {
         when(authUserRepository.findById(userId)).thenReturn(Optional.of(user));
         when(passwordEncoder.matches("correct-pw", "hashed-pw")).thenReturn(true);
         when(cacheManager.getCache(any())).thenReturn(mockCache);
+        when(authUserRepository.existsById(userId)).thenReturn(true);
         doThrow(new DownstreamServiceException("vision_service_unavailable", "Vision service down"))
                 .when(visionServiceClient).deleteFaceProfile(userId.toString());
 

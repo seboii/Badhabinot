@@ -1,0 +1,24 @@
+package com.badhabinot.backend.service.admin;
+
+import com.badhabinot.backend.dto.admin.AdminReportSummary;
+import com.badhabinot.backend.dto.admin.AdminStats;
+import com.badhabinot.backend.dto.admin.AdminUserDetail;
+import com.badhabinot.backend.dto.admin.AdminUserListResponse;
+import java.util.List;
+import java.util.UUID;
+
+/** Admin paneli işlemleri — tüm kullanıcıların verilerini görüntüleme ve yönetme. */
+public interface IAdminService {
+
+    AdminUserListResponse listUsers(String search, int page, int size);
+
+    AdminUserDetail getUserDetail(UUID userId);
+
+    List<AdminReportSummary> getUserReports(UUID userId, int limit);
+
+    void deleteUser(UUID userId);
+
+    void resetUserData(UUID userId);
+
+    AdminStats getStats();
+}

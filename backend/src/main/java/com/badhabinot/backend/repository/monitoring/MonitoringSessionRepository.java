@@ -18,6 +18,8 @@ public interface MonitoringSessionRepository extends JpaRepository<MonitoringSes
 
     List<MonitoringSession> findByUserIdOrderByStartedAtDesc(UUID userId, Pageable pageable);
 
+    long countByUserId(UUID userId);
+
     void deleteByUserId(UUID userId);
 }
 

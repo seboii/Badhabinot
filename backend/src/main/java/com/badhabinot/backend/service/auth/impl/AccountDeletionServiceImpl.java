@@ -21,9 +21,12 @@ import java.util.List;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.cache.CacheManager;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 @Service
 public class AccountDeletionServiceImpl implements IAccountDeletionService {
@@ -51,6 +54,12 @@ public class AccountDeletionServiceImpl implements IAccountDeletionService {
     private final VisionServiceClient visionServiceClient;
     private final CacheManager cacheManager;
 
+    // Çapraz veritabanı silme atomik değildir; her veritabanının silmeleri kendi
+    // transaction'ında çalıştırılmalı (türetilmiş deleteByUserId aktif tx ister).
+    private final TransactionTemplate authTx;
+    private final TransactionTemplate userTx;
+    private final TransactionTemplate monitoringTx;
+
     public AccountDeletionServiceImpl(
             AuthUserRepository authUserRepository,
             RefreshTokenRepository refreshTokenRepository,
@@ -67,8 +76,14 @@ public class AccountDeletionServiceImpl implements IAccountDeletionService {
             MonitoringSessionRepository monitoringSessionRepository,
             ReminderEventRepository reminderEventRepository,
             VisionServiceClient visionServiceClient,
-            CacheManager cacheManager
+            CacheManager cacheManager,
+            @Qualifier("authTransactionManager") PlatformTransactionManager authTxManager,
+            @Qualifier("userTransactionManager") PlatformTransactionManager userTxManager,
+            @Qualifier("monitoringTransactionManager") PlatformTransactionManager monitoringTxManager
     ) {
+        this.authTx = new TransactionTemplate(authTxManager);
+        this.userTx = new TransactionTemplate(userTxManager);
+        this.monitoringTx = new TransactionTemplate(monitoringTxManager);
         this.authUserRepository = authUserRepository;
         this.refreshTokenRepository = refreshTokenRepository;
         this.passwordEncoder = passwordEncoder;
@@ -96,24 +111,60 @@ public class AccountDeletionServiceImpl implements IAccountDeletionService {
             throw new IllegalArgumentException("Şifre hatalı");
         }
 
-        // Delete monitoring data
-        activityFeedRepository.deleteByUserId(userId);
-        behaviorEventRepository.deleteByUserId(userId);
-        chatMessageRepository.deleteByUserId(userId);
-        dailyReportRepository.deleteByUserId(userId);
-        hydrationLogRepository.deleteByUserId(userId);
-        reminderEventRepository.deleteByUserId(userId);
-        analysisJobRepository.deleteByUserId(userId);
-        monitoringSessionRepository.deleteByUserId(userId);
+        purgeAccount(userId);
+    }
 
-        // Delete user data
-        userConsentRepository.deleteById(userId);
-        userSettingsRepository.deleteById(userId);
-        userProfileRepository.deleteById(userId);
+    @Override
+    public void deleteAccountAsAdmin(UUID userId) {
+        authUserRepository.findById(userId)
+                .orElseThrow(() -> new AuthenticationFailedException("User not found"));
+        purgeAccount(userId);
+        log.info("Admin deleted account userId={}", userId);
+    }
 
-        // Delete auth data
-        refreshTokenRepository.deleteByUserId(userId);
-        authUserRepository.deleteById(userId);
+    @Override
+    public void resetUserData(UUID userId) {
+        authUserRepository.findById(userId)
+                .orElseThrow(() -> new AuthenticationFailedException("User not found"));
+
+        // Sadece izleme + sohbet verisini sil; hesap, profil, ayarlar, onaylar kalır.
+        deleteMonitoringData(userId);
+
+        // Yüz profilini de sıfırla (non-blocking)
+        try {
+            visionServiceClient.deleteFaceProfile(userId.toString());
+        } catch (Exception ex) {
+            log.warn("Face profile reset failed for userId={} — continuing: {}", userId, ex.getMessage());
+        }
+
+        evictUserCaches(userId);
+        log.info("Admin reset data for userId={}", userId);
+    }
+
+    /** Tüm DB'lerde kullanıcıya ait her şeyi siler (kaskad). Şifre doğrulaması ÇAĞIRANIN sorumluluğu. */
+    private void purgeAccount(UUID userId) {
+        deleteMonitoringData(userId);
+
+        // user-service DB — satır yoksa deleteById hata fırlatır; varlık kontrolüyle koru.
+        userTx.executeWithoutResult(status -> {
+            if (userConsentRepository.existsById(userId)) {
+                userConsentRepository.deleteById(userId);
+            }
+            if (userSettingsRepository.existsById(userId)) {
+                userSettingsRepository.deleteById(userId);
+            }
+            if (userProfileRepository.existsById(userId)) {
+                userProfileRepository.deleteById(userId);
+            }
+        });
+
+        // auth-service DB
+        authTx.executeWithoutResult(status -> {
+            refreshTokenRepository.deleteByUserId(userId);
+            if (authUserRepository.existsById(userId)) {
+                authUserRepository.deleteById(userId);
+            }
+        });
 
         // Delete face profile from vision service (non-blocking — deletion must not fail the account removal)
         try {
@@ -122,7 +173,24 @@ public class AccountDeletionServiceImpl implements IAccountDeletionService {
             log.warn("Face profile deletion failed for userId={} — continuing account deletion: {}", userId, ex.getMessage());
         }
 
-        // Evict all user-scoped cache entries
+        evictUserCaches(userId);
+    }
+
+    private void deleteMonitoringData(UUID userId) {
+        // monitoring-service DB — türetilmiş deleteByUserId sorguları aktif tx ister.
+        monitoringTx.executeWithoutResult(status -> {
+            activityFeedRepository.deleteByUserId(userId);
+            behaviorEventRepository.deleteByUserId(userId);
+            chatMessageRepository.deleteByUserId(userId);
+            dailyReportRepository.deleteByUserId(userId);
+            hydrationLogRepository.deleteByUserId(userId);
+            reminderEventRepository.deleteByUserId(userId);
+            analysisJobRepository.deleteByUserId(userId);
+            monitoringSessionRepository.deleteByUserId(userId);
+        });
+    }
+
+    private void evictUserCaches(UUID userId) {
         String userKey = userId.toString();
         for (String cacheName : USER_CACHE_NAMES) {
             var cache = cacheManager.getCache(cacheName);

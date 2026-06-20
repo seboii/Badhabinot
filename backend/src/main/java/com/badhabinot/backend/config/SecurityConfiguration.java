@@ -72,6 +72,7 @@ public class SecurityConfiguration {
                                 "/api/v1/auth/password-reset-confirm"
                         ).permitAll()
                         .requestMatchers("/internal/**").hasRole("SERVICE")
+                        .requestMatchers("/api/v1/admin/**").hasRole("ADMIN")
                         .anyRequest().authenticated())
                 .oauth2ResourceServer(oauth2 -> oauth2
                         .jwt(jwt -> jwt.decoder(jwtDecoder).jwtAuthenticationConverter(authenticationConverter)));

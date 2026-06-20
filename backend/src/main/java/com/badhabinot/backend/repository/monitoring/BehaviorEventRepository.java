@@ -13,6 +13,8 @@ public interface BehaviorEventRepository extends JpaRepository<BehaviorEvent, UU
 
     List<BehaviorEvent> findByUserIdOrderByOccurredAtDesc(UUID userId, Pageable pageable);
 
+    long countByUserId(UUID userId);
+
     void deleteByUserId(UUID userId);
 }
 

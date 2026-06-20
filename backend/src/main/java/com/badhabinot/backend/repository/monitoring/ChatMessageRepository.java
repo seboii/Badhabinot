@@ -19,6 +19,8 @@ public interface ChatMessageRepository extends JpaRepository<ChatMessage, UUID> 
 
     boolean existsByUserIdAndConversationId(UUID userId, UUID conversationId);
 
+    long countByUserId(UUID userId);
+
     void deleteByUserId(UUID userId);
 }
 

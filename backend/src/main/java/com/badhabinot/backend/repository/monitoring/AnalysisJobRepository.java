@@ -15,6 +15,8 @@ public interface AnalysisJobRepository extends JpaRepository<AnalysisJob, UUID> 
 
     List<AnalysisJob> findByUserIdOrderByCreatedAtDesc(UUID userId, Pageable pageable);
 
+    long countByUserId(UUID userId);
+
     void deleteByUserId(UUID userId);
 }
 
