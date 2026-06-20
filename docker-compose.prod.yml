@@ -14,6 +14,16 @@
 # ─────────────────────────────────────────────────────────
 
 services:
+  # ── 30GB sunucu: 7B base'i ATLA, yalnizca fine-tune coach modelini kur ──────
+  # ollama-pull'u no-op yap (4.7GB qwen2.5:7b cekilmez).
+  ollama-pull:
+    entrypoint: ["sh", "-c", "echo 'coach-only: base model pull atlandi'"]
+    command: []
+  # ollama-build coach-only modunda calissin (badhabinot:latest 7B'den uretilmez).
+  ollama-build:
+    environment:
+      COACH_ONLY: "true"
+
   caddy:
     image: caddy:2-alpine
     restart: unless-stopped

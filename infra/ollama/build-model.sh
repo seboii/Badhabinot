@@ -14,15 +14,21 @@ until ollama list > /dev/null 2>&1; do
   sleep 2
 done
 
-echo "[build-model] Checking if base model '${BASE_MODEL}' is available..."
-until ollama list | grep -q "${BASE_MODEL}"; do
-  echo "[build-model] Base model not ready yet, waiting..."
-  sleep 5
-done
+# COACH_ONLY=true (üretim/30GB sunucu): 7B base ve badhabinot:latest atlanir,
+# yalnizca fine-tune coach modeli kurulur → ~4.7GB disk + RAM tasarrufu.
+if [ "${COACH_ONLY:-false}" = "true" ]; then
+  echo "[build-model] COACH_ONLY=true → 7B base ve '${MODEL_NAME}' atlandi (yalniz fine-tune coach)."
+else
+  echo "[build-model] Checking if base model '${BASE_MODEL}' is available..."
+  until ollama list | grep -q "${BASE_MODEL}"; do
+    echo "[build-model] Base model not ready yet, waiting..."
+    sleep 5
+  done
 
-echo "[build-model] Base model ready. Building '${MODEL_NAME}'..."
-ollama create "${MODEL_NAME}" -f "${MODELFILE_PATH}"
-echo "[build-model] Model '${MODEL_NAME}' built successfully."
+  echo "[build-model] Base model ready. Building '${MODEL_NAME}'..."
+  ollama create "${MODEL_NAME}" -f "${MODELFILE_PATH}"
+  echo "[build-model] Model '${MODEL_NAME}' built successfully."
+fi
 
 # ── Fine-tune edilmiş koç modeli (varsa) ────────────────────────────────────
 # GGUF, /models'a bağlanan finetune/outputs'tan gelir. Dosya yoksa atlanır
