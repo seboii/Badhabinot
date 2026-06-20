@@ -75,7 +75,8 @@ class VisionFaceAuth:
         if not _DEEPFACE_AVAILABLE:
             return False
 
-        embedding = self._extract_embedding(image)
+        # Kayıtta gerçek yüz şart — yüzsüz kareler profili kirletmesin.
+        embedding = self._extract_embedding(image, enforce=True)
         if embedding is None:
             return False
 
@@ -197,21 +198,28 @@ class VisionFaceAuth:
             return False, 0.0, "Face profile incomplete — not enough enrolled frames"
 
         try:
+            # GÜVENLİK: Girişte enforce_detection=True ZORUNLU. False olursa DeepFace
+            # yüz bulamasa bile tüm kareyi "yüz" sayıp embedding üretir → kamerada
+            # yüz olmasa dahi giriş yapılabilirdi. True iken yüz yoksa hata fırlatır.
             results = DeepFace.represent(
                 img_path=image,
                 model_name=_MODEL_NAME,
-                enforce_detection=False,
+                enforce_detection=True,
                 detector_backend="opencv",
             )
         except Exception:
             logger.debug("DeepFace.represent failed in verify_face_for_login", exc_info=True)
-            return False, 0.0, "Face detection failed"
+            return False, 0.0, "Yüz algılanamadı — kameraya net bakın"
 
         if not results:
-            return False, 0.0, "No face detected in image"
+            return False, 0.0, "Yüz algılanamadı"
+
+        # Yüz tespit edilse de güven düşükse / kutu tüm kareyse reddet (no-face fallback'e karşı).
+        if not self._is_real_face(results[0], image.shape):
+            return False, 0.0, "Yüz algılanamadı"
 
         if len(results) > 1:
-            return False, 0.0, "Multiple faces detected — please ensure only your face is visible"
+            return False, 0.0, "Birden fazla yüz algılandı — yalnızca kendi yüzünüz görünsün"
 
         vec = np.array(results[0]["embedding"], dtype=np.float32)
         norm = float(np.linalg.norm(vec))
@@ -324,18 +332,26 @@ class VisionFaceAuth:
     # Private helpers                                                      #
     # ------------------------------------------------------------------ #
 
-    def _extract_embedding(self, image: np.ndarray) -> np.ndarray | None:
+    def _extract_embedding(self, image: np.ndarray, enforce: bool = False) -> np.ndarray | None:
+        """Yüz embedding'i çıkar.
+
+        *enforce*: True ise (kayıt/giriş gibi güvenlik-kritik akışlar) gerçek bir
+        yüz yoksa None döner — tüm kareyi yanlışlıkla "yüz" saymaz. İzleme akışı
+        (identify_owner) hoşgörülü kalsın diye varsayılan False.
+        """
         try:
             result = DeepFace.represent(
                 img_path=image,
                 model_name=_MODEL_NAME,
-                enforce_detection=False,   # don't throw if face not perfectly detected
+                enforce_detection=enforce,
                 detector_backend="opencv",  # fast
             )
             if not result:
                 return None
             face = self._largest_face(result)
             if face is None:
+                return None
+            if enforce and not self._is_real_face(face, image.shape):
                 return None
             vec = np.array(face["embedding"], dtype=np.float32)
             norm = float(np.linalg.norm(vec))
@@ -345,6 +361,38 @@ class VisionFaceAuth:
         except Exception:
             logger.debug("DeepFace embedding extraction failed", exc_info=True)
             return None
+
+    @staticmethod
+    def _is_real_face(face_data: dict, image_shape: tuple) -> bool:
+        """Sonucun gerçek bir tespit edilmiş yüz olup olmadığını doğrula.
+
+        DeepFace, yüz bulamadığında (enforce_detection kapalı fallback'i) tüm kareyi
+        kaplayan bir ``facial_area`` ve ``face_confidence=0`` döndürebilir. Bunları
+        reddederek 'yüzsüz giriş' açığını kapatırız.
+        """
+        area = face_data.get("facial_area") or {}
+        try:
+            w = float(area.get("w", 0))
+            h = float(area.get("h", 0))
+        except (TypeError, ValueError):
+            return False
+        if w <= 0 or h <= 0:
+            return False
+
+        img_h = float(image_shape[0]) if len(image_shape) > 0 else 0.0
+        img_w = float(image_shape[1]) if len(image_shape) > 1 else 0.0
+        # Kutu neredeyse tüm kareyse → no-face fallback → reddet.
+        if img_w > 0 and img_h > 0 and (w * h) >= 0.92 * img_w * img_h:
+            return False
+
+        conf = face_data.get("face_confidence")
+        if conf is not None:
+            try:
+                if float(conf) <= 0.0:
+                    return False
+            except (TypeError, ValueError):
+                pass
+        return True
 
     @staticmethod
     def _largest_face(results: list[dict]) -> dict | None:
