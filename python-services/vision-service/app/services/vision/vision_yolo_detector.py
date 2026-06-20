@@ -20,6 +20,8 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
+from app.core.config import settings
+
 logger = logging.getLogger(__name__)
 
 try:
@@ -111,6 +113,7 @@ class VisionYoloDetector:
             verbose=False,
             conf=_CONFIDENCE_THRESHOLD,
             classes=_CLASS_IDS,
+            imgsz=settings.vision_detect_imgsz,
         )
 
         detections: list[YoloDetection] = []
@@ -164,8 +167,9 @@ class VisionYoloDetector:
 
     def _get_model(self) -> object:
         if self._model is None:
-            logger.info("Loading YOLOv8n model (%s)…", _DETECT_MODEL_NAME)
-            self._model = YOLO(_DETECT_MODEL_NAME)
+            model_name = settings.vision_detect_model
+            logger.info("Loading YOLOv8n model (%s)…", model_name)
+            self._model = YOLO(model_name)
         return self._model
 
     @staticmethod

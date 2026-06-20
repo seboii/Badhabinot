@@ -1,22 +1,33 @@
-"""Module E — Posture Analysis via YOLOv8-pose.
+"""Module E — Postür Analizi (YOLOv8-pose).
 
-Detects upper-body keypoints (COCO pose, indices 0-12: nose through elbows)
-and computes:
-- Spine tilt angle from vertical
-- Shoulder asymmetry
-- Posture score 0-100
-- Slouching flag (tilt > 20°)
+Üst gövde keypoint'lerini (COCO pose: burun, gözler, kulaklar, omuzlar, dirsekler)
+çıkarır ve çok-sinyalli postür değerlendirmesi için ham geometriyi hesaplar:
+- Omuz eğikliği (asimetri)
+- Öne eğik baş / kamburluk (baş yüksekliği / omuz genişliği)
+- Yana yatma, baş eğikliği (roll), başı aşağı eğme
+- Ekrana yakınlık
 
-Lazy-loads YOLOv8n-pose on first call.
+Puanlama mantığı ``vision_posture`` modülünde toplanmıştır; bu sınıf yalnızca
+keypoint'leri çıkarır ve durağan (oturum-bağımsız) bir taban skoru üretir.
+Nihai oturum-farkında karar ``PostureEvaluator`` tarafından verilir.
+
+Modeli ilk çağrıda lazy yükler; ``.onnx`` model yolu verilirse ONNX Runtime
+üzerinden çalışır (CPU'da PyTorch'tan hızlı olabilir).
 """
 
 from __future__ import annotations
 
 import logging
-import math
 from dataclasses import dataclass, field
 
 import numpy as np
+
+from app.core.config import settings
+from app.services.vision.vision_posture import (
+    PostureMetrics,
+    compute_metrics_from_pixels,
+    score_metrics,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -27,10 +38,12 @@ except ImportError:  # pragma: no cover
     _ULTRALYTICS_AVAILABLE = False
     logger.warning("ultralytics not installed — pose estimation disabled")
 
-# COCO keypoint indices relevant to upper body
+# COCO keypoint indices (geriye dönük referans için korunur)
 _KP_NOSE = 0
 _KP_LEFT_EYE = 1
 _KP_RIGHT_EYE = 2
+_KP_LEFT_EAR = 3
+_KP_RIGHT_EAR = 4
 _KP_LEFT_SHOULDER = 5
 _KP_RIGHT_SHOULDER = 6
 _KP_LEFT_ELBOW = 7
@@ -38,39 +51,47 @@ _KP_RIGHT_ELBOW = 8
 _KP_LEFT_WRIST = 9
 _KP_RIGHT_WRIST = 10
 
-_SLOUCH_ANGLE_DEG = 20.0        # spine tilt above this = slouching
-_SHOULDER_ASYM_THRESHOLD = 0.12  # |left_y - right_y| / frame_height
+_KP_CONFIDENCE_FLOOR = 0.3      # bu güvenin altındaki keypoint "yok" sayılır
+_CONFIDENCE_THRESHOLD = 0.4     # YOLO kişi tespiti güven eşiği
 
-_POSE_MODEL_NAME = "yolov8n-pose.pt"
-_CONFIDENCE_THRESHOLD = 0.4
+_torch_threads_set = False
 
 
 @dataclass
 class PoseKeypoint:
-    x: float       # normalized [0, 1]
-    y: float       # normalized [0, 1]
-    confidence: float  # detection confidence
+    x: float            # normalized [0, 1]
+    y: float            # normalized [0, 1]
+    confidence: float
 
 
 @dataclass
 class PoseResult:
-    """Posture analysis outputs for one frame."""
+    """Bir kareye ait postür analizi çıktısı."""
 
-    # COCO keypoints 0-12, None where not detected
+    # COCO keypoints 0-16, tespit edilemeyende None
     keypoints: list[PoseKeypoint | None] = field(default_factory=list)
 
-    # Derived metrics
-    spine_tilt_angle: float = 0.0       # degrees from vertical (positive = forward lean)
-    shoulder_tilt_angle: float = 0.0    # degrees of shoulder line from horizontal
-    posture_score: int = 100            # 0–100 (100 = perfect)
+    # ── Geriye dönük uyumlu alanlar (mevcut ML eğitim/şema tüketicileri) ──
+    spine_tilt_angle: float = 0.0       # boyun vektörünün dikeyden sapması (derece)
+    shoulder_tilt_angle: float = 0.0    # omuz hattının yataydan sapması (derece)
+    posture_score: int = 100            # 0-100 taban skoru (oturum-bağımsız)
     is_slouching: bool = False
 
-    # Raw bbox for the detected person
-    person_bbox: tuple[float, float, float, float] | None = None  # (x1,y1,x2,y2) normalized
+    person_bbox: tuple[float, float, float, float] | None = None  # normalized
+
+    # ── Yeni alanlar (çok-sinyalli postür) ──────────────────────────────
+    posture_category: str = "unknown"
+    forward_head_ratio: float = 0.0
+    lateral_offset: float = 0.0
+    head_roll: float = 0.0
+    head_down_ratio: float = 0.0
+    proximity_ratio: float = 0.0
+    # Ham metrikler — PostureEvaluator tarafından oturum kararı için kullanılır.
+    metrics: PostureMetrics | None = None
 
 
 class VisionPoseEstimator:
-    """YOLOv8-pose wrapper for upper-body posture analysis."""
+    """YOLOv8-pose sarmalayıcısı — üst gövde postür analizi."""
 
     def __init__(self) -> None:
         self._model: object | None = None
@@ -84,14 +105,13 @@ class VisionPoseEstimator:
         image: np.ndarray,
         owner_bbox: tuple[int, int, int, int] | None = None,
     ) -> PoseResult | None:
-        """Run pose estimation on *image* (BGR, uint8).
+        """*image* (BGR, uint8) üzerinde pose tahmini çalıştırır.
 
-        When *owner_bbox* (the owner's face bbox in pixels) is given and several
-        people are detected, the person whose body box contains the owner's face
-        centre is analysed instead of YOLO's most-confident detection — so a
-        stranger's posture is never attributed to the owner.
+        *owner_bbox* (sahibin yüz bbox'ı, piksel) verildiğinde ve birden fazla
+        kişi varsa, sahibin yüz merkezini içeren gövde kutusuna sahip kişi analiz
+        edilir — böylece bir yabancının postürü sahibe atfedilmez.
 
-        Returns None if ultralytics is unavailable or no person detected.
+        ultralytics yoksa veya kişi yoksa None döner.
         """
         if not _ULTRALYTICS_AVAILABLE:
             return None
@@ -99,7 +119,12 @@ class VisionPoseEstimator:
         model = self._get_model()
         h, w = image.shape[:2]
 
-        results = model(image, verbose=False, conf=_CONFIDENCE_THRESHOLD)
+        results = model(
+            image,
+            verbose=False,
+            conf=_CONFIDENCE_THRESHOLD,
+            imgsz=settings.vision_pose_imgsz,
+        )
         if not results or not results[0].keypoints:
             return None
 
@@ -109,9 +134,8 @@ class VisionPoseEstimator:
         if kps is None or len(kps.xy) == 0:
             return None
 
-        # Select which detected person to analyse. Default: most confident
-        # (YOLO index 0). With an owner_bbox + multiple people: the person whose
-        # body box contains the owner's face centre.
+        # Hangi kişinin analiz edileceğini seç (varsayılan en güvenli; owner_bbox
+        # + çoklu kişi varsa sahibin yüzünü içeren kutu).
         person_idx = 0
         if (
             owner_bbox is not None
@@ -127,44 +151,55 @@ class VisionPoseEstimator:
         if person_idx >= len(kps.xy):
             person_idx = 0
 
-        kp_xy = kps.xy[person_idx].cpu().numpy()   # (17, 2) pixel coords
+        kp_xy = kps.xy[person_idx].cpu().numpy()   # (17, 2) piksel koordinatları
         kp_conf = kps.conf[person_idx].cpu().numpy() if kps.conf is not None else np.ones(17)
 
-        # Normalize to [0, 1]
+        # Hem normalize keypoint listesini (yanıt/overlay) hem de geometri için
+        # piksel-uzayı nokta listesini (None=güvensiz) tek geçişte oluştur.
         keypoints: list[PoseKeypoint | None] = []
-        for i in range(min(17, len(kp_xy))):
-            conf = float(kp_conf[i]) if i < len(kp_conf) else 0.0
-            if conf < 0.3:
-                keypoints.append(None)
+        pixel_points: list[tuple[float, float] | None] = []
+        for i in range(17):
+            if i < len(kp_xy):
+                conf = float(kp_conf[i]) if i < len(kp_conf) else 0.0
             else:
+                conf = 0.0
+            if conf < _KP_CONFIDENCE_FLOOR or i >= len(kp_xy):
+                keypoints.append(None)
+                pixel_points.append(None)
+            else:
+                px, py = float(kp_xy[i][0]), float(kp_xy[i][1])
                 keypoints.append(PoseKeypoint(
-                    x=round(float(kp_xy[i][0]) / w, 4),
-                    y=round(float(kp_xy[i][1]) / h, 4),
-                    confidence=round(conf, 3),
+                    x=round(px / w, 4), y=round(py / h, 4), confidence=round(conf, 3),
                 ))
+                pixel_points.append((px, py))
 
-        # Pad to 17 if fewer returned
-        while len(keypoints) < 17:
-            keypoints.append(None)
+        # ── Çok-sinyalli postür geometrisi (piksel uzayında) ──────────────
+        metrics = compute_metrics_from_pixels(pixel_points, w, h)
+        base_score, category, _components = score_metrics(metrics)
 
-        spine_tilt, shoulder_tilt = self._compute_angles(keypoints)
-        posture_score = self._posture_score(spine_tilt, shoulder_tilt)
-        is_slouching = spine_tilt > _SLOUCH_ANGLE_DEG
-
-        # Person bounding box (normalized) — same person selected above
+        # Kişi sınırlayıcı kutusu (aynı seçilen kişi)
         person_bbox = None
         if boxes is not None and len(boxes.xyxyn) > person_idx:
             b = boxes.xyxyn[person_idx].cpu().numpy()
             person_bbox = (round(float(b[0]), 4), round(float(b[1]), 4),
                            round(float(b[2]), 4), round(float(b[3]), 4))
 
+        is_slouching = metrics.reliable and base_score < settings.posture_poor_score
+
         return PoseResult(
             keypoints=keypoints,
-            spine_tilt_angle=round(spine_tilt, 2),
-            shoulder_tilt_angle=round(shoulder_tilt, 2),
-            posture_score=posture_score,
+            spine_tilt_angle=round(metrics.neck_inclination_deg, 2),
+            shoulder_tilt_angle=round(metrics.shoulder_tilt_deg, 2),
+            posture_score=base_score,
             is_slouching=is_slouching,
             person_bbox=person_bbox,
+            posture_category=category,
+            forward_head_ratio=metrics.forward_head_ratio,
+            lateral_offset=metrics.lateral_offset,
+            head_roll=metrics.head_roll_deg,
+            head_down_ratio=metrics.head_down_ratio,
+            proximity_ratio=metrics.proximity_ratio,
+            metrics=metrics,
         )
 
     # ------------------------------------------------------------------ #
@@ -173,20 +208,36 @@ class VisionPoseEstimator:
 
     def _get_model(self) -> object:
         if self._model is None:
-            logger.info("Loading YOLOv8-pose model (%s)…", _POSE_MODEL_NAME)
-            self._model = YOLO(_POSE_MODEL_NAME)
+            self._apply_torch_threads()
+            model_name = settings.vision_pose_model
+            logger.info("Loading YOLOv8-pose model (%s)…", model_name)
+            self._model = YOLO(model_name)
         return self._model
+
+    @staticmethod
+    def _apply_torch_threads() -> None:
+        """CPU thread tavanını uygula (eş zamanlı isteklerde oversubscription'ı önler)."""
+        global _torch_threads_set
+        if _torch_threads_set or settings.vision_torch_threads <= 0:
+            return
+        try:
+            import torch  # type: ignore[import-untyped]
+            torch.set_num_threads(settings.vision_torch_threads)
+            _torch_threads_set = True
+            logger.info("torch CPU threads capped at %d", settings.vision_torch_threads)
+        except Exception:  # pragma: no cover
+            logger.debug("could not set torch threads", exc_info=True)
 
     @staticmethod
     def _select_person_index(
         boxes_xyxyn: "np.ndarray",
         owner_center: tuple[float, float],
     ) -> int:
-        """Pick the person box that contains the owner's face centre.
+        """Sahibin yüz merkezini içeren kişi kutusunu seç.
 
-        If several boxes contain it, choose the smallest (most specific). If none
-        contains it, choose the box whose centre is nearest to the owner centre.
-        ``boxes_xyxyn`` rows are normalized (x1, y1, x2, y2).
+        Birden fazla kutu içeriyorsa en küçüğü (en spesifik) seçilir. Hiçbiri
+        içermiyorsa merkezi sahibe en yakın kutu seçilir. ``boxes_xyxyn``
+        satırları normalize (x1, y1, x2, y2).
         """
         ocx, ocy = owner_center
         containing: list[tuple[int, float]] = []
@@ -205,41 +256,3 @@ class VisionPoseEstimator:
             if d < best_d:
                 best_d, best_i = d, i
         return best_i
-
-    @staticmethod
-    def _compute_angles(kps: list[PoseKeypoint | None]) -> tuple[float, float]:
-        """Return (spine_tilt_deg, shoulder_tilt_deg)."""
-        nose = kps[_KP_NOSE]
-        ls = kps[_KP_LEFT_SHOULDER]
-        rs = kps[_KP_RIGHT_SHOULDER]
-
-        shoulder_tilt = 0.0
-        if ls is not None and rs is not None:
-            dx = rs.x - ls.x
-            dy = rs.y - ls.y
-            shoulder_tilt = abs(math.degrees(math.atan2(dy, dx)))
-            if shoulder_tilt > 90:
-                shoulder_tilt = 180.0 - shoulder_tilt
-
-        spine_tilt = 0.0
-        if nose is not None and ls is not None and rs is not None:
-            # Shoulder midpoint → nose = "spine" direction
-            mid_x = (ls.x + rs.x) / 2.0
-            mid_y = (ls.y + rs.y) / 2.0
-            # Vector from shoulder mid to nose (positive y is down in image)
-            dx = nose.x - mid_x
-            dy = mid_y - nose.y  # flip y so up = positive
-            # Angle from vertical (0° = nose directly above shoulders)
-            spine_tilt = abs(math.degrees(math.atan2(abs(dx), max(dy, 0.01))))
-
-        return spine_tilt, shoulder_tilt
-
-    @staticmethod
-    def _posture_score(spine_tilt: float, shoulder_tilt: float) -> int:
-        """Map tilt angles to a 0-100 score (100 = perfect)."""
-        # Penalise spine tilt: 0° = 0 penalty, 45° = 60 penalty
-        spine_penalty = min(60, spine_tilt * (60.0 / 45.0))
-        # Penalise shoulder asymmetry: 0° = 0, 15° = 40 penalty
-        shoulder_penalty = min(40, shoulder_tilt * (40.0 / 15.0))
-        score = 100 - spine_penalty - shoulder_penalty
-        return max(0, int(round(score)))

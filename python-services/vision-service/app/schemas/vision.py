@@ -18,6 +18,9 @@ class VisionAnalysisRequest(BaseModel):
     captured_at: datetime
     image_base64: str
     image_content_type: str
+    # Kullanıcının "Hassasiyet" ayarı (LOW/MEDIUM/HIGH) — postür eşiğini etkiler.
+    # Geriye dönük uyumlu: gönderilmezse varsayılan (MEDIUM) kullanılır.
+    sensitivity: str | None = None
 
 
 class DetectionEvidence(BaseModel):
@@ -155,6 +158,17 @@ class PoseData(BaseModel):
     is_slouching: bool = False
     # Normalized person bounding box (x1, y1, x2, y2)
     person_bbox: list[float] | None = None
+
+    # ── Çok-sinyalli postür (yeni; tümü opsiyonel, geriye dönük uyumlu) ──
+    # Baskın bozukluk türü + Türkçe, eyleme dönük öneri (frontend/coaching için).
+    posture_category: str = "unknown"
+    posture_reason: str = ""
+    # Ham metrikler (ölçek-bağımsız, omuz genişliğine göre normalize):
+    forward_head_ratio: float = 0.0   # baş yüksekliği / omuz genişliği (düşük=kambur)
+    lateral_offset: float = 0.0       # yana yatma (işaretli)
+    head_roll: float = 0.0            # baş eğikliği (derece)
+    head_down_ratio: float = 0.0      # başı aşağı eğme
+    proximity_ratio: float = 0.0      # ekrana yakınlık (omuz gen. / kare gen.)
 
 
 # ══════════════════════════════════════════════════════════════════

@@ -35,12 +35,16 @@ from app.services.vision.session_state import (
 from app.services.vision.vision_face_auth import OwnerFaceResult, VisionFaceAuth
 from app.services.vision.vision_face_mesh import GazeResult, VisionFaceMesh
 from app.services.vision.vision_hand_tracker import VisionHandTracker
+from app.services.vision.vision_optimizer import (
+    DetectorCache,
+    FrameScheduler,
+    downscale_for_inference,
+)
 from app.services.vision.vision_overlay import OverlayData, frame_to_base64, render_annotated_frame
 from app.services.vision.vision_pose_estimator import VisionPoseEstimator
+from app.services.vision.vision_posture import PostureEvaluator, poor_score_for_sensitivity
 from app.services.vision.vision_yolo_detector import VisionYoloDetector
 
-# Posture score (0-100 from YOLOv8-pose) at or below this is classified "poor".
-_POOR_POSTURE_SCORE = 70
 # Confidence floors so bridged detections clear the backend's 0.45 persistence gate.
 _HAND_MOVEMENT_CONFIDENCE = 0.55
 _SMOKING_LIKE_CONFIDENCE = 0.60
@@ -53,6 +57,11 @@ class VisionAnalysisService:
     are derived from MediaPipe face mesh / hands and YOLOv8 pose + objects, so the
     backend, AI service and frontend keep working without any hand-tuned OpenCV
     heuristics (Haar cascade, skin-colour, edge-aspect smoking guess).
+
+    Performans: kare çıkarım öncesi küçültülür ve yavaş değişen ağır modüller
+    (DeepFace yüz kimliği, nesne YOLO'su, iris bakışı) ``FrameScheduler`` ile
+    seyrek çalıştırılıp ``DetectorCache``'ten okunur. Postür ``PostureEvaluator``
+    ile çok sinyalli ve oturum-kalibrasyonlu olarak değerlendirilir.
     """
 
     def __init__(self) -> None:
@@ -63,16 +72,27 @@ class VisionAnalysisService:
         self.yolo_detector = VisionYoloDetector()
         self.behavior_store = BehaviorStateStore()
         self.owner_tracking_store = OwnerTrackingStateStore()
+        # Optimizasyon + postür durumu (oturum başına)
+        self.scheduler = FrameScheduler()
+        self.detector_cache = DetectorCache()
+        self.posture_evaluator = PostureEvaluator()
 
     async def analyze(self, request: VisionAnalysisRequest, *, render_overlay: bool = False) -> VisionAnalysisResponse:
         started = time.perf_counter()
-        image = self._decode_image(request.image_base64)
-        height, width = image.shape[:2]
+        original = self._decode_image(request.image_base64)
+        # İşlemede orijinal boyutları raporla (sözleşme), çıkarımı küçük karede yap.
+        height, width = original.shape[:2]
+        image = downscale_for_inference(original)
+
+        # ── Frame skipping kararı + oturum önbelleği ──────────────────────
+        decision = self.scheduler.tick(request.session_id, now=request.captured_at)
+        cache = self.detector_cache.get(request.session_id, now=request.captured_at)
 
         # ── Phase 1: Identify the owner FIRST — its bbox restricts all analysis ─
-        face_authenticated, auth_confidence, auth_status, owner_result = await asyncio.to_thread(
-            self._run_identify_owner, request.user_id, image
-        )
+        #   Kimlik kare kare değişmez → en pahalı modül (DeepFace) seyrek çalışır.
+        if decision.run_owner_id or cache.owner is None:
+            cache.owner = await asyncio.to_thread(self._run_identify_owner, request.user_id, image)
+        face_authenticated, auth_confidence, auth_status, owner_result = cache.owner
         has_profile = auth_status.enabled
         owner_bbox = owner_result.owner_bbox
 
@@ -119,12 +139,29 @@ class VisionAnalysisService:
             else None
         )
 
-        # ── Phase 3: Parallel — hand tracker + YOLO + gaze ───────────────
-        hand_result, yolo_result, gaze_result = await asyncio.gather(
-            asyncio.to_thread(self.hand_tracker.analyze, image, face_landmarks_list, owner_person_bbox),
-            asyncio.to_thread(self.yolo_detector.detect, image, mouth_region),
-            asyncio.to_thread(self._run_gaze, image, owner_result.owner_bbox),
-        )
+        # ── Phase 3: Parallel — hand tracker + (scheduled) YOLO + gaze ────
+        need_objects = decision.run_objects or cache.objects is None
+        need_gaze = (decision.run_gaze or cache.gaze is None) and owner_result.owner_bbox is not None
+
+        coros = [
+            asyncio.to_thread(self.hand_tracker.analyze, image, face_landmarks_list, owner_person_bbox)
+        ]
+        if need_objects:
+            coros.append(asyncio.to_thread(self.yolo_detector.detect, image, mouth_region))
+        if need_gaze:
+            coros.append(asyncio.to_thread(self._run_gaze, image, owner_result.owner_bbox))
+
+        gathered = await asyncio.gather(*coros)
+        hand_result = gathered[0]
+        idx = 1
+        if need_objects:
+            cache.objects = gathered[idx]
+            idx += 1
+        yolo_result = cache.objects
+        if need_gaze:
+            cache.gaze = gathered[idx]
+            idx += 1
+        gaze_result = cache.gaze
 
         # ── Phase 3.5: Owner tracking state update ────────────────────────
         owner_state = self.owner_tracking_store.update(
@@ -161,13 +198,25 @@ class VisionAnalysisService:
                 mouth_touch_detected=hand_result.mouth_touch_detected,
             )
 
-        # ── Unpack pose result ────────────────────────────────────────────
+        # ── Posture: çok sinyalli + oturum-kalibrasyonlu değerlendirme ─────
+        #   pose keypoint'leri (omuz/kulak/burun) + yüz pitch'i (aşağı bakış)
+        #   birleştirilir; oturum tabanına göre yumuşatılır.
+        face_pitch = mesh_result.pitch if mesh_result is not None else None
+        verdict = self.posture_evaluator.evaluate(
+            request.session_id,
+            pose_result.metrics if pose_result is not None else None,
+            captured_at=request.captured_at,
+            face_pitch=face_pitch,
+            poor_score=poor_score_for_sensitivity(request.sensitivity),
+        )
+        posture_state = verdict.state
+        posture_confidence = verdict.confidence
+        is_slouching = verdict.is_slouching
+        posture_score_int = verdict.score
+
+        # ── Unpack pose result (yeni postür alanlarıyla) ──────────────────
         pose_data: PoseData | None = None
-        is_slouching = False
-        posture_score_int = 100
         if pose_result is not None:
-            is_slouching = pose_result.is_slouching
-            posture_score_int = pose_result.posture_score
             pose_data = PoseData(
                 keypoints=[
                     PoseKeypointData(x=kp.x, y=kp.y, confidence=kp.confidence)
@@ -176,9 +225,16 @@ class VisionAnalysisService:
                 ],
                 spine_tilt_angle=pose_result.spine_tilt_angle,
                 shoulder_tilt_angle=pose_result.shoulder_tilt_angle,
-                posture_score=pose_result.posture_score,
-                is_slouching=pose_result.is_slouching,
+                posture_score=posture_score_int,
+                is_slouching=is_slouching,
                 person_bbox=list(pose_result.person_bbox) if pose_result.person_bbox else None,
+                posture_category=verdict.category,
+                posture_reason=verdict.reason,
+                forward_head_ratio=pose_result.forward_head_ratio,
+                lateral_offset=pose_result.lateral_offset,
+                head_roll=pose_result.head_roll,
+                head_down_ratio=pose_result.head_down_ratio,
+                proximity_ratio=pose_result.proximity_ratio,
             )
 
         # ── Unpack YOLO result ────────────────────────────────────────────
@@ -205,23 +261,13 @@ class VisionAnalysisService:
                 phone_detected=yolo_result.phone_detected,
             )
 
-        # ── Subject presence & posture from modern modules ────────────────
+        # ── Subject presence from modern modules ──────────────────────────
         face_detected = mesh_result is not None
         subject_present = (
             face_detected
             or (pose_result is not None and pose_result.person_bbox is not None)
             or (hand_data is not None and len(hand_data.hands) > 0)
         )
-
-        if pose_result is not None:
-            posture_state = "poor" if (is_slouching or posture_score_int <= _POOR_POSTURE_SCORE) else "good"
-            posture_confidence = round(
-                (100 - posture_score_int) / 100.0 if posture_state == "poor" else posture_score_int / 100.0,
-                4,
-            )
-        else:
-            posture_state = "unknown"
-            posture_confidence = 0.0
 
         # ── Module F: Behavioral Event System ────────────────────────────
         behavior_inputs = BehaviorFrameInput(
@@ -265,6 +311,7 @@ class VisionAnalysisService:
         response_detections = self._build_detections(
             posture_state=posture_state,
             posture_confidence=posture_confidence,
+            posture_reason=verdict.reason,
             face_detected=face_detected,
             pose_result=pose_result,
             hand_result=hand_result,
@@ -276,6 +323,8 @@ class VisionAnalysisService:
         vision_latency_ms = int((time.perf_counter() - started) * 1000)
 
         # ── Phase 4: Annotated frame (optional) ──────────────────────────
+        #   Overlay orijinal (tam çözünürlük) kare üzerine çizilir; tüm
+        #   koordinatlar normalize olduğu için doğru ölçeklenir.
         annotated_b64: str | None = None
         if render_overlay:
             try:
@@ -290,7 +339,7 @@ class VisionAnalysisService:
                     posture_score=posture_score_int,
                     fps=0.0,
                 )
-                annotated = render_annotated_frame(image, overlay_data)
+                annotated = render_annotated_frame(original, overlay_data)
                 annotated_b64 = frame_to_base64(annotated)
             except Exception:
                 pass  # overlay rendering is non-critical; never block the response
@@ -345,6 +394,7 @@ class VisionAnalysisService:
         *,
         posture_state: str,
         posture_confidence: float,
+        posture_reason: str,
         face_detected: bool,
         pose_result: object | None,
         hand_result: object | None,
@@ -362,7 +412,7 @@ class VisionAnalysisService:
                 event_type="poor_posture",
                 confidence=round(posture_confidence, 4),
                 severity=self._severity(posture_confidence),
-                recommendation_hint="Roll the shoulders back and bring the head above the spine.",
+                recommendation_hint=posture_reason or "Roll the shoulders back and bring the head above the spine.",
                 evidence=DetectionEvidence(
                     face_detected=face_detected,
                     upper_body_detected=upper_body_detected,
