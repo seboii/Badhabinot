@@ -2,6 +2,7 @@ package com.badhabinot.backend.service.admin;
 
 import com.badhabinot.backend.dto.admin.AdminReportSummary;
 import com.badhabinot.backend.dto.admin.AdminStats;
+import com.badhabinot.backend.dto.admin.AdminUserAiSettingsRequest;
 import com.badhabinot.backend.dto.admin.AdminUserDetail;
 import com.badhabinot.backend.dto.admin.AdminUserListResponse;
 import java.util.List;
@@ -19,6 +20,9 @@ public interface IAdminService {
     void deleteUser(UUID userId);
 
     void resetUserData(UUID userId);
+
+    /** Bir kullanıcının AI/sohbet ayarlarını (API/LOCAL mod, model, ollama URL) güncelle. */
+    void updateUserAiSettings(UUID userId, AdminUserAiSettingsRequest request);
 
     AdminStats getStats();
 }

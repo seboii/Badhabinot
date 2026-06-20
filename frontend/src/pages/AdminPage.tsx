@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import {
   Activity,
+  Cpu,
   FileText,
   RefreshCw,
   Search,
@@ -22,6 +23,7 @@ import { LoadingCard } from '@/components/ui/loading-state'
 import { useAuth } from '@/hooks/use-auth'
 import { useLanguage } from '@/i18n/language-provider'
 import { formatDateTime, formatRelativeTime } from '@/lib/format'
+import type { AdminUserAiSettingsRequest, AdminUserDetail } from '@/types/admin'
 
 function StatCard({ label, value, icon: Icon }: { label: string; value: number | string; icon: typeof Users }) {
   return (
@@ -47,6 +49,144 @@ function InfoRow({ label, value }: { label: string; value: React.ReactNode }) {
       <span className="text-sm text-[var(--text-muted)]">{label}</span>
       <span className="text-right text-sm font-semibold text-white">{value}</span>
     </div>
+  )
+}
+
+/** Admin: bir kullanıcının sohbet modunu (API/LOCAL), modelini ve personasını ayarla. */
+function AiSettingsCard({ userId, settings }: { userId: string; settings: AdminUserDetail['settings'] }) {
+  const { isTurkish } = useLanguage()
+  const queryClient = useQueryClient()
+
+  const [mode, setMode] = useState<'API' | 'LOCAL'>((settings?.model_mode as 'API' | 'LOCAL') ?? 'API')
+  const [localModel, setLocalModel] = useState(settings?.local_model_name || 'badhabinot-coach:latest')
+  const [ollamaUrl, setOllamaUrl] = useState(settings?.ollama_base_url || 'http://ollama:11434')
+  const [persona, setPersona] = useState<'GENERAL_CHAT' | 'BEHAVIOR_COACH' | 'CUSTOM'>(
+    (settings?.chat_persona as 'GENERAL_CHAT' | 'BEHAVIOR_COACH' | 'CUSTOM') ?? 'GENERAL_CHAT',
+  )
+
+  const mutation = useMutation({
+    mutationFn: (body: AdminUserAiSettingsRequest) => adminApi.updateUserAiSettings(userId, body),
+    onSuccess() {
+      toast.success(isTurkish ? 'AI ayarları kaydedildi.' : 'AI settings saved.')
+      void queryClient.invalidateQueries({ queryKey: ['admin-user', userId] })
+    },
+    onError(error) {
+      toast.error(toErrorMessage(error, isTurkish ? 'AI ayarları kaydedilemedi.' : 'Unable to save AI settings.'))
+    },
+  })
+
+  const inputCls =
+    'h-11 w-full rounded-2xl border border-[var(--line-soft)] bg-[rgba(255,255,255,0.03)] px-4 text-sm text-white outline-none transition focus:border-[var(--primary)]'
+
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex items-center gap-2">
+          <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-[var(--primary-soft)]">
+            <Cpu className="size-4 text-[var(--primary)]" />
+          </div>
+          <div>
+            <CardTitle>{isTurkish ? 'AI / Sohbet Ayarları' : 'AI / Chat Settings'}</CardTitle>
+            <CardDescription className="mt-1">
+              {isTurkish
+                ? 'Bu kullanıcının sohbet modunu ve modelini sen belirle.'
+                : "Set this user's chat mode and model."}
+            </CardDescription>
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div>
+          <p className="mb-2 text-xs uppercase tracking-[0.14em] text-[var(--text-soft)]">
+            {isTurkish ? 'Sohbet modu' : 'Chat mode'}
+          </p>
+          <div className="flex gap-2">
+            {(['API', 'LOCAL'] as const).map((m) => (
+              <button
+                key={m}
+                type="button"
+                onClick={() => setMode(m)}
+                className={`flex-1 rounded-2xl border px-4 py-3 text-sm font-semibold transition ${
+                  mode === m
+                    ? 'border-[var(--primary)] bg-[var(--primary-soft)] text-white'
+                    : 'border-[var(--line-soft)] bg-[rgba(255,255,255,0.02)] text-[var(--text-muted)] hover:text-white'
+                }`}
+              >
+                {m === 'LOCAL'
+                  ? isTurkish
+                    ? 'Yerel model'
+                    : 'Local model'
+                  : isTurkish
+                    ? 'API (bulut)'
+                    : 'API (cloud)'}
+              </button>
+            ))}
+          </div>
+          <p className="mt-2 text-xs text-[var(--text-muted)]">
+            {mode === 'LOCAL'
+              ? isTurkish
+                ? 'Sohbet, Ollama üzerindeki yerel modelle (ör. eğittiğin model) yanıtlar.'
+                : 'Chat is answered by the local Ollama model (e.g. your fine-tuned one).'
+              : isTurkish
+                ? 'Sohbet, sunucudaki varsayılan sağlayıcı ile yanıtlar.'
+                : 'Chat is answered by the server default provider.'}
+          </p>
+        </div>
+
+        {mode === 'LOCAL' ? (
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div>
+              <label className="mb-1 block text-xs text-[var(--text-muted)]">
+                {isTurkish ? 'Yerel model adı' : 'Local model name'}
+              </label>
+              <input
+                className={inputCls}
+                value={localModel}
+                onChange={(e) => setLocalModel(e.target.value)}
+                placeholder="badhabinot-coach:latest"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs text-[var(--text-muted)]">Ollama URL</label>
+              <input
+                className={inputCls}
+                value={ollamaUrl}
+                onChange={(e) => setOllamaUrl(e.target.value)}
+                placeholder="http://ollama:11434"
+              />
+            </div>
+          </div>
+        ) : null}
+
+        <div>
+          <label className="mb-1 block text-xs text-[var(--text-muted)]">
+            {isTurkish ? 'Sohbet personası' : 'Chat persona'}
+          </label>
+          <select className={inputCls} value={persona} onChange={(e) => setPersona(e.target.value as typeof persona)}>
+            <option value="GENERAL_CHAT">{isTurkish ? 'Genel sohbet' : 'General chat'}</option>
+            <option value="BEHAVIOR_COACH">{isTurkish ? 'Davranış koçu' : 'Behavior coach'}</option>
+            <option value="CUSTOM">{isTurkish ? 'Özel' : 'Custom'}</option>
+          </select>
+        </div>
+
+        <div className="flex justify-end border-t border-[var(--line-soft)] pt-4">
+          <Button
+            variant="primary"
+            loading={mutation.isPending}
+            onClick={() =>
+              mutation.mutate({
+                model_mode: mode,
+                local_model_name: localModel,
+                ollama_base_url: ollamaUrl,
+                chat_persona: persona,
+              })
+            }
+          >
+            {isTurkish ? 'AI ayarlarını kaydet' : 'Save AI settings'}
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
   )
 }
 
@@ -274,6 +414,9 @@ export function AdminPage() {
                 </div>
               </CardContent>
             </Card>
+
+            {/* AI / Sohbet ayarları */}
+            <AiSettingsCard key={detail.id} userId={detail.id} settings={detail.settings} />
 
             {/* Raporlar */}
             <Card>

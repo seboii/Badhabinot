@@ -2,6 +2,7 @@ import { apiClient } from '@/api/client'
 import type {
   AdminReportSummary,
   AdminStats,
+  AdminUserAiSettingsRequest,
   AdminUserDetail,
   AdminUserListResponse,
 } from '@/types/admin'
@@ -41,5 +42,9 @@ export const adminApi = {
 
   async resetUserData(userId: string) {
     await apiClient.post(`/api/v1/admin/users/${userId}/reset`)
+  },
+
+  async updateUserAiSettings(userId: string, body: AdminUserAiSettingsRequest) {
+    await apiClient.put(`/api/v1/admin/users/${userId}/ai-settings`, body)
   },
 }

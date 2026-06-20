@@ -106,6 +106,35 @@ public class UserContextServiceImpl implements IUserContextService {
 
     @Override
     @Transactional(transactionManager = "userTransactionManager")
+    @Caching(evict = {
+            @CacheEvict(cacheNames = "user-context", key = "#userId.toString()"),
+            @CacheEvict(cacheNames = "user-settings", key = "#userId.toString()"),
+            @CacheEvict(cacheNames = "analysis-context", key = "#userId.toString()")
+    })
+    public SettingsResponse updateSettingsForUser(UUID userId, String email, UpdateSettingsRequest request) {
+        ensureProfile(userId, email);
+        ensureConsent(userId);
+        UserSettings settings = ensureSettings(userId);
+        settings.update(
+                request.sensitivity(),
+                request.waterGoalMl(),
+                request.waterIntervalMin(),
+                request.exerciseIntervalMin(),
+                request.quietHoursEnabled(),
+                request.quietHoursStart(),
+                request.quietHoursEnd(),
+                request.modelMode(),
+                request.notificationsEnabled(),
+                request.localModelName(),
+                request.ollamaBaseUrl(),
+                request.chatPersona(),
+                request.customSystemPrompt()
+        );
+        return toSettingsResponse(userSettingsRepository.save(settings));
+    }
+
+    @Override
+    @Transactional(transactionManager = "userTransactionManager")
     @Cacheable(cacheNames = "user-consents", key = "#claims.userId.toString()")
     public ConsentResponse getConsents(CurrentUserClaims claims) {
         ensureProfile(claims.userId(), claims.email());

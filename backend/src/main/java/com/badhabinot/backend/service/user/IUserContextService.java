@@ -18,6 +18,8 @@ public interface IUserContextService {
     UserProfileResponse updateProfile(CurrentUserClaims claims, UpdateProfileRequest request);
     SettingsResponse getSettings(CurrentUserClaims claims);
     SettingsResponse updateSettings(CurrentUserClaims claims, UpdateSettingsRequest request);
+    /** Admin: belirli bir kullanıcının ayarlarını güncelle (cache temizliği dahil). */
+    SettingsResponse updateSettingsForUser(UUID userId, String email, UpdateSettingsRequest request);
     ConsentResponse getConsents(CurrentUserClaims claims);
     ConsentResponse updateConsents(CurrentUserClaims claims, UpdateConsentsRequest request);
     void bootstrap(InternalUserBootstrapRequest request);

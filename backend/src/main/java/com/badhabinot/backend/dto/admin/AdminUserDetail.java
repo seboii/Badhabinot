@@ -23,6 +23,9 @@ public record AdminUserDetail(
     public record Settings(
             String sensitivity,
             String modelMode,
+            String localModelName,
+            String ollamaBaseUrl,
+            String chatPersona,
             int waterGoalMl,
             int waterIntervalMin,
             int exerciseIntervalMin,
