@@ -4,6 +4,7 @@ import { Droplets, Flame, ShieldAlert, Waves } from 'lucide-react'
 import { toast } from 'sonner'
 import { monitoringApi } from '@/api/monitoring'
 import { toErrorMessage } from '@/api/client'
+import { fireReminder } from '@/services/reminderAlarm'
 import { ActivityFeedCard } from '@/features/dashboard/components/ActivityFeedCard'
 import { InsightPanel } from '@/features/dashboard/components/InsightPanel'
 import { LiveMonitorPanel } from '@/features/dashboard/components/LiveMonitorPanel'
@@ -139,6 +140,12 @@ export function DashboardPage() {
       void queryClient.invalidateQueries({ queryKey: ['dashboard'] })
       void queryClient.invalidateQueries({ queryKey: ['activities'] })
       void queryClient.invalidateQueries({ queryKey: ['behavior-events'] })
+
+      // Hatırlatıcı üretildiyse alarm çal + bildirim düşür.
+      if (result.generated_reminders?.length) {
+        const r = result.generated_reminders[0]
+        void fireReminder(behaviorLabel(r.reminder_type, language), r.message)
+      }
 
       const detections = []
       result.events.forEach((event) => detections.push(behaviorLabel(event.event_type, language)))
@@ -322,6 +329,10 @@ export function DashboardPage() {
                 image_content_type: frame.image_content_type,
               })
               setLatestAnalysis(result)
+              if (result.generated_reminders?.length) {
+                const r = result.generated_reminders[0]
+                void fireReminder(behaviorLabel(r.reminder_type, language), r.message)
+              }
               // Success: reset failure counter and restore base interval
               consecutiveFailuresRef.current = 0
               if (intervalMsRef.current !== baseIntervalMs) {

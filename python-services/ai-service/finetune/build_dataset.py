@@ -493,40 +493,120 @@ def _random_context(rng: random.Random, day: str) -> MonitoringContext:
     )
 
 
-def _synth_answer(ctx: MonitoringContext, question: str) -> str:
-    """Bağlamdan türetilen, sayıları DOĞRU olan kısa TR yanıt (format öğretici)."""
-    posture = round((1.0 - ctx.poor_posture_ratio) * 100, 1)
-    hyd = round((ctx.hydration_progress_ml / ctx.water_goal_ml * 100) if ctx.water_goal_ml else 0, 1)
-    if "su" in question.lower() or "hedef" in question.lower():
-        return f"Bugün {ctx.hydration_progress_ml}/{ctx.water_goal_ml} ml içtin (%{hyd}). Hedefe biraz daha var."
-    if "duruş" in question.lower():
-        return f"Duruş skorun {posture}/100, {ctx.posture_alert_count} uyarı aldın. Ara sıra omuzlarını geri çek."
-    if "sigara" in question.lower():
-        return (f"Sistem {ctx.smoking_like_count} sigara-benzeri ipucu yakaladı; bu kesinlik değil, "
-                "yalnızca bir işaret.")
-    if "el" in question.lower():
-        return f"Bugün {ctx.hand_movement_count} el-yüz hareketi kaydedildi. Mola verirken ellerini dinlendir."
-    return (f"Bugün duruş {posture}/100, hidrasyon %{hyd}, sigara-benzeri {ctx.smoking_like_count}. "
-            "Genel olarak fena değil, su tarafını biraz artırabilirsin.")
+# ── Parafraz havuzları — aynı niyetin ÇOK farklı ifadesi ─────────────────────
+# Amaç: tek-kalıp ezberini kırmak. Model sayıyı bağlamdan KOPYALAMAYI öğrensin,
+# kalıba değil. Her örnekte rastgele bir ifade + rastgele bir kuyruk seçilir.
+_WATER_TPL = [
+    "Bugün {p}/{g} ml su içtin (%{h}). {t}",
+    "Su tarafında {p}/{g} ml'desin, yani %{h}. {t}",
+    "Şu ana kadar {p}/{g} ml ({h}%) içmişsin. {t}",
+    "Hidrasyonun %{h} ({p}/{g} ml). {t}",
+]
+_POSTURE_TPL = [
+    "Duruş skorun {ps}/100, {al} uyarı aldın. {t}",
+    "Bugün duruşun {ps}/100 ({al} uyarı). {t}",
+    "{ps}/100 duruş skorun var; {al} kez uyarı çıktı. {t}",
+    "Duruş tarafında {ps}/100'desin, {al} uyarıyla. {t}",
+]
+_SMOKING_TPL = [
+    "Sistem {s} sigara-benzeri ipucu yakaladı; kesinlik değil, yalnızca işaret.",
+    "Bugün {s} kez el-ağız (sigara-benzeri) hareket görüldü — kanıt değil, ipucu.",
+    "{s} sigara-benzeri işaret var; emin olmak için daha çok kareye bakmak gerek.",
+    "El-ağız hareketi {s} kez çıktı; bunu kesin sigara saymıyorum, sadece bir sinyal.",
+]
+_HAND_TPL = [
+    "Bugün {hm} el-yüz hareketi kaydedildi. {t}",
+    "El hareketin {hm} kez çıktı. {t}",
+    "{hm} kez elini yüzüne götürmüşsün. {t}",
+]
+_SUMMARY_TPL = [
+    "Bugün duruş {ps}/100, hidrasyon %{h}, sigara-benzeri {s}. {t}",
+    "Genel tablo: duruş {ps}/100, su %{h}, sigara-benzeri {s}. {t}",
+    "Özetle duruş {ps}/100 ve su %{h}; sigara-benzeri {s}. {t}",
+]
+_TAIL_WATER_LOW = ["Birkaç bardak daha eklersen iyi olur.", "Hedefe biraz var, aralıklarla iç.",
+                   "Masana dolu bir şişe koy, içmesi kolaylaşır."]
+_TAIL_WATER_OK = ["Hedefe çok yakınsın, böyle devam.", "Su tarafın iyi gidiyor.", "Güzel, ritmi koru."]
+_TAIL_POSTURE_LOW = ["Ekranı göz hizasına al, sırtını yasla.", "Saat başı omuzlarını açıp doğrul.",
+                     "Arada başını omurganın üstüne getir."]
+_TAIL_POSTURE_OK = ["Gayet iyi, böyle sürdür.", "Hedef bandındasın, devam.", "Duruşun iyi görünüyor."]
+_TAIL_HAND = ["Mola verirken ellerini dinlendir.", "Ellerini klavyede tutmayı dene.",
+              "Yüze gitme isteğini azaltmak için ellerini meşgul et."]
+_TAIL_SUMMARY = ["Su tarafını biraz artırabilirsin.", "En çok kazanç sigara-benzerini azaltmakta.",
+                 "Genel olarak iyi, küçük dokunuşlar yeter."]
 
 
-def _synth_analysis(ctx: MonitoringContext) -> str:
-    """Bağlamdan türetilen, sayıları DOĞRU olan kısa analiz + 'Öneri:' (ANALYST format öğretici)."""
-    posture = round((1.0 - ctx.poor_posture_ratio) * 100, 1)
-    hyd = round((ctx.hydration_progress_ml / ctx.water_goal_ml * 100) if ctx.water_goal_ml else 0, 1)
-    parts = [f"duruş {posture}/100", f"hidrasyon %{hyd}"]
+def _synth_answer(rng: random.Random, ctx: MonitoringContext, question: str) -> str:
+    """Bağlamdan türetilen, sayıları DOĞRU olan kısa TR yanıt; ifade parafraz havuzundan."""
+    ps = round((1.0 - ctx.poor_posture_ratio) * 100, 1)
+    h = round((ctx.hydration_progress_ml / ctx.water_goal_ml * 100) if ctx.water_goal_ml else 0, 1)
+    ql = question.lower()
+    if "su" in ql or "hedef" in ql:
+        tail = rng.choice(_TAIL_WATER_OK if h >= 80 else _TAIL_WATER_LOW)
+        return rng.choice(_WATER_TPL).format(p=ctx.hydration_progress_ml, g=ctx.water_goal_ml, h=h, t=tail)
+    if "duruş" in ql or "durus" in ql:
+        tail = rng.choice(_TAIL_POSTURE_OK if ps >= 85 else _TAIL_POSTURE_LOW)
+        return rng.choice(_POSTURE_TPL).format(ps=ps, al=ctx.posture_alert_count, t=tail)
+    if "sigara" in ql:
+        return rng.choice(_SMOKING_TPL).format(s=ctx.smoking_like_count)
+    if "el" in ql:
+        return rng.choice(_HAND_TPL).format(hm=ctx.hand_movement_count, t=rng.choice(_TAIL_HAND))
+    return rng.choice(_SUMMARY_TPL).format(ps=ps, h=h, s=ctx.smoking_like_count, t=rng.choice(_TAIL_SUMMARY))
+
+
+# ── Çeşitli gündelik / reddetme yanıtları (tek-cümle canned yerine havuz) ─────
+_CASUAL_REPLIES = [
+    "Merhaba! Bugün sana nasıl yardımcı olabilirim?",
+    "Selam! Verilerine bakmamı ister misin, yoksa biraz sohbet mi edelim?",
+    "İyiyim, teşekkürler! Sen nasılsın bugün?",
+    "Günaydın! Güne iyi başladın mı?",
+    "Rica ederim, her zaman buradayım.",
+    "Merhaba! İstersen bugünkü duruş ve su durumuna birlikte bakalım.",
+    "Selam! Bugün kendini nasıl hissediyorsun?",
+]
+_REFUSE_REPLIES = [
+    "Bu konuda sana yardımcı olamam. Davranış verilerinle ilgili bir sorun var mı?",
+    "Bunu paylaşamam; ama duruş, su ya da alışkanlıkların konusunda yardımcı olabilirim.",
+    "Maalesef bu konuda bilgi veremem. Davranış hedeflerine dönelim mi?",
+    "Teknik veya gizli bilgileri paylaşamam. Senin verilerinle ilgili ne sormak istersin?",
+    "Üzgünüm, bu isteği karşılayamam. Ama davranış koçluğun için buradayım.",
+]
+
+
+_ANALYSIS_OZET_TPL = [
+    "Bu dönemde {parts}; toplam {n} analiz yapıldı.",
+    "Kısa analiz: {parts}. {n} kare işlendi.",
+    "Genel durum — {parts}; {n} analiz var.",
+]
+_ANALYSIS_ONERI = {
+    "water": ["Öneri: su tüketimini artır, masana dolu bir şişe koy.",
+              "Öneri: saat başı birkaç yudum suyla hidrasyonu yükselt."],
+    "posture": ["Öneri: ekranı göz hizasına al ve saat başı kısa bir mola ver.",
+                "Öneri: sırtını sandalyeye yasla, omuzlarını açık tut."],
+    "smoking": ["Öneri: el-ağız hareketinin yoğun olduğu saatlerde ellerini meşgul et.",
+                "Öneri: tetiklenince kısa bir yürüyüş ya da su molası dene."],
+    "good": ["Öneri: bu iyi gidişi koru, molalarda kısa esneme ekle.",
+             "Öneri: aynı düzeni sürdür, küçük molalarla ritmi koru."],
+}
+
+
+def _synth_analysis(rng: random.Random, ctx: MonitoringContext) -> str:
+    """Bağlamdan türetilen, sayıları DOĞRU kısa analiz + 'Öneri:' (ifade parafraz havuzundan)."""
+    ps = round((1.0 - ctx.poor_posture_ratio) * 100, 1)
+    h = round((ctx.hydration_progress_ml / ctx.water_goal_ml * 100) if ctx.water_goal_ml else 0, 1)
+    parts = [f"duruş {ps}/100", f"hidrasyon %{h}"]
     if ctx.smoking_like_count:
         parts.append(f"sigara-benzeri {ctx.smoking_like_count}")
-    ozet = f"Bu dönemde {', '.join(parts)}; toplam {ctx.analyses_completed} analiz yapıldı."
-    if hyd < 60:
-        oneri = "Öneri: su tüketimini artır, masana dolu bir şişe koy."
+    ozet = rng.choice(_ANALYSIS_OZET_TPL).format(parts=", ".join(parts), n=ctx.analyses_completed)
+    if h < 60:
+        key = "water"
     elif ctx.poor_posture_ratio >= 0.25:
-        oneri = "Öneri: ekranı göz hizasına al ve saat başı kısa bir mola ver."
+        key = "posture"
     elif ctx.smoking_like_count >= 3:
-        oneri = "Öneri: el-ağız hareketinin yoğun olduğu saatlerde ellerini meşgul et."
+        key = "smoking"
     else:
-        oneri = "Öneri: bu iyi gidişi koru, molalarda kısa esneme ekle."
-    return f"{ozet} {oneri}"
+        key = "good"
+    return f"{ozet} {rng.choice(_ANALYSIS_ONERI[key])}"
 
 
 def synthesize(n: int, *, seed: int = 42) -> list[CoachingExample]:
@@ -542,24 +622,24 @@ def synthesize(n: int, *, seed: int = 42) -> list[CoachingExample]:
             q = rng.choice(_DATA_QUESTIONS)
             out.append(CoachingExample(
                 persona=persona, kind="answer", question=q, context=ctx,
-                ideal_answer=_synth_answer(ctx, q), tags=["synthetic", "answer"],
+                ideal_answer=_synth_answer(rng, ctx, q), tags=["synthetic", "answer"],
             ))
         elif roll < 0.70:  # analiz (ANALYST)
             out.append(CoachingExample(
                 persona="ANALYST", kind="answer", question=rng.choice(_ANALYSIS_INSTRUCTIONS),
-                context=ctx, ideal_answer=_synth_analysis(ctx), tags=["synthetic", "analysis"],
+                context=ctx, ideal_answer=_synth_analysis(rng, ctx), tags=["synthetic", "analysis"],
             ))
-        elif roll < 0.85:  # casual
+        elif roll < 0.85:  # casual — çeşitli yanıt havuzu
             out.append(CoachingExample(
                 persona="GENERAL_CHAT", kind="casual", question=rng.choice(_CASUAL_QUESTIONS),
-                context=ctx, ideal_answer="Merhaba! Bugün sana nasıl yardımcı olabilirim?",
+                context=ctx, ideal_answer=rng.choice(_CASUAL_REPLIES),
                 tags=["synthetic", "casual"],
             ))
-        else:  # refuse
+        else:  # refuse — çeşitli reddetme havuzu
             out.append(CoachingExample(
                 persona=rng.choice(["BEHAVIOR_COACH", "GENERAL_CHAT"]), kind="refuse",
                 question=rng.choice(_REFUSE_QUESTIONS), context=ctx,
-                ideal_answer="Bu konuda sana yardımcı olamam. Davranış verilerinle ilgili bir sorun var mı?",
+                ideal_answer=rng.choice(_REFUSE_REPLIES),
                 tags=["synthetic", "refuse"],
             ))
     return out

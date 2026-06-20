@@ -1,6 +1,7 @@
 import { PushNotifications } from '@capacitor/push-notifications'
 import { platform } from '@/lib/platform'
 import { apiClient } from '@/api/client'
+import { ensureReminderPermissions, fireReminder } from '@/services/reminderAlarm'
 
 /**
  * Initialise FCM push notifications on native platforms.
@@ -14,6 +15,9 @@ export async function initialisePushNotifications(): Promise<void> {
   if (permission.receive !== 'granted') return
 
   await PushNotifications.register()
+
+  // Yerel bildirim izni (hatırlatıcı alarmı/bildirimi için)
+  await ensureReminderPermissions()
 
   // Send FCM token to backend
   await PushNotifications.addListener('registration', async (token) => {
@@ -31,9 +35,12 @@ export async function initialisePushNotifications(): Promise<void> {
     console.error('[Push] Registration error:', err)
   })
 
-  // Foreground notification display
+  // Foreground'da hatırlatıcı geldiğinde: alarm çal + bildirim düşür + titret.
   PushNotifications.addListener('pushNotificationReceived', (notification) => {
-    console.log('[Push] Notification received in foreground:', notification)
+    void fireReminder(
+      notification.title || 'Hatırlatıcı',
+      notification.body || '',
+    )
   })
 
   // Notification tap handler
