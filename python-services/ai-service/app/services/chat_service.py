@@ -102,14 +102,14 @@ class ChatService:
         # 2. Test/explicit injection
         if self.provider is not None:
             return self.provider
-        # 3. API: bulut OpenAI-compatible
+        # 3. API: bulut OpenAI-compatible (anahtar varsa)
         if request.ai_mode == "API":
-            if not settings.ai_api_key:
-                raise ProviderConfigurationError(
-                    "API modu seçildi ama AI_API_KEY ayarlanmamış. "
-                    "Sunucu .env'inde AI_API_KEY ekleyin ya da Ayarlar'dan LOCAL'e geçin."
-                )
-            return OpenAiCompatibleProvider(_make_openai_config())
+            if settings.ai_api_key:
+                return OpenAiCompatibleProvider(_make_openai_config())
+            # AI_API_KEY yoksa cloud yerine sunucunun varsayilan saglayicisina dus.
+            # AI_PROVIDER=ollama → fine-tune edilmis coach modeli. Boylece kullanici
+            # API modunda kalsa bile sohbet, sunucudaki yerel modelle kutu disi calisir.
+            return _build_provider()
         # 4. Belirsiz: env varsayılanına düş
         return _build_provider()
 
