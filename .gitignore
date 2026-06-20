@@ -24,6 +24,12 @@ Thumbs.db
 *.bak
 
 # =========================
+# Dokumanlar / raporlar — gite YUKLENMEZ (tez, durum raporlari vb.)
+# =========================
+docs/
+**/docs/
+
+# =========================
 # Gizli/yerel ortam dosyalari
 # =========================
 .env
