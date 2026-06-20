@@ -1,12 +1,11 @@
-import { Activity, Eye, Lock, ScanSearch, ShieldCheck, Zap } from 'lucide-react'
+import { Activity, Eye, ScanSearch, Zap } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { useLanguage } from '@/i18n/language-provider'
-import { behaviorLabel, postureLabel, toPercent } from '@/lib/format'
-import type { AnalyzeFrameResponse, DashboardResponse } from '@/types/monitoring'
+import { behaviorLabel, postureLabel } from '@/lib/format'
+import type { AnalyzeFrameResponse } from '@/types/monitoring'
 
 type InsightPanelProps = {
-  dashboard: DashboardResponse
   latestAnalysis: AnalyzeFrameResponse | null
 }
 
@@ -27,12 +26,6 @@ const BEHAVIOR_EMOJI: Record<string, string> = {
   HAND_MOVEMENT: '🖐️',
 }
 
-function scoreBarColor(value: number): string {
-  if (value >= 0.55) return 'linear-gradient(90deg,#ef4444,#f97316)'
-  if (value >= 0.30) return 'linear-gradient(90deg,#f59e0b,#fb923c)'
-  return 'linear-gradient(90deg,var(--primary),var(--accent))'
-}
-
 function postureColor(state: string | null | undefined): string {
   switch ((state || '').toLowerCase()) {
     case 'good':
@@ -44,12 +37,10 @@ function postureColor(state: string | null | undefined): string {
   }
 }
 
-export function InsightPanel({ dashboard, latestAnalysis }: InsightPanelProps) {
+export function InsightPanel({ latestAnalysis }: InsightPanelProps) {
   const { language, isTurkish } = useLanguage()
 
   const visionEvents = latestAnalysis?.vision_behavior_events ?? []
-  const scores = latestAnalysis?.processing.scores ?? {}
-  const visibleScores = Object.entries(scores).filter(([, v]) => v > 0.08)
 
   return (
     <Card className="h-full">
@@ -58,19 +49,19 @@ export function InsightPanel({ dashboard, latestAnalysis }: InsightPanelProps) {
           <CardTitle>{isTurkish ? 'Canlı Analiz' : 'Live Analysis'}</CardTitle>
           <CardDescription className="mt-2">
             {isTurkish
-              ? 'YOLOv8 + Vision servisten gelen anlık tespit ve AI analiz sonuçları.'
-              : 'Real-time detections from YOLOv8 + Vision service and AI analysis results.'}
+              ? 'Kameradan anlık tespitler ve öneriler.'
+              : 'Real-time detections and guidance.'}
           </CardDescription>
         </div>
       </CardHeader>
       <CardContent className="space-y-5">
 
-        {/* ── YOLOv8 Canlı Tespit ───────────────────────────── */}
+        {/* ── Anlık tespit ───────────────────────────────────── */}
         <div className="space-y-3">
           <div className="flex items-center justify-between">
             <p className="flex items-center gap-2 text-sm font-semibold text-white">
               <Zap className="size-4 text-yellow-400" />
-              {isTurkish ? 'YOLOv8 Canlı Tespit' : 'YOLOv8 Live Detection'}
+              {isTurkish ? 'Anlık Tespit' : 'Live Detection'}
             </p>
             <Badge variant={visionEvents.length > 0 ? 'warning' : 'info'}>
               {visionEvents.length > 0
@@ -88,19 +79,11 @@ export function InsightPanel({ dashboard, latestAnalysis }: InsightPanelProps) {
                 >
                   <div className="flex items-center gap-2">
                     <span className="text-base">{BEHAVIOR_EMOJI[ev.event_type.toUpperCase()] ?? '⚡'}</span>
-                    <div>
-                      <p className="text-sm font-semibold text-white">{behaviorLabel(ev.event_type, language)}</p>
-                      {ev.detail ? (
-                        <p className="text-xs text-[var(--text-muted)]">{ev.detail}</p>
-                      ) : null}
-                    </div>
+                    <p className="text-sm font-semibold text-white">{behaviorLabel(ev.event_type, language)}</p>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <Badge variant={ev.severity === 'high' ? 'danger' : ev.severity === 'medium' ? 'warning' : 'info'}>
-                      {ev.severity}
-                    </Badge>
-                    <span className="text-xs text-[var(--text-muted)]">{Math.round(ev.confidence * 100)}%</span>
-                  </div>
+                  <Badge variant={ev.severity === 'high' ? 'danger' : ev.severity === 'medium' ? 'warning' : 'info'}>
+                    {ev.severity}
+                  </Badge>
                 </div>
               ))}
             </div>
@@ -109,11 +92,11 @@ export function InsightPanel({ dashboard, latestAnalysis }: InsightPanelProps) {
               <p className="text-sm text-[var(--text-muted)]">
                 {latestAnalysis
                   ? isTurkish
-                    ? 'YOLOv8 bu karede anormal davranış tespit etmedi.'
-                    : 'YOLOv8 detected no abnormal behavior in this frame.'
+                    ? 'Bu karede anormal davranış tespit edilmedi.'
+                    : 'No abnormal behavior detected in this frame.'
                   : isTurkish
-                    ? 'İzleme başlatıldığında YOLOv8 tespitleri burada görünür.'
-                    : 'YOLOv8 detections will appear here once monitoring starts.'}
+                    ? 'İzleme başlatıldığında tespitler burada görünür.'
+                    : 'Detections will appear here once monitoring starts.'}
               </p>
             </div>
           )}
@@ -129,7 +112,6 @@ export function InsightPanel({ dashboard, latestAnalysis }: InsightPanelProps) {
             <p className={`mt-3 text-xl font-bold ${postureColor(latestAnalysis?.posture_state)}`}>
               {postureLabel(latestAnalysis?.posture_state, language)}
             </p>
-            {/* Çok-sinyalli postür gerekçesi — vision-service'ten gelen Türkçe öneri */}
             {latestAnalysis?.posture_reason ? (
               <p className="mt-2 text-xs leading-5 text-[var(--text-muted)]">{latestAnalysis.posture_reason}</p>
             ) : null}
@@ -140,22 +122,6 @@ export function InsightPanel({ dashboard, latestAnalysis }: InsightPanelProps) {
               {isTurkish ? 'Davranış' : 'Behavior'}
             </div>
             <p className="mt-3 text-xl font-bold text-white">{behaviorLabel(latestAnalysis?.behavior_type, language)}</p>
-          </div>
-        </div>
-
-        {/* ── Güven + Gecikme ───────────────────────────────── */}
-        <div className="grid grid-cols-3 gap-3">
-          <div className="rounded-[24px] border border-[var(--line-soft)] bg-[rgba(255,255,255,0.03)] p-4">
-            <p className="text-xs uppercase tracking-[0.14em] text-[var(--text-soft)]">{isTurkish ? 'Güven' : 'Confidence'}</p>
-            <p className="mt-3 text-2xl font-bold text-white">{toPercent(latestAnalysis?.confidence)}</p>
-          </div>
-          <div className="rounded-[24px] border border-[var(--line-soft)] bg-[rgba(255,255,255,0.03)] p-4">
-            <p className="text-xs uppercase tracking-[0.14em] text-[var(--text-soft)]">{isTurkish ? 'Görüntü' : 'Vision'}</p>
-            <p className="mt-3 text-2xl font-bold text-white">{latestAnalysis?.processing.vision_latency_ms ?? 0}ms</p>
-          </div>
-          <div className="rounded-[24px] border border-[var(--line-soft)] bg-[rgba(255,255,255,0.03)] p-4">
-            <p className="text-xs uppercase tracking-[0.14em] text-[var(--text-soft)]">AI</p>
-            <p className="mt-3 text-2xl font-bold text-white">{latestAnalysis?.processing.ai_latency_ms ?? 0}ms</p>
           </div>
         </div>
 
@@ -175,44 +141,10 @@ export function InsightPanel({ dashboard, latestAnalysis }: InsightPanelProps) {
           </div>
         </div>
 
-        {/* ── Model Skorları — geçiş animasyonlu + renkli ───── */}
+        {/* ── Kaydedilen olaylar ────────────────────────────── */}
         <div className="space-y-3">
           <div className="flex items-center justify-between">
-            <p className="text-sm font-semibold text-white">{isTurkish ? 'Model Skorları' : 'Model Scores'}</p>
-            <Badge variant="primary">{isTurkish ? 'Canlı' : 'Live'}</Badge>
-          </div>
-          {visibleScores.length === 0 ? (
-            <p className="text-sm text-[var(--text-muted)]">
-              {isTurkish ? 'Analiz başlatıldığında skor dağılımı burada görünür.' : 'Run an analysis to inspect the latest score breakdown.'}
-            </p>
-          ) : (
-            <div className="space-y-3">
-              {visibleScores.map(([key, value]) => (
-                <div key={key} className="space-y-2">
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-[var(--text-muted)]">{behaviorLabel(key, language)}</span>
-                    <span className="font-semibold text-white">{toPercent(value)}</span>
-                  </div>
-                  <div className="h-2 rounded-full bg-[rgba(255,255,255,0.06)]">
-                    <div
-                      className="h-2 rounded-full"
-                      style={{
-                        width: `${Math.max(value * 100, 4)}%`,
-                        background: scoreBarColor(value),
-                        transition: 'width 0.7s ease-out',
-                      }}
-                    />
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* ── Tespit Edilen Olaylar ─────────────────────────── */}
-        <div className="space-y-3">
-          <div className="flex items-center justify-between">
-            <p className="text-sm font-semibold text-white">{isTurkish ? 'Kayıtlı Olaylar' : 'Recorded Events'}</p>
+            <p className="text-sm font-semibold text-white">{isTurkish ? 'Kaydedilen Olaylar' : 'Recorded Events'}</p>
             <Badge variant="info">{latestAnalysis?.events.length ?? 0}</Badge>
           </div>
           {latestAnalysis?.events.length ? (
@@ -222,53 +154,29 @@ export function InsightPanel({ dashboard, latestAnalysis }: InsightPanelProps) {
                   <div className="flex items-center justify-between gap-3">
                     <p className="text-sm font-semibold text-white">{behaviorLabel(event.event_type, language)}</p>
                     <Badge variant={event.severity === 'high' ? 'danger' : event.severity === 'medium' ? 'warning' : 'info'}>
-                      {Math.round(event.confidence * 100)}%
+                      {event.severity}
                     </Badge>
                   </div>
-                  <p className="mt-2 text-sm leading-6 text-[var(--text-muted)]">{event.interpretation}</p>
+                  {event.interpretation ? (
+                    <p className="mt-2 text-sm leading-6 text-[var(--text-muted)]">{event.interpretation}</p>
+                  ) : null}
                 </div>
               ))}
             </div>
           ) : (
             <p className="text-sm text-[var(--text-muted)]">
-              {isTurkish ? 'Son analizde yüksek güvenli davranış olayı kaydedilmedi.' : 'No high-confidence behavior events were recorded in the latest analysis.'}
+              {isTurkish ? 'Son analizde önemli bir davranış olayı kaydedilmedi.' : 'No notable behavior events were recorded in the latest analysis.'}
             </p>
           )}
         </div>
 
-        {/* ── Gizlilik + Model Modu ─────────────────────────── */}
-        <div className="grid gap-3 sm:grid-cols-2">
-          <div className="rounded-[24px] border border-[var(--line-soft)] bg-[rgba(255,255,255,0.03)] p-4">
-            <div className="flex items-center gap-2 text-sm text-[var(--text-muted)]">
-              <ShieldCheck className="size-4" />
-              {isTurkish ? 'Gizlilik' : 'Privacy'}
-            </div>
-            <p className="mt-3 text-sm font-semibold text-white">{dashboard.privacy_mode.replace(/_/g, ' ')}</p>
-            <p className="mt-2 text-xs leading-5 text-[var(--text-muted)]">
-              {isTurkish ? 'Kareler saklanmaz.' : 'Frames are not persisted.'}
-            </p>
-          </div>
-          <div className="rounded-[24px] border border-[var(--line-soft)] bg-[rgba(255,255,255,0.03)] p-4">
-            <div className="flex items-center gap-2 text-sm text-[var(--text-muted)]">
-              <Lock className="size-4" />
-              {isTurkish ? 'Model' : 'Model'}
-            </div>
-            <p className="mt-3 text-sm font-semibold text-white">{dashboard.model_mode}</p>
-            <p className="mt-2 text-xs leading-5 text-[var(--text-muted)]">
-              {latestAnalysis?.model
-                ? `${latestAnalysis.model.provider} / ${latestAnalysis.model.name}`
-                : isTurkish ? 'Analiz bekleniyor.' : 'Awaiting analysis.'}
-            </p>
-          </div>
-        </div>
-
-        {/* ── Üretilen Hatırlatıcılar ───────────────────────── */}
+        {/* ── Üretilen hatırlatıcılar ───────────────────────── */}
         {latestAnalysis?.generated_reminders.length ? (
           <div className="space-y-3">
             <div className="flex items-center justify-between">
               <p className="flex items-center gap-2 text-sm font-semibold text-white">
                 <Eye className="size-4" />
-                {isTurkish ? 'Üretilen Hatırlatıcılar' : 'Generated Reminders'}
+                {isTurkish ? 'Hatırlatıcılar' : 'Reminders'}
               </p>
               <Badge variant="warning">{latestAnalysis.generated_reminders.length}</Badge>
             </div>
@@ -280,6 +188,10 @@ export function InsightPanel({ dashboard, latestAnalysis }: InsightPanelProps) {
             ))}
           </div>
         ) : null}
+
+        <p className="text-xs text-[var(--text-muted)]">
+          {isTurkish ? '🔒 Kameranızdan alınan kareler saklanmaz.' : '🔒 Camera frames are not stored.'}
+        </p>
 
       </CardContent>
     </Card>

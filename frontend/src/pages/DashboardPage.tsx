@@ -52,7 +52,7 @@ function MetricCard({
 export function DashboardPage() {
   const { language, isTurkish } = useLanguage()
   const queryClient = useQueryClient()
-  const { videoRef, permissionState, errorMessage, streamReady, requestCamera, stopCamera, captureFrame } = useCamera()
+  const { videoRef, errorMessage, streamReady, requestCamera, stopCamera, captureFrame } = useCamera()
   const [latestAnalysis, setLatestAnalysis] = useState<AnalyzeFrameResponse | null>(null)
   const [autoScan, setAutoScan] = useState(true)
   const [showOverlay, setShowOverlay] = useState(true)
@@ -402,9 +402,7 @@ export function DashboardPage() {
           videoRef={videoRef}
           monitoringLive={monitoringLive}
           sessionActive={sessionActive}
-          activeSessionId={dashboard.active_session_id}
           analysisEnabled={dashboard.analysis_enabled}
-          permissionState={permissionState}
           streamReady={streamReady}
           cameraError={errorMessage}
           autoScan={autoScan}
@@ -421,7 +419,7 @@ export function DashboardPage() {
           onToggleAutoScan={setAutoScan}
           onToggleOverlay={setShowOverlay}
         />
-        <InsightPanel dashboard={dashboard} latestAnalysis={latestAnalysis} />
+        <InsightPanel latestAnalysis={latestAnalysis} />
       </div>
 
       <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">

@@ -283,8 +283,8 @@ export function ChatPage() {
               </div>
               <CardDescription className="mt-2">
                 {isTurkish
-                  ? 'Yanitlar sadece kendi kayitli davranis, rapor, hatirlatici ve seans verine dayanir.'
-                  : 'Answers stay grounded in your own stored behavior events, reports, reminders, and sessions.'}
+                  ? 'Yanıtlar yalnızca kendi verilerine dayanır.'
+                  : 'Answers are based only on your own data.'}
               </CardDescription>
             </div>
             <Button
@@ -442,9 +442,7 @@ export function ChatPage() {
             <div>
               <CardTitle>{isTurkish ? 'Veriye dayali bilgiler' : 'Grounded facts'}</CardTitle>
               <CardDescription className="mt-2">
-                {isTurkish
-                  ? 'Son yanitta kullanilan kayitli veri noktalarindan secilen ozet bilgiler.'
-                  : 'Selected grounded points taken from your stored data used in the latest answer.'}
+                {isTurkish ? 'Yanıtın dayandığı kişisel verilerin.' : 'Your personal data the answer is based on.'}
               </CardDescription>
             </div>
           </CardHeader>
@@ -474,9 +472,7 @@ export function ChatPage() {
             <div>
               <CardTitle>{isTurkish ? 'Onerilen sorular' : 'Suggested questions'}</CardTitle>
               <CardDescription className="mt-2">
-                {isTurkish
-                  ? 'Sorular ayni kullaniciya ait rapor, olay, hatirlatici ve seans gecmisi ile sinirlandirilir.'
-                  : 'Suggestions stay scoped to your own report, event, reminder, and session history.'}
+                {isTurkish ? 'Hızlı başlamak için örnek sorular.' : 'Sample questions to get started.'}
               </CardDescription>
             </div>
           </CardHeader>

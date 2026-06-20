@@ -61,8 +61,8 @@ export function ReportsPage() {
             <p className="mt-2 text-xl font-bold text-white">{isTurkish ? 'Gun sonu davranis ozeti' : 'End-of-day behavior summary'}</p>
             <p className="mt-2 text-sm text-[var(--text-muted)]">
               {isTurkish
-                ? 'Bu rapor kayitli davranis olaylari, hatirlaticilar, su kayitlari ve analiz oturumlarindan uretilir.'
-                : 'This report is generated from stored behavior events, reminders, hydration logs, and analysis sessions.'}
+                ? 'Seçilen günün davranış, hatırlatıcı ve su özeti.'
+                : 'Behavior, reminder, and hydration summary for the selected day.'}
             </p>
           </div>
           <div className="w-full sm:max-w-xs">
@@ -184,9 +184,7 @@ export function ReportsPage() {
             <div>
               <CardTitle>{isTurkish ? 'Hatirlatici gecmisi' : 'Reminder history'}</CardTitle>
               <CardDescription className="mt-2">
-                {isTurkish
-                  ? 'Kocluk ve raporlama icin kullanilan arka uc kaynakli hatirlatici kayitlari.'
-                  : 'Backend-generated reminder records used for coaching and reporting.'}
+                {isTurkish ? 'Gün içinde üretilen hatırlatıcılar.' : 'Reminders generated during the day.'}
               </CardDescription>
             </div>
           </CardHeader>
@@ -206,7 +204,6 @@ export function ReportsPage() {
                     <Badge variant="info">{reminder.source}</Badge>
                   </div>
                   <p className="mt-2 text-sm leading-6 text-[var(--text-muted)]">{reminder.message}</p>
-                  <p className="mt-2 text-xs text-[var(--text-soft)]">{reminder.trigger_reason}</p>
                 </div>
               ))
             )}
