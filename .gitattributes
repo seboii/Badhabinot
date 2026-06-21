@@ -1,0 +1,16 @@
+# Linux konteynerlerinde çalışan kabuk scriptleri DAİMA LF olmalı.
+# (Windows'ta autocrlf CRLF'e çevirirse `sh` "set: Illegal option" ile çöker.)
+*.sh text eol=lf
+
+# Konteyner build/çalışma dosyaları da LF kalsın.
+Dockerfile text eol=lf
+*.Dockerfile text eol=lf
+Modelfile* text eol=lf
+Caddyfile text eol=lf
+*.env text eol=lf
+.env.* text eol=lf
+
+# Windows scriptleri CRLF kalsın.
+*.ps1 text eol=crlf
+*.bat text eol=crlf
+*.cmd text eol=crlf

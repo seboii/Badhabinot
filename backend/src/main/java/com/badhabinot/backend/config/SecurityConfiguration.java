@@ -2,6 +2,8 @@ package com.badhabinot.backend.config;
 
 import com.nimbusds.jose.jwk.source.ImmutableSecret;
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Base64;
 import java.util.List;
 import javax.crypto.SecretKey;
@@ -10,6 +12,7 @@ import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -39,6 +42,14 @@ import org.springframework.web.filter.OncePerRequestFilter;
 @Configuration
 @EnableMethodSecurity
 public class SecurityConfiguration {
+
+    /**
+     * Üretimde ek izinli origin'ler (virgülle ayrılmış). Örn:
+     * APP_CORS_ALLOWED_ORIGINS=https://badhabinot.westeurope.cloudapp.azure.com
+     * Boş bırakılırsa yalnızca yerleşik desenler (localhost, *.cloudapp.azure.com vb.) geçerli.
+     */
+    @Value("${APP_CORS_ALLOWED_ORIGINS:}")
+    private String extraAllowedOrigins;
 
     @Bean
     public SecurityFilterChain securityFilterChain(
@@ -84,7 +95,7 @@ public class SecurityConfiguration {
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration config = new CorsConfiguration();
 
-        config.setAllowedOriginPatterns(List.of(
+        List<String> originPatterns = new ArrayList<>(List.of(
             // ── LOCAL GELİŞTİRME — HTTP ────────────────────
             "http://localhost",
             "http://localhost:*",
@@ -105,13 +116,22 @@ public class SecurityConfiguration {
 
             // ── NGROK TEST ─────────────────────────────────
             "https://*.ngrok.io",
-            "https://*.ngrok-free.app"
+            "https://*.ngrok-free.app",
 
-            // ── SUNUCU (şimdilik pasif, hazır) ─────────────
-            // "https://badhabinot.com",
-            // "https://www.badhabinot.com",
-            // "https://api.badhabinot.com"
+            // ── SUNUCU — Azure ücretsiz FQDN (her bölge) ───
+            "https://*.cloudapp.azure.com",
+            "https://*.cloudapp.azure.com:*"
         ));
+
+        // Üretimde özel domain/origin'leri APP_CORS_ALLOWED_ORIGINS ile ekle (virgülle ayrılmış).
+        if (extraAllowedOrigins != null && !extraAllowedOrigins.isBlank()) {
+            Arrays.stream(extraAllowedOrigins.split(","))
+                    .map(String::trim)
+                    .filter(s -> !s.isEmpty())
+                    .forEach(originPatterns::add);
+        }
+
+        config.setAllowedOriginPatterns(originPatterns);
 
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"));
         config.setAllowedHeaders(List.of("*"));
