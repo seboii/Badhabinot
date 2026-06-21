@@ -12,15 +12,20 @@ import com.badhabinot.backend.dto.auth.RegisterResponse;
 import com.badhabinot.backend.dto.auth.TokenResponse;
 import com.badhabinot.backend.common.exception.auth.TooManyLoginAttemptsException;
 import com.badhabinot.backend.infrastructure.redis.RateLimiterService;
+import com.badhabinot.backend.model.auth.AuthUser;
+import com.badhabinot.backend.model.auth.UserRole;
+import com.badhabinot.backend.repository.auth.AuthUserRepository;
 import com.badhabinot.backend.service.auth.IAuthApplicationService;
 import com.badhabinot.backend.service.auth.IMailService;
 import com.badhabinot.backend.service.auth.IPasswordResetService;
+import com.badhabinot.backend.service.monitoring.IPushNotificationService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import java.time.Duration;
+import java.util.Map;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -40,17 +45,23 @@ public class AuthController {
     private final IPasswordResetService passwordResetService;
     private final RateLimiterService rateLimiter;
     private final IMailService mailService;
+    private final AuthUserRepository authUserRepository;
+    private final IPushNotificationService pushNotificationService;
 
     public AuthController(
             IAuthApplicationService authApplicationService,
             IPasswordResetService passwordResetService,
             RateLimiterService rateLimiter,
-            IMailService mailService
+            IMailService mailService,
+            AuthUserRepository authUserRepository,
+            IPushNotificationService pushNotificationService
     ) {
         this.authApplicationService = authApplicationService;
         this.passwordResetService = passwordResetService;
         this.rateLimiter = rateLimiter;
         this.mailService = mailService;
+        this.authUserRepository = authUserRepository;
+        this.pushNotificationService = pushNotificationService;
     }
 
     @PostMapping("/register")
@@ -62,11 +73,24 @@ public class AuthController {
             throw new TooManyLoginAttemptsException("Çok fazla kayıt denemesi. Lütfen daha sonra tekrar deneyin.");
         }
         RegisterResponse response = authApplicationService.register(request);
-        // Yöneticiye "yeni kullanıcı onay bekliyor" bildirimi (hata kaydı bozmaz).
+        // Yöneticiye "yeni kullanıcı onay bekliyor" bildirimi: hem e-posta hem
+        // mobil push (admin Capacitor uygulamasında). Hatalar kaydı bozmaz.
         try {
             mailService.sendNewUserNotification(request.email());
         } catch (Exception ignored) {
             // non-fatal
+        }
+        try {
+            for (AuthUser admin : authUserRepository.findByRole(UserRole.ADMIN)) {
+                pushNotificationService.sendToUser(
+                        admin.getId(),
+                        "Yeni kayıt onayı bekliyor",
+                        request.email() + " kaydoldu, onayını bekliyor.",
+                        Map.of("type", "NEW_USER_PENDING", "email", request.email())
+                );
+            }
+        } catch (Exception ignored) {
+            // non-fatal (Firebase yapılandırılmamışsa sessizce atlanır)
         }
         return response;
     }

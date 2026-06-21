@@ -2,6 +2,7 @@ package com.badhabinot.backend.repository.auth;
 
 import com.badhabinot.backend.model.auth.AuthUser;
 import com.badhabinot.backend.model.auth.UserRole;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.domain.Page;
@@ -18,6 +19,9 @@ public interface AuthUserRepository extends JpaRepository<AuthUser, UUID> {
     Page<AuthUser> findByEmailContainingIgnoreCase(String email, Pageable pageable);
 
     long countByRole(UserRole role);
+
+    /** Yeni kayıt bildirimi için admin kullanıcıları (push). */
+    List<AuthUser> findByRole(UserRole role);
 }
 
 
