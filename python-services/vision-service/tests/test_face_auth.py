@@ -63,7 +63,9 @@ def test_register_frame_appends_embedding(
     class FakeDeepFace:
         @staticmethod
         def represent(**_: Any) -> list[dict]:
-            return [{"embedding": embedding.tolist(), "facial_area": {}}]
+            # Gerçekçi (görüntü içinde, tam kareyi kaplamayan) yüz kutusu →
+            # _is_real_face guard'ını geçer (kayıtta gerçek yüz zorunlu).
+            return [{"embedding": embedding.tolist(), "facial_area": {"x": 8, "y": 8, "w": 30, "h": 40}}]
 
     monkeypatch.setattr(m, "DeepFace", FakeDeepFace, raising=False)
     auth = VisionFaceAuth()
@@ -91,7 +93,9 @@ def test_register_frame_caps_at_max_frames(
     class FakeDeepFace:
         @staticmethod
         def represent(**_: Any) -> list[dict]:
-            return [{"embedding": embedding.tolist(), "facial_area": {}}]
+            # Gerçekçi (görüntü içinde, tam kareyi kaplamayan) yüz kutusu →
+            # _is_real_face guard'ını geçer (kayıtta gerçek yüz zorunlu).
+            return [{"embedding": embedding.tolist(), "facial_area": {"x": 8, "y": 8, "w": 30, "h": 40}}]
 
     monkeypatch.setattr(m, "DeepFace", FakeDeepFace, raising=False)
     auth = VisionFaceAuth()
@@ -341,9 +345,11 @@ def test_register_frame_enrolls_largest_face_not_first(
     class FakeDeepFace:
         @staticmethod
         def represent(**_: Any) -> list[dict]:
+            # Her iki kutu da 64x64 görüntü içinde ve tam kareyi kaplamıyor
+            # (_is_real_face guard'ını geçer); büyük olan "owner" en geniş alan.
             return [
-                {"embedding": small_stranger.tolist(), "facial_area": {"x": 0, "y": 0, "w": 30, "h": 30}},
-                {"embedding": large_owner.tolist(), "facial_area": {"x": 100, "y": 50, "w": 120, "h": 120}},
+                {"embedding": small_stranger.tolist(), "facial_area": {"x": 0, "y": 0, "w": 12, "h": 12}},
+                {"embedding": large_owner.tolist(), "facial_area": {"x": 20, "y": 20, "w": 40, "h": 40}},
             ]
 
     monkeypatch.setattr(m, "DeepFace", FakeDeepFace, raising=False)
