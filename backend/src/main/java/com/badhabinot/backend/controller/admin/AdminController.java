@@ -75,6 +75,12 @@ public class AdminController {
         return ResponseEntity.ok().build();
     }
 
+    @PostMapping("/users/{userId}/approve")
+    public ResponseEntity<Void> approveUser(@PathVariable UUID userId) {
+        adminService.approveUser(userId);
+        return ResponseEntity.ok().build();
+    }
+
     @PutMapping("/users/{userId}/ai-settings")
     public ResponseEntity<Void> updateUserAiSettings(
             @PathVariable UUID userId,

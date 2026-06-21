@@ -7,12 +7,13 @@ import com.badhabinot.backend.dto.auth.LoginRequest;
 import com.badhabinot.backend.dto.auth.LogoutRequest;
 import com.badhabinot.backend.dto.auth.RefreshTokenRequest;
 import com.badhabinot.backend.dto.auth.RegisterRequest;
+import com.badhabinot.backend.dto.auth.RegisterResponse;
 import com.badhabinot.backend.dto.auth.TokenResponse;
 import java.util.UUID;
 import org.springframework.security.oauth2.jwt.Jwt;
 
 public interface IAuthApplicationService {
-    TokenResponse register(RegisterRequest request);
+    RegisterResponse register(RegisterRequest request);
     TokenResponse login(LoginRequest request);
     TokenResponse loginWithFace(FaceLoginRequest request);
     TokenResponse refresh(RefreshTokenRequest request);

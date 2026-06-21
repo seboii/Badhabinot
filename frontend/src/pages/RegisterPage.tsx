@@ -58,7 +58,15 @@ export function RegisterPage() {
   const accountSchema = z
     .object({
       email: z.email(isTurkish ? 'Geçerli bir e-posta adresi gir.' : 'Enter a valid email address.'),
-      password: z.string().min(8, isTurkish ? 'Şifre en az 8 karakter olmalı.' : 'Password must be at least 8 characters.'),
+      password: z
+        .string()
+        .min(8, isTurkish ? 'Şifre en az 8 karakter olmalı.' : 'Password must be at least 8 characters.')
+        .regex(
+          /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$/,
+          isTurkish
+            ? 'Şifre en az bir büyük harf, bir küçük harf ve bir rakam içermeli.'
+            : 'Password must contain an uppercase letter, a lowercase letter, and a digit.',
+        ),
       confirmPassword: z.string(),
       display_name: z.string().min(2, isTurkish ? 'Ad zorunlu.' : 'Name is required.').max(100),
       timezone: z.string().min(2).max(64),
@@ -79,18 +87,25 @@ export function RegisterPage() {
     mutationFn: async () => {
       if (!accountData) throw new Error('Missing account data')
       const { confirmPassword: _, ...payload } = accountData
-      const session = await authApi.register(payload)
-      setSession(session)
-      await userApi.updateConsents(consents)
-      return session
+      return authApi.register(payload)
     },
-    onSuccess(_session) {
+    onSuccess(result) {
+      // Yeni kayıtlar yönetici onayı bekler — token gelmez. Onam + yüz kaydı,
+      // onaydan sonraki ilk girişte /onboarding akışında toplanır.
+      if (result.pending_approval || !result.session) {
+        toast.success(
+          result.message ||
+            (isTurkish
+              ? 'Hesabınız oluşturuldu. Yönetici onayından sonra giriş yapabilirsiniz.'
+              : 'Account created. You can sign in after an administrator approves it.'),
+        )
+        navigate('/login')
+        return
+      }
+      // (İleride otomatik onay açılırsa) oturumu kur ve devam et.
+      setSession(result.session)
+      void userApi.updateConsents(consents).catch(() => {})
       void userApi.getMe().then(setProfile).catch(() => {})
-      toast.success(
-        isTurkish
-          ? 'Hesap oluşturuldu. Yüz kaydına geçiliyor...'
-          : 'Account created. Proceeding to face registration...',
-      )
       setStep('camera_face')
     },
     onError(error) {

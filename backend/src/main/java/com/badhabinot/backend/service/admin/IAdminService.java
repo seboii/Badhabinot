@@ -21,6 +21,9 @@ public interface IAdminService {
 
     void resetUserData(UUID userId);
 
+    /** Onay bekleyen kullanıcıyı aktifleştir (PENDING_APPROVAL → ACTIVE). */
+    void approveUser(UUID userId);
+
     /** Bir kullanıcının AI/sohbet ayarlarını (API/LOCAL mod, model, ollama URL) güncelle. */
     void updateUserAiSettings(UUID userId, AdminUserAiSettingsRequest request);
 

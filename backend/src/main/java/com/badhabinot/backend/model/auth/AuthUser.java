@@ -104,6 +104,11 @@ public class AuthUser {
     public void updatePassword(String encodedPassword) {
         this.passwordHash = encodedPassword;
     }
+
+    /** Yönetici onayı: hesabı aktifleştir (PENDING_APPROVAL → ACTIVE). */
+    public void activate() {
+        this.status = AccountStatus.ACTIVE;
+    }
 }
 
 

@@ -7,12 +7,13 @@ import type {
   PasswordResetConfirmDto,
   PasswordResetRequestDto,
   RegisterRequest,
+  RegisterResponse,
   TokenResponse,
 } from '@/types/auth'
 
 export const authApi = {
   async register(payload: RegisterRequest) {
-    const response = await apiClient.post<TokenResponse>('/api/v1/auth/register', payload)
+    const response = await apiClient.post<RegisterResponse>('/api/v1/auth/register', payload)
     return response.data
   },
 

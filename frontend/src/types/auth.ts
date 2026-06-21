@@ -28,6 +28,12 @@ export type RegisterRequest = {
   locale: string
 }
 
+export type RegisterResponse = {
+  pending_approval: boolean
+  message: string
+  session: TokenResponse | null
+}
+
 export type LoginRequest = {
   email: string
   password: string

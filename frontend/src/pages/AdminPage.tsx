@@ -232,6 +232,18 @@ export function AdminPage() {
     },
   })
 
+  const approveMutation = useMutation({
+    mutationFn: () => adminApi.approveUser(selectedId as string),
+    onSuccess() {
+      toast.success(isTurkish ? 'Kullanıcı onaylandı, artık giriş yapabilir.' : 'User approved.')
+      void queryClient.invalidateQueries({ queryKey: ['admin-user', selectedId] })
+      void queryClient.invalidateQueries({ queryKey: ['admin-users'] })
+    },
+    onError(error) {
+      toast.error(toErrorMessage(error, isTurkish ? 'Kullanıcı onaylanamadı.' : 'Unable to approve user.'))
+    },
+  })
+
   const users = usersQuery.data?.items ?? []
   const detail = detailQuery.data
   const reports = reportsQuery.data ?? []
@@ -315,6 +327,9 @@ export function AdminPage() {
                       <p className="truncate text-sm font-semibold text-white">{u.display_name || u.email}</p>
                       <p className="truncate text-xs text-[var(--text-muted)]">{u.email}</p>
                     </div>
+                    {u.status === 'PENDING_APPROVAL' ? (
+                      <Badge variant="warning">{isTurkish ? 'onay bekliyor' : 'pending'}</Badge>
+                    ) : null}
                     {u.role === 'ADMIN' ? <Badge variant="primary">admin</Badge> : null}
                   </button>
                 ))}
@@ -386,6 +401,16 @@ export function AdminPage() {
 
                 {/* İşlemler */}
                 <div className="flex flex-wrap gap-3 border-t border-[var(--line-soft)] pt-4">
+                  {detail.status === 'PENDING_APPROVAL' ? (
+                    <Button
+                      variant="primary"
+                      iconLeft={<ShieldCheck className="size-4" />}
+                      loading={approveMutation.isPending}
+                      onClick={() => approveMutation.mutate()}
+                    >
+                      {isTurkish ? 'Kullanıcıyı onayla' : 'Approve user'}
+                    </Button>
+                  ) : null}
                   <Button variant="secondary" iconLeft={<RefreshCw className="size-4" />} onClick={() => setResetOpen(true)}>
                     {isTurkish ? 'Verileri sıfırla' : 'Reset data'}
                   </Button>

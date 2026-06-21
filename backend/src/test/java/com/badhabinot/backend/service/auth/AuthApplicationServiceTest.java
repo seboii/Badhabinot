@@ -72,16 +72,9 @@ class AuthApplicationServiceTest {
 
     @Test
     void registerNormalizesEmailAndBootstrapsUserContext() {
-        Instant expiresAt = Instant.parse("2026-04-08T12:00:00Z");
         when(authUserRepository.existsByEmail("alice@example.com")).thenReturn(false);
         when(passwordEncoder.encode("secret-123")).thenReturn("encoded-password");
         when(authUserRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
-        when(tokenIssuer.issueAccessToken(any())).thenReturn(new ITokenIssuer.IssuedAccessToken("access-token", expiresAt));
-        when(refreshTokenService.generate(any())).thenReturn(new IRefreshTokenService.GeneratedRefreshToken(
-                "refresh-token",
-                "refresh-hash",
-                expiresAt
-        ));
 
         var response = AuthApplicationServiceImpl.register(new RegisterRequest(
                 " Alice@Example.com ",
@@ -91,9 +84,17 @@ class AuthApplicationServiceTest {
                 "tr-TR"
         ));
 
-        assertThat(response.accessToken()).isEqualTo("access-token");
-        assertThat(response.refreshToken()).isEqualTo("refresh-token");
-        assertThat(response.user().email()).isEqualTo("alice@example.com");
+        // Yeni kayıt onay bekler — token verilmez.
+        assertThat(response.pendingApproval()).isTrue();
+        assertThat(response.session()).isNull();
+
+        // Kullanıcı PENDING_APPROVAL durumunda kaydedilmeli.
+        ArgumentCaptor<com.badhabinot.backend.model.auth.AuthUser> userCaptor =
+                ArgumentCaptor.forClass(com.badhabinot.backend.model.auth.AuthUser.class);
+        verify(authUserRepository).save(userCaptor.capture());
+        assertThat(userCaptor.getValue().getStatus())
+                .isEqualTo(com.badhabinot.backend.model.auth.AccountStatus.PENDING_APPROVAL);
+        assertThat(userCaptor.getValue().getEmail()).isEqualTo("alice@example.com");
 
         ArgumentCaptor<UUID> userIdCaptor = ArgumentCaptor.forClass(UUID.class);
         verify(userContextService).bootstrap(

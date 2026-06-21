@@ -44,6 +44,10 @@ export const adminApi = {
     await apiClient.post(`/api/v1/admin/users/${userId}/reset`)
   },
 
+  async approveUser(userId: string) {
+    await apiClient.post(`/api/v1/admin/users/${userId}/approve`)
+  },
+
   async updateUserAiSettings(userId: string, body: AdminUserAiSettingsRequest) {
     await apiClient.put(`/api/v1/admin/users/${userId}/ai-settings`, body)
   },

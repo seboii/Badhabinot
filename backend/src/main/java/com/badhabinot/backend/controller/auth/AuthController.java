@@ -8,6 +8,7 @@ import com.badhabinot.backend.dto.auth.PasswordResetConfirmDto;
 import com.badhabinot.backend.dto.auth.PasswordResetRequestDto;
 import com.badhabinot.backend.dto.auth.RefreshTokenRequest;
 import com.badhabinot.backend.dto.auth.RegisterRequest;
+import com.badhabinot.backend.dto.auth.RegisterResponse;
 import com.badhabinot.backend.dto.auth.TokenResponse;
 import com.badhabinot.backend.service.auth.IAuthApplicationService;
 import com.badhabinot.backend.service.auth.IPasswordResetService;
@@ -40,8 +41,8 @@ public class AuthController {
 
     @PostMapping("/register")
     @ResponseStatus(HttpStatus.CREATED)
-    @Operation(summary = "Register a new BADHABINOT user")
-    public TokenResponse register(@Valid @RequestBody RegisterRequest request) {
+    @Operation(summary = "Register a new BADHABINOT user (requires admin approval before login)")
+    public RegisterResponse register(@Valid @RequestBody RegisterRequest request) {
         return authApplicationService.register(request);
     }
 

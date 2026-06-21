@@ -195,6 +195,15 @@ public class AdminServiceImpl implements IAdminService {
     }
 
     @Override
+    @org.springframework.transaction.annotation.Transactional(transactionManager = "authTransactionManager")
+    public void approveUser(UUID userId) {
+        AuthUser user = authUserRepository.findById(userId)
+                .orElseThrow(() -> new IllegalArgumentException("User not found"));
+        user.activate();
+        authUserRepository.save(user);
+    }
+
+    @Override
     public void updateUserAiSettings(UUID userId, AdminUserAiSettingsRequest req) {
         AuthUser user = authUserRepository.findById(userId)
                 .orElseThrow(() -> new IllegalArgumentException("User not found"));

@@ -63,7 +63,13 @@ export function PasswordChangeForm() {
       currentPassword: z.string().min(1, isTurkish ? 'Mevcut sifre zorunlu.' : 'Current password is required.'),
       newPassword: z
         .string()
-        .min(8, isTurkish ? 'Yeni sifre en az 8 karakter olmali.' : 'New password must be at least 8 characters.'),
+        .min(8, isTurkish ? 'Yeni sifre en az 8 karakter olmali.' : 'New password must be at least 8 characters.')
+        .regex(
+          /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$/,
+          isTurkish
+            ? 'Şifre en az bir büyük harf, bir küçük harf ve bir rakam içermeli.'
+            : 'Password must contain an uppercase letter, a lowercase letter, and a digit.',
+        ),
       confirmNewPassword: z.string(),
     })
     .refine((data) => data.newPassword === data.confirmNewPassword, {

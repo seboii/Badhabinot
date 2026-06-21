@@ -31,7 +31,15 @@ export function ResetPasswordPage() {
 
   const schema = z
     .object({
-      newPassword: z.string().min(8, isTurkish ? 'Sifre en az 8 karakter olmali.' : 'Password must be at least 8 characters.'),
+      newPassword: z
+        .string()
+        .min(8, isTurkish ? 'Sifre en az 8 karakter olmali.' : 'Password must be at least 8 characters.')
+        .regex(
+          /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$/,
+          isTurkish
+            ? 'Şifre en az bir büyük harf, bir küçük harf ve bir rakam içermeli.'
+            : 'Password must contain an uppercase letter, a lowercase letter, and a digit.',
+        ),
       confirmPassword: z.string(),
     })
     .refine((data) => data.newPassword === data.confirmPassword, {

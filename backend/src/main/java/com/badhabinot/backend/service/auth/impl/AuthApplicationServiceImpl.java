@@ -7,6 +7,7 @@ import com.badhabinot.backend.dto.auth.LoginRequest;
 import com.badhabinot.backend.dto.auth.LogoutRequest;
 import com.badhabinot.backend.dto.auth.RefreshTokenRequest;
 import com.badhabinot.backend.dto.auth.RegisterRequest;
+import com.badhabinot.backend.dto.auth.RegisterResponse;
 import com.badhabinot.backend.dto.auth.TokenResponse;
 import com.badhabinot.backend.common.exception.auth.AuthenticationFailedException;
 import com.badhabinot.backend.common.exception.auth.DuplicateEmailException;
@@ -69,22 +70,27 @@ public class AuthApplicationServiceImpl implements IAuthApplicationService {
 
     @Transactional(transactionManager = "authTransactionManager")
     @Override
-    public TokenResponse register(RegisterRequest request) {
+    public RegisterResponse register(RegisterRequest request) {
         String normalizedEmail = normalizeEmail(request.email());
         if (authUserRepository.existsByEmail(normalizedEmail)) {
             throw new DuplicateEmailException("An account already exists for that email address");
         }
 
+        // GÜVENLİK: Yeni kayıtlar yönetici onayı bekler — onaylanana kadar giriş yapamaz.
         AuthUser user = AuthUser.create(
                 normalizedEmail,
                 passwordEncoder.encode(request.password()),
                 UserRole.USER,
-                AccountStatus.ACTIVE
+                AccountStatus.PENDING_APPROVAL
         );
         authUserRepository.save(user);
 
         userContextService.bootstrap(user.getId(), normalizedEmail, request.displayName(), request.timezone(), request.locale());
-        return issueTokenResponse(user);
+        return new RegisterResponse(
+                true,
+                "Hesabınız oluşturuldu. Yönetici onayından sonra giriş yapabilirsiniz.",
+                null
+        );
     }
 
 
@@ -102,6 +108,10 @@ public class AuthApplicationServiceImpl implements IAuthApplicationService {
         if (!passwordEncoder.matches(request.password(), user.getPasswordHash())) {
             loginAttemptService.recordFailure(normalizedEmail);
             throw new AuthenticationFailedException("Invalid email or password");
+        }
+        if (user.getStatus() == AccountStatus.PENDING_APPROVAL) {
+            // Şifre doğru ama hesap onaysız — kilitleme sayacına yazma.
+            throw new AuthenticationFailedException("Hesabınız henüz yönetici tarafından onaylanmadı. Lütfen onay bekleyin.");
         }
         if (user.getStatus() != AccountStatus.ACTIVE) {
             loginAttemptService.recordFailure(normalizedEmail);
@@ -162,6 +172,9 @@ public class AuthApplicationServiceImpl implements IAuthApplicationService {
         if (user == null) {
             loginAttemptService.recordFailure(normalizedEmail);
             throw new AuthenticationFailedException("Invalid email or password");
+        }
+        if (user.getStatus() == AccountStatus.PENDING_APPROVAL) {
+            throw new AuthenticationFailedException("Hesabınız henüz yönetici tarafından onaylanmadı. Lütfen onay bekleyin.");
         }
         if (user.getStatus() != AccountStatus.ACTIVE) {
             loginAttemptService.recordFailure(normalizedEmail);
