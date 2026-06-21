@@ -9,8 +9,17 @@
 {$PUBLIC_DOMAIN} {
 	encode zstd gzip
 
+	# Grafana panoları — /grafana altında (yalnız iç ağdaki grafana:3000'e proxy).
+	# Grafana GF_SERVER_SERVE_FROM_SUB_PATH=true ile alt-yolu kendi yönetir.
+	handle /grafana* {
+		reverse_proxy grafana:3000
+	}
+
+	# SPA + /api + /actuator + SSE → frontend-app (kendi nginx'i backend'e proxy'ler).
 	# flush_interval -1 → yanıtları anında akıt (SSE / sohbet token akışı için).
-	reverse_proxy frontend-app:80 {
-		flush_interval -1
+	handle {
+		reverse_proxy frontend-app:80 {
+			flush_interval -1
+		}
 	}
 }

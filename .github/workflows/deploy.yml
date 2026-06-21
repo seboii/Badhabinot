@@ -177,6 +177,9 @@ jobs:
             COMPOSE="docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.ghcr.yml --env-file .env.prod"
             $COMPOSE pull backend ai-service vision-service frontend-app
             $COMPOSE up -d
+            # Caddy bind-mount'lu Caddyfile'ı değişince compose recreate etmez →
+            # /grafana gibi yeni rotaların etkin olması için Caddy'yi yeniden yükle.
+            $COMPOSE restart caddy || true
             docker image prune -f
             echo "--- container durumları ---"
             $COMPOSE ps

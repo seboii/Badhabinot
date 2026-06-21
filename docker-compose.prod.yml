@@ -24,6 +24,12 @@ services:
     environment:
       COACH_ONLY: "true"
 
+  # Grafana uretimde Caddy'nin /grafana alt-yolundan sunulur (alt-yol modu aktif).
+  grafana:
+    environment:
+      GF_SERVER_ROOT_URL: https://${PUBLIC_DOMAIN}/grafana/
+      GF_SERVER_SERVE_FROM_SUB_PATH: "true"
+
   caddy:
     image: caddy:2-alpine
     restart: unless-stopped

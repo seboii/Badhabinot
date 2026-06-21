@@ -240,12 +240,43 @@ services:
       retries: 10
       start_period: 10s
 
+  # ── İzleme: Prometheus (metrik toplama) — yalnız iç ağ, dışarı kapalı ──────
+  prometheus:
+    <<: *runtime-defaults
+    image: prom/prometheus:latest
+    volumes:
+      - ./infra/monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    networks:
+      - platform
+
+  # ── İzleme: Grafana (panolar) — dışarı port açmaz; prod'da Caddy /grafana ──
+  grafana:
+    <<: *runtime-defaults
+    image: grafana/grafana:latest
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - ./infra/monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./infra/monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    depends_on:
+      - prometheus
+    networks:
+      - platform
+
 networks:
   platform:
     name: badhabinot-platform
+    # Docker'in varsayilan surucusu zaten 'bridge'; mevcut agi gereksiz yeniden
+    # olusturmamak icin acik 'driver' belirtilmez (islevsel olarak aynidir).
 
 volumes:
   postgres-data:
   vision-face-data:
   vision-session-logs:
   ollama-models:
+  prometheus-data:
+  grafana-data:
