@@ -1,8 +1,10 @@
 name: CI
 
+# master push'ta tam pipeline deploy.yml'de çalışır (test → build → deploy);
+# çift test koşmamak için CI yalnızca PR'larda ve develop push'ta doğrular.
 on:
   push:
-    branches: [master, develop]
+    branches: [develop]
   pull_request:
     branches: [master, develop]
 

@@ -1,10 +1,13 @@
 name: Deploy
 
-# master'a push olunca: 4 servis imajını GHCR'a derle/push et, sonra Azure VM'e SSH ile çek+ayağa kaldır.
-# Gerekli repo secret'ları:
+# master'a push → ÖNCE tüm testler (backend + python + frontend), SONRA 4 imajı
+# GHCR'a derle/push, EN SON Azure VM'e SSH ile çek+ayağa kaldır.
+# Testler kırmızıysa imaj derlenmez ve deploy YAPILMAZ (kırık kod canlıya gitmez).
+#
+# Gerekli repo secret'ları (Settings → Secrets and variables → Actions):
 #   VM_HOST     → Azure VM public IP veya FQDN
 #   VM_USER     → VM kullanıcı adı (ör. azureuser)
-#   VM_SSH_KEY  → VM'e erişen private SSH anahtarı (PEM içeriği)
+#   VM_SSH_KEY  → VM'e erişen private SSH anahtarı (PEM içeriği, satır sonlarıyla)
 #   GHCR_USER   → GHCR kullanıcı adı (GitHub kullanıcı adı, ör. seboii)
 #   GHCR_PAT    → read:packages yetkili GitHub PAT (VM'in imaj çekmesi için)
 on:
@@ -21,8 +24,71 @@ env:
   OWNER: seboii
 
 jobs:
+  # ── 1) TESTLER ───────────────────────────────────────────────────────────
+  test-backend:
+    name: Test · Backend
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: maven
+      - name: Build + test (JaCoCo)
+        run: mvn -B -ntp -f backend/pom.xml verify
+
+  test-python:
+    name: Test · ${{ matrix.service }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        service: [ai-service, vision-service]
+    defaults:
+      run:
+        working-directory: python-services/${{ matrix.service }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Pip cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ matrix.service }}-${{ hashFiles(format('python-services/{0}/requirements*.txt', matrix.service)) }}
+          restore-keys: |
+            ${{ runner.os }}-pip-${{ matrix.service }}-
+      - name: Bağımlılıklar
+        run: pip install -r requirements.txt -r requirements-dev.txt
+      - name: Pytest (+coverage)
+        run: python -m pytest --cov=app --cov-report=term-missing --tb=short -q tests
+
+  test-frontend:
+    name: Test · Frontend
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run build
+
+  # ── 2) İMAJ DERLE + GHCR'A PUSH (testler geçtiyse) ───────────────────────
   build-push:
-    name: Build & push (${{ matrix.svc.name }})
+    name: Build & push · ${{ matrix.svc.name }}
+    needs: [test-backend, test-python, test-frontend]
     runs-on: ubuntu-latest
     timeout-minutes: 45
     permissions:
@@ -54,16 +120,13 @@ jobs:
             args: ""
     steps:
       - uses: actions/checkout@v4
-
       - uses: docker/setup-buildx-action@v3
-
       - name: GHCR login
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-
       - name: Build & push
         uses: docker/build-push-action@v6
         with:
@@ -77,19 +140,34 @@ jobs:
           cache-from: type=gha,scope=${{ matrix.svc.name }}
           cache-to: type=gha,mode=max,scope=${{ matrix.svc.name }}
 
+  # ── 3) AZURE VM'E DEPLOY (imajlar hazırsa) ───────────────────────────────
   deploy:
-    name: Deploy to Azure VM
+    name: Deploy · Azure VM
     needs: build-push
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - name: SSH → pull & up
+      - name: Secret ön kontrol
+        run: |
+          missing=""
+          [ -z "${{ secrets.VM_HOST }}" ]    && missing="$missing VM_HOST"
+          [ -z "${{ secrets.VM_USER }}" ]    && missing="$missing VM_USER"
+          [ -z "${{ secrets.VM_SSH_KEY }}" ] && missing="$missing VM_SSH_KEY"
+          [ -z "${{ secrets.GHCR_USER }}" ]  && missing="$missing GHCR_USER"
+          [ -z "${{ secrets.GHCR_PAT }}" ]   && missing="$missing GHCR_PAT"
+          if [ -n "$missing" ]; then
+            echo "::error::Eksik repo secret:$missing → Settings → Secrets and variables → Actions'tan ekle (bkz. docs/setup/azure-deployment.md)."
+            exit 1
+          fi
+          echo "Tüm deploy secret'ları mevcut."
+      - name: SSH → pull & up & health
         uses: appleboy/ssh-action@v1.2.0
         with:
           host: ${{ secrets.VM_HOST }}
           username: ${{ secrets.VM_USER }}
           key: ${{ secrets.VM_SSH_KEY }}
           script_stop: true
+          command_timeout: 20m
           script: |
             set -e
             cd ~/Badhabinot
@@ -100,3 +178,8 @@ jobs:
             $COMPOSE pull backend ai-service vision-service frontend-app
             $COMPOSE up -d
             docker image prune -f
+            echo "--- container durumları ---"
+            $COMPOSE ps
+            echo "--- sağlık kontrolü (frontend/nginx) ---"
+            sleep 5
+            curl -fsS http://localhost/healthz && echo " OK" || echo "healthz beklenmedik (loglara bak)"
