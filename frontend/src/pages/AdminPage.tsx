@@ -60,9 +60,6 @@ function AiSettingsCard({ userId, settings }: { userId: string; settings: AdminU
   const [mode, setMode] = useState<'API' | 'LOCAL'>((settings?.model_mode as 'API' | 'LOCAL') ?? 'API')
   const [localModel, setLocalModel] = useState(settings?.local_model_name || 'badhabinot-coach:latest')
   const [ollamaUrl, setOllamaUrl] = useState(settings?.ollama_base_url || 'http://ollama:11434')
-  const [persona, setPersona] = useState<'GENERAL_CHAT' | 'BEHAVIOR_COACH' | 'CUSTOM'>(
-    (settings?.chat_persona as 'GENERAL_CHAT' | 'BEHAVIOR_COACH' | 'CUSTOM') ?? 'GENERAL_CHAT',
-  )
 
   const mutation = useMutation({
     mutationFn: (body: AdminUserAiSettingsRequest) => adminApi.updateUserAiSettings(userId, body),
@@ -158,17 +155,6 @@ function AiSettingsCard({ userId, settings }: { userId: string; settings: AdminU
           </div>
         ) : null}
 
-        <div>
-          <label className="mb-1 block text-xs text-[var(--text-muted)]">
-            {isTurkish ? 'Sohbet personası' : 'Chat persona'}
-          </label>
-          <select className={inputCls} value={persona} onChange={(e) => setPersona(e.target.value as typeof persona)}>
-            <option value="GENERAL_CHAT">{isTurkish ? 'Genel sohbet' : 'General chat'}</option>
-            <option value="BEHAVIOR_COACH">{isTurkish ? 'Davranış koçu' : 'Behavior coach'}</option>
-            <option value="CUSTOM">{isTurkish ? 'Özel' : 'Custom'}</option>
-          </select>
-        </div>
-
         <div className="flex justify-end border-t border-[var(--line-soft)] pt-4">
           <Button
             variant="primary"
@@ -178,7 +164,7 @@ function AiSettingsCard({ userId, settings }: { userId: string; settings: AdminU
                 model_mode: mode,
                 local_model_name: localModel,
                 ollama_base_url: ollamaUrl,
-                chat_persona: persona,
+                chat_persona: 'GENERAL_CHAT',
               })
             }
           >
