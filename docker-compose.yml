@@ -3,6 +3,12 @@ name: badhabinot-platform
 x-runtime-defaults: &runtime-defaults
   restart: unless-stopped
   init: true
+  # Log rotasyonu — konteyner json log'lari sinirsiz buyuyup disk doldurmasin.
+  logging:
+    driver: json-file
+    options:
+      max-size: "10m"
+      max-file: "3"
   env_file:
     - .env
 
@@ -239,6 +245,19 @@ services:
       timeout: 5s
       retries: 10
       start_period: 10s
+
+  # ── İzleme: node-exporter (host disk/RAM/CPU metrikleri) — yalnız iç ağ ────
+  node-exporter:
+    <<: *runtime-defaults
+    image: prom/node-exporter:latest
+    command:
+      - '--path.rootfs=/host'
+      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+    pid: host
+    volumes:
+      - /:/host:ro,rslave
+    networks:
+      - platform
 
   # ── İzleme: Prometheus (metrik toplama) — yalnız iç ağ, dışarı kapalı ──────
   prometheus:

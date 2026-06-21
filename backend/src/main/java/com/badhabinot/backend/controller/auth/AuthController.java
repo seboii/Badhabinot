@@ -10,12 +10,16 @@ import com.badhabinot.backend.dto.auth.RefreshTokenRequest;
 import com.badhabinot.backend.dto.auth.RegisterRequest;
 import com.badhabinot.backend.dto.auth.RegisterResponse;
 import com.badhabinot.backend.dto.auth.TokenResponse;
+import com.badhabinot.backend.infrastructure.redis.RateLimiterService;
 import com.badhabinot.backend.service.auth.IAuthApplicationService;
+import com.badhabinot.backend.service.auth.IMailService;
 import com.badhabinot.backend.service.auth.IPasswordResetService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
+import java.time.Duration;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -25,6 +29,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.server.ResponseStatusException;
 
 @RestController
 @RequestMapping("/api/v1/auth")
@@ -33,17 +38,38 @@ public class AuthController {
 
     private final IAuthApplicationService authApplicationService;
     private final IPasswordResetService passwordResetService;
+    private final RateLimiterService rateLimiter;
+    private final IMailService mailService;
 
-    public AuthController(IAuthApplicationService authApplicationService, IPasswordResetService passwordResetService) {
+    public AuthController(
+            IAuthApplicationService authApplicationService,
+            IPasswordResetService passwordResetService,
+            RateLimiterService rateLimiter,
+            IMailService mailService
+    ) {
         this.authApplicationService = authApplicationService;
         this.passwordResetService = passwordResetService;
+        this.rateLimiter = rateLimiter;
+        this.mailService = mailService;
     }
 
     @PostMapping("/register")
     @ResponseStatus(HttpStatus.CREATED)
     @Operation(summary = "Register a new BADHABINOT user (requires admin approval before login)")
-    public RegisterResponse register(@Valid @RequestBody RegisterRequest request) {
-        return authApplicationService.register(request);
+    public RegisterResponse register(@Valid @RequestBody RegisterRequest request, HttpServletRequest http) {
+        // Kötüye kullanım koruması: aynı IP'den saatte en fazla 5 kayıt.
+        if (!rateLimiter.allow("register:" + clientIp(http), 5, Duration.ofHours(1))) {
+            throw new ResponseStatusException(HttpStatus.TOO_MANY_REQUESTS,
+                    "Çok fazla kayıt denemesi. Lütfen daha sonra tekrar deneyin.");
+        }
+        RegisterResponse response = authApplicationService.register(request);
+        // Yöneticiye "yeni kullanıcı onay bekliyor" bildirimi (hata kaydı bozmaz).
+        try {
+            mailService.sendNewUserNotification(request.email());
+        } catch (Exception ignored) {
+            // non-fatal
+        }
+        return response;
     }
 
     @PostMapping("/login")
@@ -74,7 +100,18 @@ public class AuthController {
     @PostMapping("/password-reset-request")
     @Operation(summary = "Request a password reset email — always returns 200 to avoid email enumeration")
     public void passwordResetRequest(@Valid @RequestBody PasswordResetRequestDto request) {
+        // E-posta spam'ini önle: aynı adrese saatte en fazla 3 sıfırlama isteği.
+        if (!rateLimiter.allow("pwdreset:" + request.email().trim().toLowerCase(), 3, Duration.ofHours(1))) {
+            throw new ResponseStatusException(HttpStatus.TOO_MANY_REQUESTS,
+                    "Çok fazla şifre sıfırlama isteği. Lütfen daha sonra tekrar deneyin.");
+        }
         passwordResetService.requestReset(request);
+    }
+
+    /** Caddy/nginx arkasında gerçek istemci IP'si (ForwardedHeaderFilter X-Forwarded-For'u uygular). */
+    private static String clientIp(HttpServletRequest http) {
+        String ip = http.getRemoteAddr();
+        return (ip == null || ip.isBlank()) ? "unknown" : ip;
     }
 
     @PostMapping("/password-reset-confirm")

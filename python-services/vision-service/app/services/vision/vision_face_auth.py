@@ -33,9 +33,10 @@ except Exception as _deepface_exc:  # pragma: no cover
 _DATA_ROOT = Path(os.getenv("FACE_DATA_DIR", "data/users"))
 _EMBED_FILENAME = "face_embeddings.npy"
 _MODEL_NAME = "Facenet"          # compact & fast
-_AUTH_THRESHOLD = 0.85           # cosine similarity floor to pass (full auth)
-_OWNER_ID_THRESHOLD = 0.75       # cosine similarity floor for owner identification (multi-face scan)
-_OWNER_EARLY_EXIT_THRESHOLD = 0.90  # single-face early-exit: skip full scan above this
+# Eşikler env ile ayarlanabilir → sahada yeniden derlemeden ince ayar yapılabilir.
+_AUTH_THRESHOLD = float(os.getenv("FACE_AUTH_THRESHOLD", "0.85"))           # giriş/doğrulama benzerlik tabanı
+_OWNER_ID_THRESHOLD = float(os.getenv("FACE_OWNER_THRESHOLD", "0.75"))      # çoklu-yüz sahip tespiti tabanı
+_OWNER_EARLY_EXIT_THRESHOLD = float(os.getenv("FACE_OWNER_EARLY_EXIT", "0.90"))  # tek-yüz erken çıkış
 _MIN_FRAMES_TO_REGISTER = 3      # minimum stored embeddings to consider profile valid
 _MAX_FRAMES_PER_USER = 15        # cap to keep npy small
 

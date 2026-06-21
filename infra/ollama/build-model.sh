@@ -36,7 +36,9 @@ fi
 COACH_MODEL="${COACH_MODEL_NAME:-badhabinot-coach:latest}"
 COACH_GGUF="/models/badhabinot-coach.gguf"
 COACH_MODELFILE="/modelfiles/Modelfile.coach"
-if [ -f "${COACH_GGUF}" ]; then
+if ollama list 2>/dev/null | grep -q "${COACH_MODEL}"; then
+  echo "[build-model] '${COACH_MODEL}' zaten kurulu — yeniden olusturulmadi (deploy hizlandi)."
+elif [ -f "${COACH_GGUF}" ]; then
   echo "[build-model] Fine-tune GGUF bulundu. '${COACH_MODEL}' olusturuluyor..."
   ollama create "${COACH_MODEL}" -f "${COACH_MODELFILE}"
   echo "[build-model] Fine-tune modeli '${COACH_MODEL}' hazir."
