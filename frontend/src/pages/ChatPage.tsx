@@ -339,14 +339,14 @@ export function ChatPage() {
               messages.map((message) => (
                 <div
                   key={message.message_id}
-                  className={`rounded-2xl px-3.5 py-2.5 ${
+                  className={`rounded-[20px] p-4 ${
                     message.role === 'assistant'
                       ? 'border border-[var(--line-soft)] bg-[rgba(255,255,255,0.04)]'
                       : 'ml-auto max-w-[80%] bg-[var(--primary-soft)] text-[var(--text-on-accent)]'
                   }`}
                 >
-                  <p className="whitespace-pre-wrap text-[13px] leading-5">{message.content}</p>
-                  <p className="mt-1 text-[11px] opacity-70">{formatRelativeTime(message.created_at, language)}</p>
+                  <p className="whitespace-pre-wrap text-sm leading-6">{message.content}</p>
+                  <p className="mt-2 text-xs opacity-70">{formatRelativeTime(message.created_at, language)}</p>
                 </div>
               ))
             )}
@@ -359,8 +359,8 @@ export function ChatPage() {
               </div>
             ) : null}
             {isStreaming && streamingContent.length > 0 ? (
-              <div className="rounded-2xl border border-[var(--line-soft)] bg-[rgba(255,255,255,0.04)] px-3.5 py-2.5">
-                <p className="whitespace-pre-wrap text-[13px] leading-5">
+              <div className="rounded-[20px] border border-[var(--line-soft)] bg-[rgba(255,255,255,0.04)] p-4">
+                <p className="whitespace-pre-wrap text-sm leading-6">
                   {streamingContent}
                   <span className="animate-pulse text-[var(--primary)]">&#9611;</span>
                 </p>
