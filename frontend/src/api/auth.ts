@@ -1,6 +1,8 @@
 import { apiClient } from '@/api/client'
 import type {
   AuthenticatedUserResponse,
+  CaptchaChallenge,
+  CaptchaVerifyResponse,
   FaceLoginRequest,
   LoginRequest,
   LogoutRequest,
@@ -14,6 +16,19 @@ import type {
 export const authApi = {
   async register(payload: RegisterRequest) {
     const response = await apiClient.post<RegisterResponse>('/api/v1/auth/register', payload)
+    return response.data
+  },
+
+  async getCaptcha() {
+    const response = await apiClient.get<CaptchaChallenge>('/api/v1/auth/captcha')
+    return response.data
+  },
+
+  async verifyCaptcha(captchaId: string, answer: number[]) {
+    const response = await apiClient.post<CaptchaVerifyResponse>('/api/v1/auth/captcha/verify', {
+      captcha_id: captchaId,
+      answer,
+    })
     return response.data
   },
 

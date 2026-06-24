@@ -26,6 +26,18 @@ export type RegisterRequest = {
   display_name: string
   timezone: string
   locale: string
+  captcha_token: string
+}
+
+export type CaptchaChallenge = {
+  captcha_id: string
+  prompt_tr: string
+  prompt_en: string
+  tiles: string[]
+}
+
+export type CaptchaVerifyResponse = {
+  token: string
 }
 
 export type RegisterResponse = {

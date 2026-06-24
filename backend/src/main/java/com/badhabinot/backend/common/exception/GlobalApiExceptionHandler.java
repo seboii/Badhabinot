@@ -4,6 +4,7 @@ import com.badhabinot.backend.common.exception.auth.AuthenticationFailedExceptio
 import com.badhabinot.backend.common.exception.auth.DuplicateEmailException;
 import com.badhabinot.backend.common.exception.auth.FaceMismatchException;
 import com.badhabinot.backend.common.exception.auth.FaceNotRegisteredException;
+import com.badhabinot.backend.common.exception.auth.InvalidCaptchaException;
 import com.badhabinot.backend.common.exception.auth.InvalidPasswordResetTokenException;
 import com.badhabinot.backend.common.exception.auth.InvalidRefreshTokenException;
 import com.badhabinot.backend.common.exception.auth.TooManyLoginAttemptsException;
@@ -39,6 +40,11 @@ public class GlobalApiExceptionHandler {
     @ExceptionHandler(InvalidPasswordResetTokenException.class)
     public ResponseEntity<Map<String, Object>> handleInvalidResetToken(InvalidPasswordResetTokenException exception) {
         return error(HttpStatus.BAD_REQUEST, "invalid_reset_token", exception.getMessage());
+    }
+
+    @ExceptionHandler(InvalidCaptchaException.class)
+    public ResponseEntity<Map<String, Object>> handleInvalidCaptcha(InvalidCaptchaException exception) {
+        return error(HttpStatus.BAD_REQUEST, "invalid_captcha", exception.getMessage());
     }
 
     @ExceptionHandler(FaceNotRegisteredException.class)

@@ -81,7 +81,8 @@ class AuthApplicationServiceTest {
                 "secret-123",
                 "Alice",
                 "Europe/Istanbul",
-                "tr-TR"
+                "tr-TR",
+                null
         ));
 
         // Yeni kayıt onay bekler — token verilmez.
@@ -116,7 +117,8 @@ class AuthApplicationServiceTest {
                 "secret-123",
                 "Alice",
                 "UTC",
-                "en-US"
+                "en-US",
+                null
         ))).isInstanceOf(DuplicateEmailException.class)
                 .hasMessageContaining("already exists");
 
