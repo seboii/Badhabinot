@@ -30,6 +30,22 @@ services:
       GF_SERVER_ROOT_URL: https://${PUBLIC_DOMAIN}/grafana/
       GF_SERVER_SERVE_FROM_SUB_PATH: "true"
 
+  # ── Veritabanı gözatma (Adminer) — YALNIZ VM-localhost'a bağlı ─────────────
+  # İnternete ASLA açılmaz (Azure NSG'de yalnız 80/443/22 açık; ayrıca 127.0.0.1
+  # binding ile dışarıdan erişilemez). Erişim YALNIZCA SSH tüneliyle:
+  #   ssh -L 8083:localhost:8083 <VM_USER>@<PUBLIC_DOMAIN>
+  #   → tarayıcıda http://localhost:8083
+  adminer:
+    image: adminer:latest
+    restart: unless-stopped
+    init: true
+    depends_on:
+      - postgres
+    ports:
+      - "127.0.0.1:8083:8080"
+    networks:
+      - platform
+
   caddy:
     image: caddy:2-alpine
     restart: unless-stopped
