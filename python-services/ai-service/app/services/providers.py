@@ -212,16 +212,71 @@ class OpenAiCompatibleProvider:
         "uyari", "smoking", "posture", "hydration", "monitoring",
     ])
 
+    @staticmethod
+    def _normalize_tr(text: str) -> str:
+        """Türkçe diakritikleri sadeleştirip küçük harfe çevirir.
+
+        Böylece "duruş", "Duruşumu", "DURUS", "durusum" hepsi eşleşir → GENERAL_CHAT
+        grounding'i tek bir aksanlı harf yüzünden kaçırmaz.
+        """
+        if not text:
+            return ""
+        for a, b in (
+            ("ş", "s"), ("Ş", "s"), ("ı", "i"), ("İ", "i"), ("ç", "c"), ("Ç", "c"),
+            ("ğ", "g"), ("Ğ", "g"), ("ö", "o"), ("Ö", "o"), ("ü", "u"), ("Ü", "u"), ("â", "a"),
+        ):
+            text = text.replace(a, b)
+        return text.lower()
+
     @classmethod
     def _persona_includes_data_block(cls, request: ChatRequest) -> bool:
-        """BEHAVIOR_COACH/CUSTOM her zaman data bloğu ekler.
-        GENERAL_CHAT yalnızca mesaj DAR monitoring kelimelerinden biri içerirse ekler.
+        """BEHAVIOR_COACH/CUSTOM/ANALYST her zaman data bloğu ekler.
+        GENERAL_CHAT yalnızca mesaj monitoring kelimelerinden biri içerirse ekler
+        (Türkçe-diakritik duyarsız eşleşme → aksanlı harf yüzünden kaçmaz).
         """
         persona = (request.chat_persona or "GENERAL_CHAT").upper()
-        if persona in ("BEHAVIOR_COACH", "CUSTOM"):
+        if persona in ("BEHAVIOR_COACH", "CUSTOM", "ANALYST"):
             return True
-        lower = (request.message or "").lower()
-        return any(kw in lower for kw in cls._GENERAL_CHAT_DATA_KEYWORDS)
+        norm = cls._normalize_tr(request.message or "")
+        return any(cls._normalize_tr(kw) in norm for kw in cls._GENERAL_CHAT_DATA_KEYWORDS)
+
+    @staticmethod
+    def _effective_daily_metrics(ctx: Any, report_date: Any) -> dict[str, Any]:
+        """Grounding için 'etkili gün'ü döndürür.
+
+        Bugün ölçüm varsa bugünü; yoksa son 7 gündeki EN SON ölçümlü günü kullanır;
+        hiç yoksa ``has_data=False``. Böylece "bugün veri yok" durumunda yanıltıcı
+        100/100 yerine gerçek son ölçüm sunulur (ya da veri yok denir, uydurma değil).
+        """
+        today_has = (
+            ctx.analyses_completed > 0 or ctx.hydration_progress_ml > 0 or ctx.posture_alert_count > 0
+        )
+        if today_has:
+            return {
+                "label": f"Bugün ({report_date.isoformat()})",
+                "has_data": True,
+                "posture_score": round((1.0 - ctx.poor_posture_ratio) * 100, 1),
+                "posture_alert": ctx.posture_alert_count,
+                "hydration_ml": ctx.hydration_progress_ml,
+                "water_goal": ctx.water_goal_ml,
+                "smoking": ctx.smoking_like_count,
+                "hand": ctx.hand_movement_count,
+                "analyses": ctx.analyses_completed,
+            }
+        snap = next((s for s in ctx.recent_daily_snapshots if s.analyses_completed > 0), None)
+        if snap is not None:
+            return {
+                "label": f"En son ölçümlü gün ({snap.report_date.isoformat()})",
+                "has_data": True,
+                "posture_score": round((1.0 - snap.poor_posture_ratio) * 100, 1),
+                "posture_alert": snap.posture_alert_count,
+                "hydration_ml": snap.hydration_progress_ml,
+                "water_goal": snap.water_goal_ml,
+                "smoking": snap.smoking_like_count,
+                "hand": snap.hand_movement_count,
+                "analyses": snap.analyses_completed,
+            }
+        return {"label": None, "has_data": False, "water_goal": ctx.water_goal_ml}
 
     def _build_stream_payload(self, request: ChatRequest) -> dict[str, Any]:
         """Stream için persona-aware Türkçe düz metin prompt.
@@ -256,42 +311,64 @@ class OpenAiCompatibleProvider:
         if not self._persona_includes_data_block(request):
             return request.message
         ctx = request.context
-        hydration_pct = round(
-            (ctx.hydration_progress_ml / ctx.water_goal_ml * 100)
-            if ctx.water_goal_ml > 0 else 0, 1
-        )
-        posture_score = round((1.0 - ctx.poor_posture_ratio) * 100, 1)
-        summary_block = (
-            f"Bugünün özeti ({request.report_date.isoformat()}):\n"
-            f"- Hidrasyon: {ctx.hydration_progress_ml}/{ctx.water_goal_ml} ml (%{hydration_pct})\n"
-            f"- Duruş skoru: {posture_score}/100 (uyarı: {ctx.posture_alert_count})\n"
-            f"- Sigara benzeri: {ctx.smoking_like_count}, el hareketi: {ctx.hand_movement_count}\n"
-            f"- Tamamlanan analiz: {ctx.analyses_completed}\n"
-            f"- Karşılaştırma: {ctx.comparison_to_previous_day or 'Veri yok'}"
-        )
+        block = self._build_grounding_block(ctx, request.report_date)
         if ctx.behavioral_patterns:
-            summary_block += "\n- Zamansal örüntüler:"
+            block += "\n- Zamansal örüntüler:"
             for p in ctx.behavioral_patterns[:3]:
-                summary_block += (
+                block += (
                     f"\n  • {p.event_type}: {p.total_count_last_7_days} olay "
                     f"(pik saat {p.peak_hour_of_day:02d}, trend: {p.trend_label})"
                 )
-        return f"{summary_block}\n\nSoru: {request.message}"
+        return f"{block}\n\nSoru: {request.message}"
+
+    @classmethod
+    def _build_grounding_block(cls, ctx: Any, report_date: Any) -> str:
+        """'Etkili gün' (bugün ya da son ölçümlü gün) + 7 günlük bağlam + örüntülerden
+        grounding metni kurar. Bugün boşsa yanıltıcı 100/100 yerine gerçek son ölçüm.
+        OllamaProvider de bunu kullanır (tek doğruluk kaynağı)."""
+        m = cls._effective_daily_metrics(ctx, report_date)
+        if not m["has_data"]:
+            return (
+                f"Bugün ({report_date.isoformat()}) ve son 7 günde kayıtlı ölçüm yok. "
+                "Veri olmadığını açıkça söyle; sayı/skor UYDURMA."
+            )
+        goal = m["water_goal"]
+        hyd_pct = round((m["hydration_ml"] / goal * 100) if goal > 0 else 0, 1)
+        lines = [
+            f"{m['label']} özeti:",
+            f"- Duruş skoru: {m['posture_score']}/100 (uyarı: {m['posture_alert']})",
+            f"- Hidrasyon: {m['hydration_ml']}/{goal} ml (%{hyd_pct})",
+            f"- Sigara benzeri: {m['smoking']}, el hareketi: {m['hand']}",
+            f"- Tamamlanan analiz: {m['analyses']}",
+        ]
+        if ctx.analyses_completed_last_7_days > 0 or ctx.total_sessions_last_7_days > 0:
+            lines.append(
+                f"- Son 7 gün: {ctx.total_sessions_last_7_days} oturum, "
+                f"{ctx.analyses_completed_last_7_days} analiz, hidrasyon {ctx.hydration_last_7_days_ml} ml"
+            )
+        if ctx.comparison_to_previous_day:
+            lines.append(f"- Karşılaştırma: {ctx.comparison_to_previous_day}")
+        # Not: zamansal örüntü bloğunu çağıran provider kendi formatıyla ekler
+        # (Ollama uppercase _format_pattern_block, OpenAI satır-içi) → fine-tune uyumu korunur.
+        return "\n".join(lines)
 
     def _stream_meta(self, request: ChatRequest) -> tuple[list[str], list[str]]:
         """Stream'in done event'i için grounded_facts + follow_up'ı context'ten türetir."""
         ctx = request.context
-        hydration_pct = round(
-            (ctx.hydration_progress_ml / ctx.water_goal_ml * 100) if ctx.water_goal_ml > 0 else 0, 1
-        )
-        posture_score = round((1.0 - ctx.poor_posture_ratio) * 100, 1)
-        grounded_facts = [
-            f"Hidrasyon: {ctx.hydration_progress_ml}/{ctx.water_goal_ml} ml (%{hydration_pct})",
-            f"Duruş skoru: {posture_score}/100 (uyarı: {ctx.posture_alert_count})",
-            f"Sigara benzeri: {ctx.smoking_like_count}, el hareketi: {ctx.hand_movement_count}",
-        ]
+        m = self._effective_daily_metrics(ctx, request.report_date)
+        grounded_facts: list[str] = []
+        if m["has_data"]:
+            goal = m["water_goal"]
+            hyd_pct = round((m["hydration_ml"] / goal * 100) if goal > 0 else 0, 1)
+            grounded_facts = [
+                f"{m['label']}: duruş {m['posture_score']}/100 (uyarı: {m['posture_alert']})",
+                f"Hidrasyon: {m['hydration_ml']}/{goal} ml (%{hyd_pct})",
+                f"Sigara benzeri: {m['smoking']}, el hareketi: {m['hand']}",
+            ]
+        else:
+            grounded_facts = ["Bugün ve son 7 günde kayıtlı ölçüm yok."]
         if ctx.comparison_to_previous_day:
-            grounded_facts.append(f"Dünle karşılaştırma: {ctx.comparison_to_previous_day}")
+            grounded_facts.append(f"Karşılaştırma: {ctx.comparison_to_previous_day}")
         # Faz 4: pattern fact'leri varsa ekle
         if ctx.behavioral_patterns:
             for p in ctx.behavioral_patterns[:2]:
@@ -300,9 +377,9 @@ class OpenAiCompatibleProvider:
                     f"pik saat {p.peak_hour_of_day:02d}, trend: {p.trend_label}"
                 )
         follow_up_suggestions: list[str] = []
-        if ctx.poor_posture_ratio > 0.25:
+        if m["has_data"] and m["posture_score"] < 75:
             follow_up_suggestions.append("Duruşumu nasıl düzeltebilirim?")
-        if hydration_pct < 60:
+        if m["has_data"] and m["water_goal"] > 0 and (m["hydration_ml"] / m["water_goal"]) < 0.6:
             follow_up_suggestions.append("Su içmemi nasıl artırabilirim?")
         follow_up_suggestions.append("Bu hafta genel trendim nasıl?")
         return grounded_facts[:5], follow_up_suggestions[:3]
@@ -930,16 +1007,9 @@ class OllamaProvider:
             system_prompt = OpenAiCompatibleProvider._persona_system_prompt(request)
             include_data = OpenAiCompatibleProvider._persona_includes_data_block(request)
             if include_data:
-                hydration_pct = round((ctx.hydration_progress_ml / ctx.water_goal_ml * 100) if ctx.water_goal_ml > 0 else 0, 1)
-                posture_score = round((1.0 - ctx.poor_posture_ratio) * 100, 1)
-                summary_block = (
-                    f"Bugünün özeti ({request.report_date.isoformat()}):\n"
-                    f"- Hidrasyon: {ctx.hydration_progress_ml}/{ctx.water_goal_ml} ml (%{hydration_pct})\n"
-                    f"- Duruş skoru: {posture_score}/100 (uyarı: {ctx.posture_alert_count})\n"
-                    f"- Sigara benzeri: {ctx.smoking_like_count}, el hareketi: {ctx.hand_movement_count}\n"
-                    f"- Tamamlanan analiz: {ctx.analyses_completed}\n"
-                    f"- Karşılaştırma: {ctx.comparison_to_previous_day or 'Veri yok'}"
-                )
+                # Paylaşılan grounding bloğu: bugün boşsa son ölçümlü güne düşer
+                # (yanıltıcı 100/100 yerine gerçek veri) → tek doğruluk kaynağı.
+                summary_block = OpenAiCompatibleProvider._build_grounding_block(ctx, request.report_date)
                 pattern_block = self._format_pattern_block(ctx.behavioral_patterns)
                 if pattern_block:
                     summary_block = summary_block + "\n" + pattern_block
