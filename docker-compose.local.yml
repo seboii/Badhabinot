@@ -70,6 +70,19 @@ services:
     ports:
       - "127.0.0.1:9090:9090"
 
+  # ── Veritabanı gözatma (tarayıcı) — http://127.0.0.1:8083 ──────────────────
+  # Yalnız yerel: DB yönetim arayüzü üretimde ASLA açılmaz (bu yüzden local overlay'de).
+  adminer:
+    image: adminer:latest
+    restart: unless-stopped
+    init: true
+    depends_on:
+      - postgres
+    ports:
+      - "127.0.0.1:8083:8080"
+    networks:
+      - platform
+
   # ── Ngrok (opsiyonel — make ngrok-start ile başlar) ────
 
   ngrok:

@@ -286,6 +286,19 @@ services:
     networks:
       - platform
 
+  # ── İzleme: postgres-exporter (DB metrikleri: bağlantı, tablo boyutu, işlem) ─
+  # pg_stat_* görünümleri küme genelidir → tek bağlantı (postgres DB) üç DB'yi de kapsar.
+  postgres-exporter:
+    <<: *runtime-defaults
+    image: prometheuscommunity/postgres-exporter:latest
+    environment:
+      DATA_SOURCE_NAME: "postgresql://${POSTGRES_USER:-badhabinot}:${POSTGRES_PASSWORD:-badhabinot}@postgres:5432/postgres?sslmode=disable"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - platform
+
 networks:
   platform:
     name: badhabinot-platform
