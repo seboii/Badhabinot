@@ -108,8 +108,8 @@ export function CaptchaWidget({ isTurkish, onVerified, onReset }: Props) {
         {isTurkish ? `Tüm ${shapeName} şekillerine tıklayın` : `Click all ${shapeName}s`}
       </p>
 
-      {/* Grid */}
-      <div className="grid grid-cols-3 gap-2 mb-3">
+      {/* Grid — sabit küçük genişlik (karolar büyük görünmesin) */}
+      <div className="grid grid-cols-3 gap-2 mb-3 max-w-[200px]">
         {tiles.length === 0 && status === 'loading'
           ? Array.from({ length: 9 }).map((_, idx) => (
               <div
