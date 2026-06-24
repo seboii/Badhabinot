@@ -83,9 +83,10 @@ export function FaceLoginTab({ onSuccess, onSwitchToPassword }: Props) {
       const ch = await authApi.requestFaceChallenge()
       setChallenge(ch)
       setPhase('action')
-      // Kullanıcı talimatı okuyup eyleme başlasın.
-      await new Promise((r) => setTimeout(r, 1300))
-      const frames = await captureBurst(7, 350) // ~2.1 sn boyunca yakala
+      // Kullanıcı talimatı okusun (kısa); ardından YOĞUN ve uzun yakala ki göz
+      // kırpma (~150ms) kareler arasında kaçmasın.
+      await new Promise((r) => setTimeout(r, 600))
+      const frames = await captureBurst(12, 200) // ~2.4 sn boyunca ~5 fps
 
       if (frames.length < 3) {
         setFaceError(isTurkish ? 'Kamera görüntüsü alınamadı.' : 'Could not capture camera frames.')
