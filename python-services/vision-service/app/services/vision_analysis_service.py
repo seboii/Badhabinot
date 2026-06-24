@@ -76,8 +76,19 @@ class VisionAnalysisService:
         self.scheduler = FrameScheduler()
         self.detector_cache = DetectorCache()
         self.posture_evaluator = PostureEvaluator()
+        # GÜVENLİK/STABİLİTE: MediaPipe `solutions` nesneleri (face_mesh, hands,
+        # pose) ile DeepFace/YOLO thread-safe DEĞİL. Bu servis modül-seviyesi tek
+        # singleton olduğundan, eşzamanlı /analyze çağrıları (çok kullanıcı veya
+        # üst üste binen kareler) aynı nesnede process() çağırıp çökme/bozuk sonuç
+        # üretebilir. Basit global kilit ile kare işleme serileştirilir.
+        self._lock = asyncio.Lock()
 
     async def analyze(self, request: VisionAnalysisRequest, *, render_overlay: bool = False) -> VisionAnalysisResponse:
+        # Paylaşılan dedektörleri tek seferde bir kare kullansın diye serileştir.
+        async with self._lock:
+            return await self._analyze_locked(request, render_overlay=render_overlay)
+
+    async def _analyze_locked(self, request: VisionAnalysisRequest, *, render_overlay: bool = False) -> VisionAnalysisResponse:
         started = time.perf_counter()
         original = self._decode_image(request.image_base64)
         # İşlemede orijinal boyutları raporla (sözleşme), çıkarımı küçük karede yap.
