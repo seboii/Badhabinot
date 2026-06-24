@@ -16,7 +16,10 @@ public record RegisterRequest(
         String password,
         @NotBlank @Size(min = 2, max = 100) String displayName,
         @NotBlank @Size(min = 2, max = 64) String timezone,
-        @NotBlank @Size(min = 2, max = 16) String locale
+        @NotBlank @Size(min = 2, max = 16) String locale,
+        // Sunucu-taraflı captcha geçiş token'ı (POST /auth/captcha/verify'den alınır).
+        // Zorunluluk kontrolü AuthController'da CaptchaService.consumePass ile yapılır.
+        String captchaToken
 ) {
 }
 

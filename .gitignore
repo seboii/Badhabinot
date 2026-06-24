@@ -153,3 +153,9 @@ infra/**/.terragrunt-cache/
 infra/**/generated/
 tmp/
 temp/
+
+# =========================
+# Dokumanlar — yerelde tutulur, surum kontrolune girmez
+# (rapor, tez iskeleti, etiketleme protokolu, egitim verisi vb.)
+# =========================
+docs/

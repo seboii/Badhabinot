@@ -2,8 +2,10 @@ package com.badhabinot.backend.common.exception;
 
 import com.badhabinot.backend.common.exception.auth.AuthenticationFailedException;
 import com.badhabinot.backend.common.exception.auth.DuplicateEmailException;
+import com.badhabinot.backend.common.exception.auth.FaceLivenessFailedException;
 import com.badhabinot.backend.common.exception.auth.FaceMismatchException;
 import com.badhabinot.backend.common.exception.auth.FaceNotRegisteredException;
+import com.badhabinot.backend.common.exception.auth.InvalidCaptchaException;
 import com.badhabinot.backend.common.exception.auth.InvalidPasswordResetTokenException;
 import com.badhabinot.backend.common.exception.auth.InvalidRefreshTokenException;
 import com.badhabinot.backend.common.exception.auth.TooManyLoginAttemptsException;
@@ -41,6 +43,11 @@ public class GlobalApiExceptionHandler {
         return error(HttpStatus.BAD_REQUEST, "invalid_reset_token", exception.getMessage());
     }
 
+    @ExceptionHandler(InvalidCaptchaException.class)
+    public ResponseEntity<Map<String, Object>> handleInvalidCaptcha(InvalidCaptchaException exception) {
+        return error(HttpStatus.BAD_REQUEST, "invalid_captcha", exception.getMessage());
+    }
+
     @ExceptionHandler(FaceNotRegisteredException.class)
     public ResponseEntity<Map<String, Object>> handleFaceNotRegistered(FaceNotRegisteredException exception) {
         return error(HttpStatus.BAD_REQUEST, "FACE_NOT_REGISTERED", exception.getMessage());
@@ -49,6 +56,11 @@ public class GlobalApiExceptionHandler {
     @ExceptionHandler(FaceMismatchException.class)
     public ResponseEntity<Map<String, Object>> handleFaceMismatch(FaceMismatchException exception) {
         return error(HttpStatus.UNAUTHORIZED, "FACE_MISMATCH", exception.getMessage());
+    }
+
+    @ExceptionHandler(FaceLivenessFailedException.class)
+    public ResponseEntity<Map<String, Object>> handleFaceLiveness(FaceLivenessFailedException exception) {
+        return error(HttpStatus.UNAUTHORIZED, "FACE_LIVENESS_FAILED", exception.getMessage());
     }
 
     @ExceptionHandler({

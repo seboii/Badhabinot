@@ -44,7 +44,7 @@ export function RegisterPage() {
 
   const [step, setStep] = useState<RegisterStep>('account_info')
   const [accountData, setAccountData] = useState<AccountInfoValues | null>(null)
-  const [captchaValid, setCaptchaValid] = useState(false)
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null)
   const [consents, setConsents] = useState<ConsentsValues>({
     privacy_policy_accepted: false,
     camera_monitoring_accepted: false,
@@ -86,8 +86,9 @@ export function RegisterPage() {
   const completeMutation = useMutation({
     mutationFn: async () => {
       if (!accountData) throw new Error('Missing account data')
-      const { confirmPassword: _, ...payload } = accountData
-      return authApi.register(payload)
+      if (!captchaToken) throw new Error('Missing captcha token')
+      const { confirmPassword: _, ...rest } = accountData
+      return authApi.register({ ...rest, captcha_token: captchaToken })
     },
     onSuccess(result) {
       // Yeni kayıtlar yönetici onayı bekler — token gelmez. Onam + yüz kaydı,
@@ -119,7 +120,7 @@ export function RegisterPage() {
     consents.remote_inference_accepted
 
   function onAccountNext(values: AccountInfoValues) {
-    if (!captchaValid) {
+    if (!captchaToken) {
       toast.error(isTurkish ? 'Lütfen doğrulama sorusunu cevaplayın.' : 'Please complete the verification.')
       return
     }
@@ -181,11 +182,15 @@ export function RegisterPage() {
           />
           <input type="hidden" {...register('timezone')} />
           <input type="hidden" {...register('locale')} />
-          <CaptchaWidget isTurkish={isTurkish} onValidate={setCaptchaValid} />
+          <CaptchaWidget
+            isTurkish={isTurkish}
+            onVerified={setCaptchaToken}
+            onReset={() => setCaptchaToken(null)}
+          />
           <Button
             className="w-full"
             size="lg"
-            disabled={!captchaValid}
+            disabled={!captchaToken}
             type="submit"
             iconLeft={<ChevronRight className="size-4" />}
           >

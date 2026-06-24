@@ -32,7 +32,7 @@ export function LoginPage() {
   const location = useLocation()
   const { setSession } = useAuth()
   const setProfile = useUserStore((s) => s.setProfile)
-  const [captchaValid, setCaptchaValid] = useState(false)
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null)
   const [mode, setMode] = useState<LoginMode>('face')
   const [prefillEmail, setPrefillEmail] = useState('')
 
@@ -73,7 +73,7 @@ export function LoginPage() {
   }
 
   function onPasswordSubmit(values: PasswordFormValues) {
-    if (!captchaValid) {
+    if (!captchaToken) {
       toast.error(isTurkish ? 'Lütfen doğrulama sorusunu cevaplayın.' : 'Please complete the verification.')
       return
     }
@@ -137,12 +137,16 @@ export function LoginPage() {
               </Link>
             </div>
           </div>
-          <CaptchaWidget isTurkish={isTurkish} onValidate={setCaptchaValid} />
+          <CaptchaWidget
+            isTurkish={isTurkish}
+            onVerified={setCaptchaToken}
+            onReset={() => setCaptchaToken(null)}
+          />
           <Button
             className="w-full"
             size="lg"
             loading={loginMutation.isPending}
-            disabled={!captchaValid}
+            disabled={!captchaToken}
             type="submit"
           >
             {isTurkish ? 'Giriş yap' : 'Sign in'}

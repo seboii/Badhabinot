@@ -10,14 +10,14 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { useCamera } from '@/hooks/use-camera'
 import { useLanguage } from '@/i18n/language-provider'
-import type { TokenResponse } from '@/types/auth'
+import type { FaceChallenge, TokenResponse } from '@/types/auth'
 
 type Props = {
   onSuccess: (session: TokenResponse) => void
   onSwitchToPassword: (email: string) => void
 }
 
-type FaceLoginPhase = 'form' | 'camera' | 'verifying' | 'error'
+type FaceLoginPhase = 'form' | 'camera' | 'action' | 'verifying' | 'error'
 
 export function FaceLoginTab({ onSuccess, onSwitchToPassword }: Props) {
   const { isTurkish } = useLanguage()
@@ -26,7 +26,8 @@ export function FaceLoginTab({ onSuccess, onSwitchToPassword }: Props) {
   const [phase, setPhase] = useState<FaceLoginPhase>('form')
   const [attemptCount, setAttemptCount] = useState(0)
   const [faceError, setFaceError] = useState<string | null>(null)
-  const captureTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+  const [challenge, setChallenge] = useState<FaceChallenge | null>(null)
+  const startedRef = useRef(false)
 
   const schema = z.object({
     email: z.email(isTurkish ? 'Geçerli bir e-posta adresi gir.' : 'Enter a valid email address.'),
@@ -36,19 +37,18 @@ export function FaceLoginTab({ onSuccess, onSwitchToPassword }: Props) {
     resolver: zodResolver(schema),
   })
 
-  // Auto-capture after camera is ready
+  // Kamera hazır olunca challenge al + canlılık dizisini bir kez başlat.
   useEffect(() => {
-    if (phase === 'camera' && streamReady) {
-      clearTimeout(captureTimerRef.current)
-      captureTimerRef.current = setTimeout(() => void captureAndVerify(), 2000)
+    if (phase === 'camera' && streamReady && !startedRef.current) {
+      startedRef.current = true
+      void runFaceLogin()
     }
-    return () => clearTimeout(captureTimerRef.current)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase, streamReady])
 
-  // Stop camera when leaving camera phase
+  // Stop camera when leaving the live phases
   useEffect(() => {
-    if (phase !== 'camera' && phase !== 'verifying') {
+    if (phase !== 'camera' && phase !== 'action' && phase !== 'verifying') {
       stopCamera()
     }
   }, [phase, stopCamera])
@@ -66,68 +66,95 @@ export function FaceLoginTab({ onSuccess, onSwitchToPassword }: Props) {
     return dataUrl.split(',')[1] ?? null
   }
 
-  async function captureAndVerify() {
-    const email = getValues('email')
-    const b64 = captureFrameBase64()
-    if (!b64) {
-      setFaceError(isTurkish ? 'Kamera görüntüsü alınamadı.' : 'Could not capture camera frame.')
-      setPhase('error')
-      return
+  async function captureBurst(count: number, gapMs: number): Promise<string[]> {
+    const frames: string[] = []
+    for (let i = 0; i < count; i++) {
+      const b64 = captureFrameBase64()
+      if (b64) frames.push(b64)
+      if (i < count - 1) await new Promise((r) => setTimeout(r, gapMs))
     }
+    return frames
+  }
 
-    setPhase('verifying')
+  // Akış: challenge al → talimatı göster → kısa kare dizisi yakala → kimlik + canlılık doğrula.
+  async function runFaceLogin() {
+    const email = getValues('email')
     try {
+      const ch = await authApi.requestFaceChallenge()
+      setChallenge(ch)
+      setPhase('action')
+      // Kullanıcı talimatı okuyup eyleme başlasın.
+      await new Promise((r) => setTimeout(r, 1300))
+      const frames = await captureBurst(7, 350) // ~2.1 sn boyunca yakala
+
+      if (frames.length < 3) {
+        setFaceError(isTurkish ? 'Kamera görüntüsü alınamadı.' : 'Could not capture camera frames.')
+        setPhase('error')
+        return
+      }
+
+      setPhase('verifying')
       const session = await authApi.loginWithFace({
         email,
-        face_image_base64: b64,
+        challenge_id: ch.challenge_id,
+        frames,
         image_content_type: 'image/jpeg',
       })
       stopCamera()
       toast.success(isTurkish ? 'Yüz ile giriş başarılı.' : 'Face login successful.')
       onSuccess(session)
     } catch (err: unknown) {
-      const errObj = err as { response?: { data?: { code?: string } } }
-      const code = errObj?.response?.data?.code
-      if (code === 'FACE_NOT_REGISTERED') {
-        toast.error(
-          isTurkish
-            ? 'Bu hesapta kayıtlı yüz yok. Şifre ile giriş yapın.'
-            : 'No face registered for this account. Please use password login.',
-        )
-        stopCamera()
-        onSwitchToPassword(email)
-        return
-      }
-
-      const newCount = attemptCount + 1
-      setAttemptCount(newCount)
-
-      if (newCount >= 3) {
-        toast.error(
-          isTurkish
-            ? 'Yüz tanıma 3 kez başarısız. Şifre ile giriş yapmayı deneyin.'
-            : 'Face recognition failed 3 times. Please try password login.',
-        )
-        stopCamera()
-        onSwitchToPassword(email)
-        return
-      }
-
-      setFaceError(
-        toErrorMessage(
-          err,
-          isTurkish
-            ? 'Yüz tanıma başarısız. Tekrar deneyin.'
-            : 'Face recognition failed. Please try again.',
-        ),
-      )
-      setPhase('error')
+      handleFaceError(err, email)
     }
+  }
+
+  function handleFaceError(err: unknown, email: string) {
+    const errObj = err as { response?: { data?: { code?: string } } }
+    const code = errObj?.response?.data?.code
+
+    if (code === 'FACE_NOT_REGISTERED') {
+      toast.error(
+        isTurkish
+          ? 'Bu hesapta kayıtlı yüz yok. Şifre ile giriş yapın.'
+          : 'No face registered for this account. Please use password login.',
+      )
+      stopCamera()
+      onSwitchToPassword(email)
+      return
+    }
+
+    const newCount = attemptCount + 1
+    setAttemptCount(newCount)
+
+    if (newCount >= 3) {
+      toast.error(
+        isTurkish
+          ? 'Yüz tanıma 3 kez başarısız. Şifre ile giriş yapmayı deneyin.'
+          : 'Face recognition failed 3 times. Please try password login.',
+      )
+      stopCamera()
+      onSwitchToPassword(email)
+      return
+    }
+
+    setFaceError(
+      code === 'FACE_LIVENESS_FAILED'
+        ? (isTurkish
+            ? 'Canlılık doğrulanamadı. İstenen hareketi yaparak tekrar deneyin.'
+            : 'Liveness check failed. Perform the requested action and try again.')
+        : toErrorMessage(
+            err,
+            isTurkish ? 'Yüz tanıma başarısız. Tekrar deneyin.' : 'Face recognition failed. Please try again.',
+          ),
+    )
+    setPhase('error')
   }
 
   async function handleStartFaceLogin({ email: _ }: FormValues) {
     setFaceError(null)
     setAttemptCount(0)
+    setChallenge(null)
+    startedRef.current = false
     setPhase('camera')
     const granted = await requestCamera()
     if (!granted) {
@@ -135,10 +162,15 @@ export function FaceLoginTab({ onSuccess, onSwitchToPassword }: Props) {
     }
   }
 
-  function handleRetry() {
+  async function handleRetry() {
     setFaceError(null)
+    setChallenge(null)
+    startedRef.current = false
     setPhase('camera')
-    captureTimerRef.current = setTimeout(() => void captureAndVerify(), 2000)
+    const granted = await requestCamera()
+    if (!granted) {
+      setPhase('form')
+    }
   }
 
   return (
@@ -153,8 +185,8 @@ export function FaceLoginTab({ onSuccess, onSwitchToPassword }: Props) {
           {...register('email')}
         />
 
-        {/* Camera preview — shown only in camera / verifying phase */}
-        {(phase === 'camera' || phase === 'verifying') && (
+        {/* Camera preview — shown in camera / action / verifying phases */}
+        {(phase === 'camera' || phase === 'action' || phase === 'verifying') && (
           <div className="relative overflow-hidden rounded-[20px] bg-black">
             <video
               ref={videoRef}
@@ -163,6 +195,15 @@ export function FaceLoginTab({ onSuccess, onSwitchToPassword }: Props) {
               muted
               playsInline
             />
+            {/* Liveness instruction overlay */}
+            {phase === 'action' && challenge && (
+              <div className="absolute inset-x-0 bottom-0 flex items-center justify-center gap-2 bg-black/60 px-3 py-2">
+                <ScanFace className="size-5 text-[var(--primary)]" />
+                <p className="text-sm font-semibold text-white">
+                  {isTurkish ? challenge.prompt_tr : challenge.prompt_en}
+                </p>
+              </div>
+            )}
             {/* Scanning badge */}
             {phase === 'verifying' && (
               <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/50">
@@ -219,12 +260,12 @@ export function FaceLoginTab({ onSuccess, onSwitchToPassword }: Props) {
           </Button>
         ) : null}
 
-        {phase === 'camera' && (
+        {(phase === 'camera' || phase === 'action') && (
           <Button
             type="button"
             variant="secondary"
             className="w-full"
-            onClick={() => { stopCamera(); setPhase('form') }}
+            onClick={() => { startedRef.current = false; stopCamera(); setPhase('form') }}
           >
             {isTurkish ? 'İptal' : 'Cancel'}
           </Button>

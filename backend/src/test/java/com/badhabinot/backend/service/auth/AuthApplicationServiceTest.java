@@ -14,9 +14,11 @@ import com.badhabinot.backend.dto.auth.RefreshTokenRequest;
 import com.badhabinot.backend.dto.auth.RegisterRequest;
 import com.badhabinot.backend.common.exception.auth.AuthenticationFailedException;
 import com.badhabinot.backend.common.exception.auth.DuplicateEmailException;
+import com.badhabinot.backend.common.exception.auth.FaceLivenessFailedException;
 import com.badhabinot.backend.common.exception.auth.FaceMismatchException;
 import com.badhabinot.backend.common.exception.auth.FaceNotRegisteredException;
 import com.badhabinot.backend.common.exception.auth.InvalidRefreshTokenException;
+import com.badhabinot.backend.dto.monitoring.FaceLiveVerificationResponse;
 import com.badhabinot.backend.dto.monitoring.FaceRegisterResponse;
 import com.badhabinot.backend.dto.monitoring.FaceVerificationResponse;
 import com.badhabinot.backend.integration.python.VisionServiceClient;
@@ -67,6 +69,9 @@ class AuthApplicationServiceTest {
     @Mock
     private VisionServiceClient visionServiceClient;
 
+    @Mock
+    private com.badhabinot.backend.infrastructure.redis.FaceChallengeService faceChallengeService;
+
     @InjectMocks
     private AuthApplicationServiceImpl AuthApplicationServiceImpl;
 
@@ -81,7 +86,8 @@ class AuthApplicationServiceTest {
                 "secret-123",
                 "Alice",
                 "Europe/Istanbul",
-                "tr-TR"
+                "tr-TR",
+                null
         ));
 
         // Yeni kayıt onay bekler — token verilmez.
@@ -116,7 +122,8 @@ class AuthApplicationServiceTest {
                 "secret-123",
                 "Alice",
                 "UTC",
-                "en-US"
+                "en-US",
+                null
         ))).isInstanceOf(DuplicateEmailException.class)
                 .hasMessageContaining("already exists");
 
@@ -174,15 +181,16 @@ class AuthApplicationServiceTest {
         when(authUserRepository.findByEmail("carol@example.com")).thenReturn(Optional.of(user));
         when(visionServiceClient.faceStatus(any())).thenReturn(
                 new FaceRegisterResponse(userId.toString(), true, 5, "Profile active"));
-        when(visionServiceClient.verifyFace(any(), any(), any())).thenReturn(
-                new FaceVerificationResponse(true, 0.92f, "Yüz doğrulandı"));
+        when(faceChallengeService.consume(any())).thenReturn("BLINK");
+        when(visionServiceClient.verifyFaceLive(any(), any(), any(), any())).thenReturn(
+                new FaceLiveVerificationResponse(true, true, "BLINK", 0.92f, "ok"));
         when(authUserRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
         when(tokenIssuer.issueAccessToken(any())).thenReturn(new ITokenIssuer.IssuedAccessToken("access-token", expiresAt));
         when(refreshTokenService.generate(any())).thenReturn(
                 new IRefreshTokenService.GeneratedRefreshToken("refresh-token", "refresh-hash", expiresAt));
 
         var response = AuthApplicationServiceImpl.loginWithFace(
-                new FaceLoginRequest("carol@example.com", "base64image==", "image/jpeg"));
+                new FaceLoginRequest("carol@example.com", "ch-1", java.util.List.of("frame=="), "image/jpeg"));
 
         assertThat(response.accessToken()).isEqualTo("access-token");
         assertThat(response.user().email()).isEqualTo("carol@example.com");
@@ -197,7 +205,7 @@ class AuthApplicationServiceTest {
                 new FaceRegisterResponse("user-id", false, 0, "No profile"));
 
         assertThatThrownBy(() -> AuthApplicationServiceImpl.loginWithFace(
-                new FaceLoginRequest("dave@example.com", "base64image==", "image/jpeg")))
+                new FaceLoginRequest("dave@example.com", "ch-2", java.util.List.of("frame=="), "image/jpeg")))
                 .isInstanceOf(FaceNotRegisteredException.class);
 
         verifyNoInteractions(tokenIssuer, refreshTokenService);
@@ -209,11 +217,12 @@ class AuthApplicationServiceTest {
         when(authUserRepository.findByEmail("eve@example.com")).thenReturn(Optional.of(user));
         when(visionServiceClient.faceStatus(any())).thenReturn(
                 new FaceRegisterResponse("user-id", true, 5, "Profile active"));
-        when(visionServiceClient.verifyFace(any(), any(), any())).thenReturn(
-                new FaceVerificationResponse(false, 0.42f, "Yüz eşleşmedi"));
+        when(faceChallengeService.consume(any())).thenReturn("BLINK");
+        when(visionServiceClient.verifyFaceLive(any(), any(), any(), any())).thenReturn(
+                new FaceLiveVerificationResponse(false, false, null, 0.42f, "no match"));
 
         assertThatThrownBy(() -> AuthApplicationServiceImpl.loginWithFace(
-                new FaceLoginRequest("eve@example.com", "base64image==", "image/jpeg")))
+                new FaceLoginRequest("eve@example.com", "ch-3", java.util.List.of("frame=="), "image/jpeg")))
                 .isInstanceOf(FaceMismatchException.class);
 
         verify(loginAttemptService).recordFailure("eve@example.com");
@@ -225,10 +234,29 @@ class AuthApplicationServiceTest {
         when(authUserRepository.findByEmail("ghost@example.com")).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> AuthApplicationServiceImpl.loginWithFace(
-                new FaceLoginRequest("ghost@example.com", "base64image==", "image/jpeg")))
+                new FaceLoginRequest("ghost@example.com", "ch-4", java.util.List.of("frame=="), "image/jpeg")))
                 .isInstanceOf(AuthenticationFailedException.class);
 
         verify(loginAttemptService).recordFailure("ghost@example.com");
+    }
+
+    @Test
+    void faceLoginThrowsLivenessFailedWhenActionNotPerformed() {
+        AuthUser user = AuthUser.create("frank@example.com", "hashed-pw", UserRole.USER, AccountStatus.ACTIVE);
+        when(authUserRepository.findByEmail("frank@example.com")).thenReturn(Optional.of(user));
+        when(visionServiceClient.faceStatus(any())).thenReturn(
+                new FaceRegisterResponse("user-id", true, 5, "Profile active"));
+        when(faceChallengeService.consume(any())).thenReturn("BLINK");
+        // Kimlik eşleşiyor ama istenen eylem (canlılık) yapılmamış.
+        when(visionServiceClient.verifyFaceLive(any(), any(), any(), any())).thenReturn(
+                new FaceLiveVerificationResponse(true, false, null, 0.91f, "no blink"));
+
+        assertThatThrownBy(() -> AuthApplicationServiceImpl.loginWithFace(
+                new FaceLoginRequest("frank@example.com", "ch-5", java.util.List.of("frame=="), "image/jpeg")))
+                .isInstanceOf(FaceLivenessFailedException.class);
+
+        verify(loginAttemptService).recordFailure("frank@example.com");
+        verifyNoInteractions(tokenIssuer, refreshTokenService);
     }
 
     @Test

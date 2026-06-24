@@ -84,6 +84,26 @@ class FaceVerifyResponse(BaseModel):
     message: str
 
 
+class FaceLiveVerifyRequest(BaseModel):
+    """Aktif challenge ile yüz girişi: kimlik + canlılık tek istekte doğrulanır."""
+
+    model_config = ConfigDict(protected_namespaces=())
+
+    action: str                                   # BLINK | TURN_HEAD
+    frames: list[str]                             # base64 kare dizisi (sıralı)
+    image_content_type: str = "image/jpeg"
+
+
+class FaceLiveVerifyResponse(BaseModel):
+    model_config = ConfigDict(protected_namespaces=())
+
+    verified: bool                                # kimlik eşleşmesi
+    liveness_passed: bool                         # istenen eylem yapıldı mı
+    action_detected: str | None = None
+    confidence: float = Field(ge=0.0, le=1.0)
+    message: str
+
+
 # ══════════════════════════════════════════════════════════════════
 # New schemas — Module C: Face Mesh
 # ══════════════════════════════════════════════════════════════════
