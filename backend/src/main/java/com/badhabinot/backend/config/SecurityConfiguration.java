@@ -79,6 +79,7 @@ public class SecurityConfiguration {
                                 "/api/v1/auth/register",
                                 "/api/v1/auth/login",
                                 "/api/v1/auth/login/face",
+                                "/api/v1/auth/login/face/challenge",
                                 "/api/v1/auth/refresh",
                                 "/api/v1/auth/captcha/verify",
                                 "/api/v1/auth/password-reset-request",

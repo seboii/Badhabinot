@@ -68,15 +68,24 @@ export type PasswordResetConfirmDto = {
   new_password: string
 }
 
+export type FaceChallenge = {
+  challenge_id: string
+  action: 'BLINK' | 'TURN_HEAD'
+  prompt_tr: string
+  prompt_en: string
+}
+
 export type FaceLoginRequest = {
   email: string
-  face_image_base64: string
+  challenge_id: string
+  frames: string[]
   image_content_type: string
 }
 
 export type FaceLoginErrorCode =
   | 'FACE_NOT_REGISTERED'
   | 'FACE_MISMATCH'
+  | 'FACE_LIVENESS_FAILED'
   | 'too_many_login_attempts'
   | 'unauthorized'
 

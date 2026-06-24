@@ -11,9 +11,12 @@ import com.badhabinot.backend.dto.auth.RegisterResponse;
 import com.badhabinot.backend.dto.auth.TokenResponse;
 import com.badhabinot.backend.common.exception.auth.AuthenticationFailedException;
 import com.badhabinot.backend.common.exception.auth.DuplicateEmailException;
+import com.badhabinot.backend.common.exception.auth.FaceLivenessFailedException;
 import com.badhabinot.backend.common.exception.auth.FaceMismatchException;
 import com.badhabinot.backend.common.exception.auth.FaceNotRegisteredException;
 import com.badhabinot.backend.common.exception.auth.InvalidRefreshTokenException;
+import com.badhabinot.backend.dto.monitoring.FaceLiveVerificationResponse;
+import com.badhabinot.backend.infrastructure.redis.FaceChallengeService;
 import com.badhabinot.backend.integration.python.VisionServiceClient;
 import com.badhabinot.backend.model.auth.AccountStatus;
 import com.badhabinot.backend.model.auth.AuthUser;
@@ -46,6 +49,7 @@ public class AuthApplicationServiceImpl implements IAuthApplicationService {
     private final IUserContextService userContextService;
     private final LoginAttemptService loginAttemptService;
     private final VisionServiceClient visionServiceClient;
+    private final FaceChallengeService faceChallengeService;
 
     public AuthApplicationServiceImpl(
             AuthUserRepository authUserRepository,
@@ -55,7 +59,8 @@ public class AuthApplicationServiceImpl implements IAuthApplicationService {
             IRefreshTokenService refreshTokenService,
             IUserContextService userContextService,
             LoginAttemptService loginAttemptService,
-            VisionServiceClient visionServiceClient
+            VisionServiceClient visionServiceClient,
+            FaceChallengeService faceChallengeService
     ) {
         this.authUserRepository = authUserRepository;
         this.refreshTokenRepository = refreshTokenRepository;
@@ -65,6 +70,7 @@ public class AuthApplicationServiceImpl implements IAuthApplicationService {
         this.userContextService = userContextService;
         this.loginAttemptService = loginAttemptService;
         this.visionServiceClient = visionServiceClient;
+        this.faceChallengeService = faceChallengeService;
     }
 
 
@@ -186,14 +192,23 @@ public class AuthApplicationServiceImpl implements IAuthApplicationService {
             throw new FaceNotRegisteredException("No face profile registered for this account. Please sign in with your password.");
         }
 
-        var verification = visionServiceClient.verifyFace(
+        // Aktif challenge: istemcinin önceden kaydedilmiş bir kareyle geçmesini
+        // engellemek için sunucu rastgele bir eylem ister (göz kırpma / baş çevirme).
+        String expectedAction = faceChallengeService.consume(request.challengeId());
+
+        FaceLiveVerificationResponse verification = visionServiceClient.verifyFaceLive(
                 user.getId().toString(),
-                request.faceImageBase64(),
+                expectedAction,
+                request.frames(),
                 request.imageContentType()
         );
         if (!verification.verified()) {
             loginAttemptService.recordFailure(normalizedEmail);
             throw new FaceMismatchException("Face verification failed. Please try again or sign in with your password.");
+        }
+        if (!verification.livenessPassed()) {
+            loginAttemptService.recordFailure(normalizedEmail);
+            throw new FaceLivenessFailedException("Liveness check failed. Please perform the requested action and try again.");
         }
 
         loginAttemptService.resetAttempts(normalizedEmail);

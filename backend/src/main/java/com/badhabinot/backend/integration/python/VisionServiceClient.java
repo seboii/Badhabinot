@@ -1,5 +1,6 @@
 package com.badhabinot.backend.integration.python;
 
+import com.badhabinot.backend.dto.monitoring.FaceLiveVerificationResponse;
 import com.badhabinot.backend.dto.monitoring.FaceRegisterRequest;
 import com.badhabinot.backend.dto.monitoring.FaceRegisterResponse;
 import com.badhabinot.backend.dto.monitoring.FaceVerificationResponse;
@@ -135,6 +136,36 @@ public class VisionServiceClient {
             throw new DownstreamServiceException("vision_service_unavailable", "Unable to reach vision-service");
         } catch (Exception exception) {
             throw new DownstreamServiceException("vision_service_unavailable", "Unexpected failure during face verification");
+        }
+    }
+
+    /** Verify identity + active-challenge liveness from a short frame sequence. */
+    public FaceLiveVerificationResponse verifyFaceLive(
+            String userId, String action, java.util.List<String> frames, String contentType) {
+        try {
+            var body = new java.util.HashMap<String, Object>();
+            body.put("action", action);
+            body.put("frames", frames);
+            body.put("image_content_type", contentType != null ? contentType : "image/jpeg");
+
+            return webClient.post()
+                    .uri("/v1/vision/face/{userId}/verify-live", userId)
+                    .bodyValue(body)
+                    .retrieve()
+                    .onStatus(HttpStatusCode::isError, response -> response.bodyToMono(String.class)
+                            .defaultIfEmpty("face-verify-live error")
+                            .flatMap(b -> Mono.error(new DownstreamServiceException("vision_face_error", b))))
+                    .bodyToMono(FaceLiveVerificationResponse.class)
+                    .block(Duration.ofSeconds(15));
+        } catch (DownstreamServiceException exception) {
+            throw exception;
+        } catch (WebClientRequestException exception) {
+            if (isTimeout(exception)) {
+                throw new DownstreamTimeoutException("vision_face_timeout", "Timed out during live face verification");
+            }
+            throw new DownstreamServiceException("vision_service_unavailable", "Unable to reach vision-service");
+        } catch (Exception exception) {
+            throw new DownstreamServiceException("vision_service_unavailable", "Unexpected failure during live face verification");
         }
     }
 
