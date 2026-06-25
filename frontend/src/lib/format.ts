@@ -127,11 +127,11 @@ export function postureLabel(value: string | null | undefined, language: AppLang
 
   switch ((value || '').toLowerCase()) {
     case 'poor':
-      return isTurkish ? 'Duzeltme gerekli' : 'Needs adjustment'
+      return isTurkish ? 'Yamuk' : 'Slouching'
     case 'good':
-      return isTurkish ? 'Durus hizali' : 'Aligned posture'
+      return isTurkish ? 'Dik' : 'Upright'
     default:
-      return isTurkish ? 'Kullanilamiyor' : 'Unavailable'
+      return isTurkish ? 'Belirsiz' : 'Unavailable'
   }
 }
 
