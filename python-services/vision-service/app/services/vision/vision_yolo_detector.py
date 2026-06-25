@@ -43,6 +43,8 @@ _CLASS_IDS = list(ALLOWED_CLASSES.keys())
 _DETECT_MODEL_NAME = "yolov8n.pt"
 _CONFIDENCE_THRESHOLD = 0.4
 
+_torch_threads_set = False
+
 
 @dataclass
 class YoloDetection:
@@ -167,10 +169,25 @@ class VisionYoloDetector:
 
     def _get_model(self) -> object:
         if self._model is None:
+            self._apply_torch_threads()
             model_name = settings.vision_detect_model
             logger.info("Loading YOLOv8n model (%s)…", model_name)
             self._model = YOLO(model_name)
         return self._model
+
+    @staticmethod
+    def _apply_torch_threads() -> None:
+        """CPU thread tavanını uygula (eş zamanlı isteklerde oversubscription'ı önler)."""
+        global _torch_threads_set
+        if _torch_threads_set or settings.vision_torch_threads <= 0:
+            return
+        try:
+            import torch  # type: ignore[import-untyped]
+            torch.set_num_threads(settings.vision_torch_threads)
+            _torch_threads_set = True
+            logger.info("torch CPU threads capped at %d", settings.vision_torch_threads)
+        except Exception:  # pragma: no cover
+            logger.debug("could not set torch threads", exc_info=True)
 
     @staticmethod
     def _iou(a: tuple[float, float, float, float], b: tuple[float, float, float, float]) -> float:
