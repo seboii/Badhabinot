@@ -74,8 +74,12 @@ services:
         condition: service_healthy
     environment:
       OLLAMA_HOST: http://ollama:11434
-    entrypoint: ["ollama", "pull"]
-    command: ["${OLLAMA_BASE_MODEL_NAME:-llama3.2:3b}"]
+      COACH_ONLY: ${COACH_ONLY:-false}
+      OLLAMA_BASE_MODEL_NAME: ${OLLAMA_BASE_MODEL_NAME:-llama3.2:3b}
+    entrypoint:
+      - sh
+      - -c
+      - 'if [ "$$COACH_ONLY" = "true" ]; then echo "COACH_ONLY=true -> base model pull atlandi (yalniz fine-tune coach)"; else ollama pull "$$OLLAMA_BASE_MODEL_NAME"; fi'
     networks:
       - platform
 
@@ -93,6 +97,7 @@ services:
       OLLAMA_MODEL_NAME: ${OLLAMA_BASE_MODEL_NAME:-llama3.2:3b}
       BADHABINOT_MODEL_NAME: ${OLLAMA_MODEL_NAME:-badhabinot:latest}
       COACH_MODEL_NAME: ${AI_OLLAMA_MODEL_NAME:-badhabinot-coach:latest}
+      COACH_ONLY: ${COACH_ONLY:-false}
     volumes:
       - ./infra/ollama:/modelfiles:ro
       # Fine-tune edilmis GGUF artefaktlari (gitignore'lu; yerelde uretilir). Dosya yoksa adim atlanir.
@@ -247,8 +252,13 @@ services:
       start_period: 10s
 
   # ── İzleme: node-exporter (host disk/RAM/CPU metrikleri) — yalnız iç ağ ────
+  # OPT-IN: `monitoring` profile. Host `/` bind'i `rslave` propagation ister; bu
+  # Docker Desktop/Windows'ta desteklenmez ("path / is not a shared or slave mount")
+  # ve orada host-metrik zaten anlamsızdır. Linux deploy'da host metriği için:
+  #   docker compose --profile monitoring up -d
   node-exporter:
     <<: *runtime-defaults
+    profiles: ["monitoring"]
     image: prom/node-exporter:latest
     command:
       - '--path.rootfs=/host'
