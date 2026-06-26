@@ -100,9 +100,7 @@ public class UserContextServiceImpl implements IUserContextService {
                 settings.getModelMode(),
                 request.notificationsEnabled(),
                 settings.getLocalModelName(),
-                settings.getOllamaBaseUrl(),
-                settings.getChatPersona(),
-                settings.getCustomSystemPrompt()
+                settings.getOllamaBaseUrl()
         );
         return toSettingsResponse(userSettingsRepository.save(settings));
     }
@@ -129,9 +127,7 @@ public class UserContextServiceImpl implements IUserContextService {
                 request.modelMode(),
                 request.notificationsEnabled(),
                 request.localModelName(),
-                request.ollamaBaseUrl(),
-                request.chatPersona(),
-                request.customSystemPrompt()
+                request.ollamaBaseUrl()
         );
         return toSettingsResponse(userSettingsRepository.save(settings));
     }
@@ -222,9 +218,7 @@ public class UserContextServiceImpl implements IUserContextService {
                 settings.getQuietHoursEnd(),
                 consent.isRemoteInferenceAccepted(),
                 settings.getLocalModelName(),
-                settings.getOllamaBaseUrl(),
-                settings.getChatPersona(),
-                settings.getCustomSystemPrompt()
+                settings.getOllamaBaseUrl()
         );
     }
 
@@ -247,9 +241,7 @@ public class UserContextServiceImpl implements IUserContextService {
                 context.quietHoursEnd().toString(),
                 context.remoteInferenceAccepted(),
                 context.localModelName(),
-                context.ollamaBaseUrl(),
-                context.chatPersona() != null ? context.chatPersona().name() : "GENERAL_CHAT",
-                context.customSystemPrompt()
+                context.ollamaBaseUrl()
         );
     }
 
@@ -315,8 +307,6 @@ public class UserContextServiceImpl implements IUserContextService {
                 settings.isNotificationsEnabled(),
                 settings.getLocalModelName(),
                 settings.getOllamaBaseUrl(),
-                settings.getChatPersona(),
-                settings.getCustomSystemPrompt(),
                 settings.getUpdatedAt()
         );
     }

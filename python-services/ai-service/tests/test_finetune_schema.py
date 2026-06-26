@@ -1,100 +1,91 @@
-"""finetune.schema + build_dataset — saf python, torch gerekmez (her zaman koşar)."""
+"""finetune.schema — sohbet-mesajları (ChatExample) JSONL şeması. Saf python."""
 
 from __future__ import annotations
 
+import json
+
 import pytest
 
-from finetune.build_dataset import build, synthesize
 from finetune.schema import (
-    BehavioralPattern,
-    ChatTurn,
-    CoachingExample,
-    MonitoringContext,
+    ChatExample,
+    ChatMessage,
     dataset_stats,
     dump_jsonl,
     load_jsonl,
 )
 
 
-def _ctx() -> MonitoringContext:
-    return MonitoringContext(report_date="2026-05-30", hydration_progress_ml=1500,
-                             water_goal_ml=2500, poor_posture_ratio=0.2)
+def _ex(*pairs: tuple[str, str], tags: list[str] | None = None) -> ChatExample:
+    return ChatExample(messages=[ChatMessage(role=r, content=c) for r, c in pairs], tags=tags or [])
 
 
 def test_valid_example_passes_validation():
-    ex = CoachingExample(persona="BEHAVIOR_COACH", kind="answer", question="Duruşum?",
-                         ideal_answer="Skorun 80/100.", context=_ctx())
+    ex = _ex(("system", "Sen koçsun."), ("user", "Duruşum?"), ("assistant", "Skorun 80/100."))
     ex.validate()  # raise etmemeli
 
 
-def test_invalid_persona_rejected():
-    ex = CoachingExample(persona="WRONG", kind="answer", question="q",
-                         ideal_answer="a", context=_ctx())
+def test_user_assistant_only_is_valid():
+    # system opsiyonel — yoksa Ollama Modelfile sistem promptu devreye girer.
+    _ex(("user", "Su?"), ("assistant", "1500/2500 ml.")).validate()
+
+
+def test_invalid_role_rejected():
     with pytest.raises(ValueError):
-        ex.validate()
+        _ex(("robot", "x"), ("assistant", "y")).validate()
 
 
-def test_custom_persona_requires_prompt():
-    ex = CoachingExample(persona="CUSTOM", kind="answer", question="q",
-                         ideal_answer="a", context=_ctx())
+def test_last_message_must_be_assistant():
     with pytest.raises(ValueError):
-        ex.validate()
-    ex.custom_system_prompt = "Sen bir koçsun."
-    ex.validate()
+        _ex(("user", "Duruşum?")).validate()
 
 
-def test_behavioral_pattern_bounds():
-    p = BehavioralPattern(event_type="x", peak_hour_of_day=30, peak_hour_count=1,
-                          peak_day_of_week="MONDAY", peak_day_count=1,
-                          total_count_last_7_days=1, intensity_label="az", trend_label="stabil")
+def test_requires_at_least_one_user():
     with pytest.raises(ValueError):
-        p.validate()
+        _ex(("system", "Sen koçsun."), ("assistant", "Merhaba.")).validate()
 
 
-def test_context_ratio_bounds():
-    ctx = MonitoringContext(report_date="2026-05-30", poor_posture_ratio=1.5)
+def test_system_must_be_first():
     with pytest.raises(ValueError):
-        ctx.validate()
+        _ex(("user", "q"), ("system", "geç sistem"), ("assistant", "a")).validate()
+
+
+def test_empty_content_rejected():
+    with pytest.raises(ValueError):
+        _ex(("user", "q"), ("assistant", "   ")).validate()
+
+
+def test_prompt_messages_and_target():
+    ex = _ex(("system", "S"), ("user", "U"), ("assistant", "A"))
+    assert ex.target == "A"
+    assert ex.prompt_messages() == [{"role": "system", "content": "S"}, {"role": "user", "content": "U"}]
+    assert ex.to_messages()[-1] == {"role": "assistant", "content": "A"}
 
 
 def test_jsonl_roundtrip(tmp_path):
-    ex = CoachingExample(
-        persona="GENERAL_CHAT", kind="answer", question="Su?",
-        ideal_answer="1500/2500 ml.", context=_ctx(),
-        history=[ChatTurn(role="user", content="selam")],
-        grounded_facts=["Hidrasyon: 1500/2500 ml"], tags=["t"],
-    )
+    ex = _ex(("user", "Su?"), ("assistant", "1500/2500 ml."), tags=["gold"])
     path = tmp_path / "d.jsonl"
     assert dump_jsonl([ex], path) == 1
     loaded = load_jsonl(path)
     assert len(loaded) == 1
-    assert loaded[0].persona == "GENERAL_CHAT"
-    assert loaded[0].history[0].content == "selam"
-    assert loaded[0].context.water_goal_ml == 2500
+    assert loaded[0].messages[0].content == "Su?"
+    assert loaded[0].target == "1500/2500 ml."
+    assert loaded[0].tags == ["gold"]
 
 
 def test_load_jsonl_reports_bad_line(tmp_path):
     path = tmp_path / "bad.jsonl"
-    path.write_text('{"persona": "BEHAVIOR_COACH"}\n', encoding="utf-8")
+    # son mesaj assistant değil → doğrulama hatası, satır numarasıyla.
+    path.write_text(json.dumps({"messages": [{"role": "user", "content": "q"}]}) + "\n", encoding="utf-8")
     with pytest.raises(ValueError) as exc:
         load_jsonl(path)
     assert "bad.jsonl:1" in str(exc.value)
 
 
-def test_synthesize_is_deterministic_and_valid():
-    a = synthesize(20, seed=1)
-    b = synthesize(20, seed=1)
-    assert len(a) == 20
-    assert [e.question for e in a] == [e.question for e in b]
-    for e in a:
-        e.validate()
-
-
-def test_build_writes_gold_and_synthetic(tmp_path):
-    out = tmp_path / "ds.jsonl"
-    n = build(str(out), synthetic=10, seed=3)
-    examples = load_jsonl(out)
-    assert n == len(examples) >= 10
+def test_dataset_stats():
+    examples = [
+        _ex(("user", "a"), ("assistant", "b")),
+        _ex(("system", "s"), ("user", "c"), ("assistant", "d")),
+    ]
     stats = dataset_stats(examples)
-    assert stats["total"] == n
-    assert set(stats["by_kind"]).issubset({"answer", "casual", "refuse"})
+    assert stats["total"] == 2
+    assert stats["by_role"] == {"user": 2, "assistant": 2, "system": 1}

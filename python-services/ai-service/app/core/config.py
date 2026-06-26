@@ -32,7 +32,7 @@ class Settings:
 
     # Ollama settings (server-level default; per-request values override these)
     ollama_base_url: str = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434").rstrip("/")
-    ollama_model_name: str = os.getenv("OLLAMA_MODEL_NAME", "llama3.2:3b").strip()
+    ollama_model_name: str = os.getenv("OLLAMA_MODEL_NAME", "badhabinot-coach:latest").strip()
 
     internal_api_key: str = os.getenv("INTERNAL_API_KEY", "change-me-in-real-environments")
     ai_timeout_seconds: float = float(os.getenv("AI_TIMEOUT_SECONDS", "30"))

@@ -19,7 +19,6 @@ import argparse
 import sys
 
 from .config import FinetuneConfig
-from .prompt_format import build_chat_messages, build_inference_messages
 from .schema import load_jsonl
 
 
@@ -30,22 +29,24 @@ def prepare(config: FinetuneConfig) -> str:
     config.ensure_dirs()
     examples = load_jsonl(config.dataset_path)
     if not examples:
-        raise SystemExit(f"Veri seti boş: {config.dataset_path}. Önce build_dataset çalıştır.")
+        raise SystemExit(
+            f"Veri seti boş: {config.dataset_path}. "
+            "Sohbet-mesajları JSONL'ini ({\"messages\": [...]}) bu yola yükle.")
 
     tokenizer = AutoTokenizer.from_pretrained(config.base_model, trust_remote_code=True)
 
-    # Prompt-completion biçimi: kayıp YALNIZCA asistan tamamlamasında hesaplanır.
-    # prompt    = apply_chat_template([system,*history,user], add_generation_prompt=True)
-    # full      = apply_chat_template([...,assistant], add_generation_prompt=False)
+    # Prompt-completion biçimi: kayıp YALNIZCA son asistan tamamlamasında hesaplanır.
+    # prompt    = apply_chat_template(messages[:-1], add_generation_prompt=True)
+    # full      = apply_chat_template(messages,      add_generation_prompt=False)
     # completion = full[len(prompt):]  → asistan yanıtı + <|im_end|> (EOS öğrenilir)
     # Şablon deterministik olduğundan prompt, full'ün strict ön ekidir; dilimleme güvenli.
     prompts: list[str] = []
     completions: list[str] = []
     for ex in examples:
         full = tokenizer.apply_chat_template(
-            build_chat_messages(ex), tokenize=False, add_generation_prompt=False)
+            ex.to_messages(), tokenize=False, add_generation_prompt=False)
         prompt = tokenizer.apply_chat_template(
-            build_inference_messages(ex), tokenize=False, add_generation_prompt=True)
+            ex.prompt_messages(), tokenize=False, add_generation_prompt=True)
         if not full.startswith(prompt):
             raise SystemExit(
                 "Prompt, tam metnin ön eki değil — sohbet şablonu beklenmedik; "

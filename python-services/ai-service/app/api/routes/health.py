@@ -15,8 +15,10 @@ async def health() -> dict:
         "status": "ok",
         "service": settings.app_name,
         "version": settings.app_version,
-        "provider": settings.ai_provider,
-        "model": settings.model_name,
+        "provider": settings.effective_provider,
+        # Ollama sağlayıcıda gerçek kullanılan model ollama_model_name'dir
+        # (model_name openai-compatible içindir) → doğru modeli raporla.
+        "model": settings.ollama_model_name if settings.effective_provider == "ollama" else settings.model_name,
         "provider_ready": readiness.get("provider_ready", True),
         "provider_status": readiness.get("provider_status", "unknown"),
         "provider_reason": readiness.get("reason"),

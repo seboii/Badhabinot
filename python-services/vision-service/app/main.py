@@ -33,15 +33,20 @@ def _warm_up_models() -> None:
     except Exception:  # pragma: no cover - warm-up is best-effort
         logger.warning("DeepFace warm-up skipped/failed; will lazy-load on demand", exc_info=True)
 
-    # Aynı pipeline singleton'unun gerçek dedektörlerini ısıt (YOLOv8 nesne + poz).
-    try:
-        from app.api.routes.vision import service as vision_service
+    # Aynı pipeline singleton'unun gerçek dedektörlerini ısıt (ilk-kare gecikmesini önle).
+    # Her biri ayrı try ile: biri ısınamazsa diğerleri yine ısınır.
+    from app.api.routes.vision import service as vision_service
 
-        vision_service.yolo_detector._get_model()
-        vision_service.pose_estimator._get_model()
-        logger.info("YOLOv8 detect + pose models warmed up at startup")
-    except Exception:  # pragma: no cover - warm-up is best-effort
-        logger.warning("YOLO warm-up skipped/failed; will lazy-load on demand", exc_info=True)
+    for name, warm in (
+        ("YOLOv8 object detector", lambda: vision_service.yolo_detector._get_model()),
+        ("MediaPipe Pose", lambda: vision_service.pose_estimator._get_pose()),
+        ("MediaPipe FaceMesh", lambda: vision_service.face_mesh._get_mesh()),
+    ):
+        try:
+            warm()
+            logger.info("%s warmed up at startup", name)
+        except Exception:  # pragma: no cover - warm-up is best-effort
+            logger.warning("%s warm-up skipped/failed; will lazy-load on demand", name, exc_info=True)
 
 
 @asynccontextmanager

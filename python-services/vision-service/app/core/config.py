@@ -60,15 +60,22 @@ class Settings:
     vision_mesh_interval: int = _env_int("VISION_MESH_INTERVAL", 1)
     vision_hand_interval: int = _env_int("VISION_HAND_INTERVAL", 1)
 
-    # YOLO model dosyaları — ".onnx" uzantısı verilirse ONNX Runtime üzerinden
-    # çalışır (bkz. scripts/export_yolo_onnx.py). Varsayılan PyTorch (.pt).
-    vision_pose_model: str = os.getenv("VISION_POSE_MODEL", "yolov8n-pose.pt")
+    # Nesne tespiti (YOLOv8) model dosyası — ".onnx" uzantısı verilirse ONNX
+    # Runtime üzerinden çalışır (bkz. scripts/export_yolo_onnx.py). Varsayılan
+    # PyTorch (.pt). Postür artık YOLO değil MediaPipe Pose ile yapılır.
     vision_detect_model: str = os.getenv("VISION_DETECT_MODEL", "yolov8n.pt")
-    vision_pose_imgsz: int = _env_int("VISION_POSE_IMGSZ", 640)
     vision_detect_imgsz: int = _env_int("VISION_DETECT_IMGSZ", 640)
 
-    # CPU thread tavanı (0 = dokunma/torch varsayılanı). Eş zamanlı isteklerde
-    # thread oversubscription'ı önlemek için 2-4 önerilir.
+    # MediaPipe Pose (postür iskeleti) — YOLOv8-pose yerine.
+    #   complexity: 0 (lite) / 1 (full) / 2 (heavy). 0 ve 1 modelleri pakette GÖMÜLÜ;
+    #     2 ("heavy") ilk kullanımda İNDİRİLİR → root-olmayan konteynerde yazma izni
+    #     yok (PermissionError) + CPU'da çok yavaş. Bu yüzden varsayılan 1 (full).
+    #   min_confidence: kişi tespiti için minimum güven (düşük = marjinal çerçevede de yakalar).
+    posture_pose_complexity: int = _env_int("POSTURE_POSE_COMPLEXITY", 1)
+    posture_pose_min_confidence: float = _env_float("POSTURE_POSE_MIN_CONFIDENCE", 0.4)
+
+    # CPU thread tavanı (0 = dokunma/torch varsayılanı). Nesne tespiti YOLO'su
+    # için geçerli; eş zamanlı isteklerde oversubscription'ı önlemek için 2-4.
     vision_torch_threads: int = _env_int("VISION_TORCH_THREADS", 0)
 
     # ──────────────────────────────────────────────────────────────────────

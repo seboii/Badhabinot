@@ -11,7 +11,6 @@ import com.badhabinot.backend.dto.user.UpdateSettingsRequest;
 import com.badhabinot.backend.integration.python.VisionServiceClient;
 import com.badhabinot.backend.model.auth.AuthUser;
 import com.badhabinot.backend.model.auth.UserRole;
-import com.badhabinot.backend.model.user.ChatPersona;
 import com.badhabinot.backend.model.user.ModelMode;
 import com.badhabinot.backend.model.user.Sensitivity;
 import com.badhabinot.backend.model.user.UserSettings;
@@ -122,7 +121,6 @@ public class AdminServiceImpl implements IAdminService {
                         s.getModelMode().name(),
                         s.getLocalModelName(),
                         s.getOllamaBaseUrl(),
-                        s.getChatPersona() != null ? s.getChatPersona().name() : "GENERAL_CHAT",
                         s.getWaterGoalMl(),
                         s.getWaterIntervalMin(),
                         s.getExerciseIntervalMin(),
@@ -218,7 +216,6 @@ public class AdminServiceImpl implements IAdminService {
         LocalTime quietStart = cur != null ? cur.getQuietHoursStart() : LocalTime.of(22, 0);
         LocalTime quietEnd = cur != null ? cur.getQuietHoursEnd() : LocalTime.of(8, 0);
         boolean notifications = cur == null || cur.isNotificationsEnabled();
-        String customPrompt = cur != null ? cur.getCustomSystemPrompt() : null;
 
         String localModel = (req.localModelName() != null && !req.localModelName().isBlank())
                 ? req.localModelName().trim()
@@ -226,14 +223,10 @@ public class AdminServiceImpl implements IAdminService {
         String ollamaUrl = (req.ollamaBaseUrl() != null && !req.ollamaBaseUrl().isBlank())
                 ? req.ollamaBaseUrl().trim()
                 : (cur != null ? cur.getOllamaBaseUrl() : "http://ollama:11434");
-        ChatPersona persona = req.chatPersona() != null
-                ? req.chatPersona()
-                : (cur != null ? cur.getChatPersona() : ChatPersona.GENERAL_CHAT);
-
         UpdateSettingsRequest full = new UpdateSettingsRequest(
                 sensitivity, waterGoal, waterInterval, exerciseInterval,
                 quietEnabled, quietStart, quietEnd,
-                req.modelMode(), notifications, localModel, ollamaUrl, persona, customPrompt
+                req.modelMode(), notifications, localModel, ollamaUrl
         );
         userContextService.updateSettingsForUser(userId, user.getEmail(), full);
     }

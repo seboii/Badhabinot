@@ -120,9 +120,7 @@ public class GroundedChatServiceImpl implements IGroundedChatService {
                 aiContext,
                 context.modelMode(),
                 context.localModelName(),
-                context.ollamaBaseUrl(),
-                context.chatPersona(),
-                context.customSystemPrompt()
+                context.ollamaBaseUrl()
         ));
 
         Map<String, Object> metadata = new LinkedHashMap<>();
@@ -185,8 +183,7 @@ public class GroundedChatServiceImpl implements IGroundedChatService {
             return new SetupData(conversationId, new AiChatRequest(
                     conversationId.toString(), userId.toString(), context.timezone(), report.reportDate(),
                     request.message(), historyItems, aiContext,
-                    context.modelMode(), context.localModelName(), context.ollamaBaseUrl(),
-                    context.chatPersona(), context.customSystemPrompt()));
+                    context.modelMode(), context.localModelName(), context.ollamaBaseUrl()));
         }));
 
         SseEmitter emitter = new SseEmitter(300_000L);
@@ -298,8 +295,11 @@ public class GroundedChatServiceImpl implements IGroundedChatService {
             return UUID.randomUUID();
         }
         UUID parsed = parseConversationId(conversationId);
+        // Bayat/yabancı conversation_id (önceki oturum/kullanıcı ya da istemci-üretimi
+        // yeni ID) sohbeti ENGELLEMEsin: sahibi değilse yeni bir konuşma başlat.
+        // İstemci, yanıtta dönen conversation_id ile sessionStorage'ı kendisi düzeltir.
         if (!chatMessageRepository.existsByUserIdAndConversationId(userId, parsed)) {
-            throw new IllegalArgumentException("conversation_id does not belong to the authenticated user");
+            return UUID.randomUUID();
         }
         return parsed;
     }
@@ -311,8 +311,11 @@ public class GroundedChatServiceImpl implements IGroundedChatService {
                     .orElse(null);
         }
         UUID parsed = parseConversationId(conversationId);
+        // Geçmiş için: bayat/yabancı ID'de hata yerine kullanıcının en son konuşmasına düş.
         if (!chatMessageRepository.existsByUserIdAndConversationId(userId, parsed)) {
-            throw new IllegalArgumentException("conversation_id does not belong to the authenticated user");
+            return chatMessageRepository.findFirstByUserIdOrderByCreatedAtDesc(userId)
+                    .map(ChatMessage::getConversationId)
+                    .orElse(null);
         }
         return parsed;
     }

@@ -3,8 +3,6 @@ import type {
   AuthenticatedUserResponse,
   CaptchaChallenge,
   CaptchaVerifyResponse,
-  FaceChallenge,
-  FaceLoginRequest,
   LoginRequest,
   LogoutRequest,
   PasswordResetConfirmDto,
@@ -53,21 +51,6 @@ export const authApi = {
 
   async confirmPasswordReset(payload: PasswordResetConfirmDto) {
     await apiClient.post('/api/v1/auth/password-reset-confirm', payload)
-  },
-
-  async requestFaceChallenge() {
-    const response = await apiClient.post<FaceChallenge>('/api/v1/auth/login/face/challenge')
-    return response.data
-  },
-
-  async loginWithFace(payload: FaceLoginRequest) {
-    const response = await apiClient.post<TokenResponse>('/api/v1/auth/login/face', {
-      email: payload.email,
-      challenge_id: payload.challenge_id,
-      frames: payload.frames,
-      image_content_type: payload.image_content_type,
-    })
-    return response.data
   },
 }
 

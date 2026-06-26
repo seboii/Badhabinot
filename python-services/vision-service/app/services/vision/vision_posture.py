@@ -53,16 +53,24 @@ PostureCategory = Literal[
     "head_tilt", "too_close", "head_down", "unknown",
 ]
 
-# Kategori → Türkçe, eyleme dönük öneri.
+# Kategori → Türkçe, eyleme dönük öneri ("dik / yamuk" çerçevesiyle).
 _CATEGORY_REASON: dict[str, str] = {
-    "good": "Postürün düzgün.",
-    "forward_head": "Başın öne kaymış — başını omuzlarının üzerine al, sırtını dikleştir.",
-    "leaning": "Gövden bir yana yatmış — dik otur ve ağırlığını ortala.",
-    "uneven_shoulders": "Omuzların eğik — iki omzunu aynı hizaya getir.",
-    "head_tilt": "Başın yana eğik — başını dikleştir.",
+    "good": "Dik oturuyorsun, böyle devam et. 👍",
+    "forward_head": "Yamuk oturuyorsun: başın öne kaymış — başını omuzlarının üzerine al, sırtını dikleştir.",
+    "leaning": "Yamuk oturuyorsun: gövden bir yana yatmış — dik otur ve ağırlığını ortala.",
+    "uneven_shoulders": "Yamuk oturuyorsun: omuzların eğik — iki omzunu aynı hizaya getir.",
+    "head_tilt": "Yamuk oturuyorsun: başın yana eğik — başını dikleştir.",
     "too_close": "Ekrana çok yaklaşmışsın — biraz geriye yaslan.",
-    "head_down": "Başın aşağı eğik — ekranı göz hizasına getir, çeneni geri çek.",
+    "head_down": "Yamuk oturuyorsun: başın aşağı eğik — ekranı göz hizasına getir, çeneni geri çek.",
     "unknown": "Postür değerlendirmesi için omuzların net görünmüyor.",
+}
+
+# Nihai ikili etiket: kullanıcıya gösterilen sade "dik / yamuk / belirsiz".
+PostureLabelTr = Literal["dik", "yamuk", "belirsiz"]
+_STATE_TO_LABEL_TR: dict[str, PostureLabelTr] = {
+    "good": "dik",
+    "poor": "yamuk",
+    "unknown": "belirsiz",
 }
 
 
@@ -86,6 +94,7 @@ class PostureVerdict:
     """Postür değerlendirmesinin nihai çıktısı."""
 
     state: Literal["good", "poor", "unknown"] = "unknown"
+    label_tr: PostureLabelTr = "belirsiz"  # sade ikili etiket: dik / yamuk / belirsiz
     score: int = 100                     # 0-100 (yumuşatılmış)
     confidence: float = 0.0
     category: PostureCategory = "unknown"
@@ -336,6 +345,7 @@ class PostureEvaluator:
             state = "unknown"
             return PostureVerdict(
                 state="unknown",
+                label_tr="belirsiz",
                 score=100,
                 confidence=0.0,
                 category="unknown",
@@ -382,6 +392,7 @@ class PostureEvaluator:
 
         return PostureVerdict(
             state=state,
+            label_tr=_STATE_TO_LABEL_TR[state],
             score=smoothed,
             confidence=confidence,
             category=category,

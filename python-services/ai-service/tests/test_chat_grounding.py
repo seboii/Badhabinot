@@ -1,9 +1,7 @@
-"""Sohbet grounding düzeltmeleri için testler.
+"""Sohbet grounding düzeltmeleri için testler (tek koç modu).
 
-1) GENERAL_CHAT data-bloğu kapısı Türkçe-diakritik DUYARSIZ olmalı
-   (duruş/duruşumu/durusum hepsi tetiklemeli) → tek aksanlı harf yüzünden kaçmasın.
-2) Bugün ölçüm yoksa yanıltıcı 100/100 yerine SON ÖLÇÜMLÜ güne düşmeli;
-   hiç veri yoksa "kayıtlı ölçüm yok" deyip uydurmamasını istemeli.
+Bugün ölçüm yoksa yanıltıcı 100/100 yerine SON ÖLÇÜMLÜ güne düşmeli;
+hiç veri yoksa "kayıtlı ölçüm yok" deyip uydurmamasını istemeli.
 """
 from __future__ import annotations
 
@@ -54,13 +52,6 @@ def _req(message: str, **ctx_overrides) -> ChatRequest:
         conversation_id="c", user_id="u", timezone="Europe/Istanbul",
         report_date="2026-04-08", message=message, history=[], context=_ctx(**ctx_overrides),
     )
-
-
-def test_gate_is_diacritic_insensitive() -> None:
-    inc = OpenAiCompatibleProvider._persona_includes_data_block
-    assert inc(_req("Bugün duruşumu merak ediyorum"))   # aksanlı
-    assert inc(_req("durusum nasildi"))                  # aksansız/typo-yakın
-    assert not inc(_req("merhaba nasilsin"))             # veri sorusu değil
 
 
 def test_grounding_falls_back_to_last_measured_day_when_today_empty() -> None:

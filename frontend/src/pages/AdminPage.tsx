@@ -52,7 +52,7 @@ function InfoRow({ label, value }: { label: string; value: React.ReactNode }) {
   )
 }
 
-/** Admin: bir kullanıcının sohbet modunu (API/LOCAL), modelini ve personasını ayarla. */
+/** Admin: bir kullanıcının sohbet modunu (API/LOCAL) ve modelini ayarla. */
 function AiSettingsCard({ userId, settings }: { userId: string; settings: AdminUserDetail['settings'] }) {
   const { isTurkish } = useLanguage()
   const queryClient = useQueryClient()
@@ -164,7 +164,6 @@ function AiSettingsCard({ userId, settings }: { userId: string; settings: AdminU
                 model_mode: mode,
                 local_model_name: localModel,
                 ollama_base_url: ollamaUrl,
-                chat_persona: 'GENERAL_CHAT',
               })
             }
           >

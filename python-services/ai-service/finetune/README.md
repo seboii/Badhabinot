@@ -1,3 +1,4 @@
+
 # Chatbot Fine-Tune — Türkçe Davranış Koçluğu LLM'i (QLoRA)
 
 Bu paket, Badhabinot sohbet asistanını **prompt mühendisliğinden** çıkarıp
@@ -61,29 +62,30 @@ git clone https://github.com/ggerganov/llama.cpp
 
 ---
 
-## İş akışı (5 adım)
+## İş akışı (4 adım)
 
 ```
-build_dataset → prepare → train_lora → merge_and_export → evaluate
-   (veri)        (token)    (QLoRA)       (GGUF/Ollama)     (kıyas)
+(senin {messages} JSONL'in) → prepare → train_lora → merge_and_export → evaluate
+        (veriyi SEN yüklersin)   (token)    (QLoRA)      (GGUF/Ollama)      (kıyas)
 ```
 
-### 1. Veri seti üret/büyüt
-```bash
-# Başlangıç: elle yazılmış gold + 200 sentetik örnek
-python -m finetune.build_dataset --out finetune/data/coaching_dataset.jsonl --synthetic 200
-```
-- **Sentetik örnekler formatı öğretir**, ama akademik değer GOLD örneklerdedir.
-  `build_dataset.py` içindeki `_gold_examples()`'ı çoğalt; ideal yanıtların kalitesi
-  = model kalitesi. Hedef: persona (GENERAL_CHAT / BEHAVIOR_COACH / CUSTOM) ve
-  kind (answer / casual / refuse) dengeli birkaç yüz gerçek örnek.
-- Ayrı bir held-out **değerlendirme** seti üret (kıyas için):
-  ```bash
-  python -m finetune.build_dataset --out finetune/data/eval.jsonl --synthetic 40 --seed 7
-  ```
+> **Yapı değişti:** Sentetik `build_dataset` KALDIRILDI. Model artık **senin yüklediğin**
+> sohbet-mesajları verisiyle eğitilir; veri kalitesi = model kalitesi.
 
-Veri biçimi ve doğrulama: `schema.py` (saf python). Prompt biçimi üretimle birebir:
-`prompt_format.py` (— `app/services/providers.py` ile senkron tutulmalı).
+### 1. Veri setini yükle (sohbet-mesajları JSONL)
+Her satır bir sohbet; **son mesaj `assistant` = eğitim hedefi.** Dosyayı şu yola koy:
+`finetune/data/coaching_dataset.jsonl` (ya da `--dataset <yol>` ile başka yer).
+
+```jsonl
+{"messages": [{"role": "system", "content": "Sen Badhabinot davranış koçusun. Her yanıt monitoring verisine dayanmalı; uydurma yok. Türkçe, kısa, düz metin."}, {"role": "user", "content": "=== BUGÜNÜN PERFORMANS ÖZETİ (2026-05-30) ===\nDuruş skoru: 80/100 (Dikkat) — uyarı: 2\n...\nSoru: Bugün duruşum nasıldı?"}, {"role": "assistant", "content": "Duruş skorun 80/100, 2 uyarı aldın. Fena değil ama omuzlarını geri al."}]}
+```
+
+- **Roller:** `system` (opsiyonel, ilk sırada) | `user` | `assistant`. Doğrulama: `schema.py`.
+- Ayrı bir **held-out** değerlendirme seti tut (`finetune/data/eval.jsonl`) — eğitimde olmayan örnekler; baseline vs fine-tune kıyası bununla yapılır.
+
+#### ⚠️ Parity (eğitim promptu == üretim promptu)
+Üretimde (`app/services/providers.py` → `OllamaProvider._build_messages`) sohbet **tek mod = davranış koçu**: sistem promptu Ollama Modelfile'dan gelir, `user` mesajı = **zengin grounding bloğu** (`=== BUGÜNÜN PERFORMANS ÖZETİ ===` + zamansal örüntüler + son olaylar/hatırlatıcılar) **+ `Soru: ...`**. Modelin üretimde dağılmaması için, eğitim verisindeki `user` mesajlarını **aynı yapıda** yaz (yukarıdaki örnek gibi). Sistem promptunu ya hiç koyma (Modelfile devreye girer) ya da birebir koç sistem promptunu koy.
+> Grounding bloğunun tam biçimi tek doğruluk kaynağı `providers.py`'dedir; veri üretirken oradaki çıktıyı referans al.
 
 ### 2. Hazırla (tokenize + böl)
 ```bash
@@ -126,16 +128,13 @@ Metrikler: `turkish_ratio`, `plaintext_ratio`, `grounding_score` (uydurma sayı 
 | Dosya | Bağımlılık | Sorumluluk |
 |-------|-----------|------------|
 | `config.py` | — | VRAM profili → taban model + hiperparametre |
-| `schema.py` | saf python | Veri seti şeması + JSONL G/Ç + doğrulama |
-| `prompt_format.py` | saf python | Üretimle birebir mesaj/özet biçimi |
-| `build_dataset.py` | saf python | Gold + sentetik örnek üretimi |
-| `prepare.py` | transformers, datasets | Chat-template tokenize + train/val ayrımı |
+| `schema.py` | saf python | Sohbet-mesajları (ChatExample) şeması + JSONL G/Ç + doğrulama |
+| `prepare.py` | transformers, datasets | Chat-template tokenize (completion-only) + train/val ayrımı |
 | `train_lora.py` | torch, peft, trl, bnb | QLoRA fine-tune → adaptör |
 | `merge_and_export.py` | torch, peft | Adaptör birleştir → GGUF → Ollama Modelfile |
-| `evaluate.py` | torch, transformers | baseline vs fine-tune metrikleri |
+| `evaluate.py` | torch, transformers | baseline vs fine-tune metrikleri (grounding = prompt'taki sayılar) |
 
-Saf-python modüller (schema, prompt_format, build_dataset) torch'suz çalışır ve
-`tests/test_finetune_*.py` ile her zaman test edilir.
+Saf-python modül (`schema`) torch'suz çalışır ve `tests/test_finetune_schema.py` ile test edilir.
 
 ---
 
@@ -144,6 +143,6 @@ Saf-python modüller (schema, prompt_format, build_dataset) torch'suz çalışı
 - **Completion-only loss:** Şu an tüm diyalog üzerinde SFT yapılır. Yalnızca asistan
   yanıtına loss vermek (prompt'u maskelemek) kaliteyi artırabilir — TRL
   `DataCollatorForCompletionOnlyLM` ile eklenebilir.
-- **Veri = tavan.** Model kalitesi gold veri kalitesine bağlıdır; sentetik orana güvenme.
+- **Veri = tavan.** Model kalitesi yüklediğin verinin kalitesine bağlıdır; çeşitli, dengeli, gerçekçi örnekler topla.
 - **KVKK:** Veri seti gerçek kullanıcı diyaloglarından türetilirse anonimleştir;
   `data/` git'e girmez (bkz. `.gitignore`).

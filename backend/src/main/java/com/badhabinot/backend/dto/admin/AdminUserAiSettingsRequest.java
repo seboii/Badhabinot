@@ -1,6 +1,5 @@
 package com.badhabinot.backend.dto.admin;
 
-import com.badhabinot.backend.model.user.ChatPersona;
 import com.badhabinot.backend.model.user.ModelMode;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
@@ -9,7 +8,6 @@ import jakarta.validation.constraints.Size;
 public record AdminUserAiSettingsRequest(
         @NotNull ModelMode modelMode,
         @Size(max = 100) String localModelName,
-        @Size(max = 255) String ollamaBaseUrl,
-        ChatPersona chatPersona
+        @Size(max = 255) String ollamaBaseUrl
 ) {
 }

@@ -78,9 +78,7 @@ class ReminderEngineServiceTest {
                 "08:00",
                 true,
                 "llama3.2:3b",
-                "http://localhost:11434",
-                "GENERAL_CHAT",
-                null
+                "http://localhost:11434"
         );
         BehaviorEventResponse postureEvent = new BehaviorEventResponse(
                 UUID.randomUUID(),
@@ -131,9 +129,7 @@ class ReminderEngineServiceTest {
                 "08:00",
                 true,
                 "llama3.2:3b",
-                "http://localhost:11434",
-                "GENERAL_CHAT",
-                null
+                "http://localhost:11434"
         );
         var reminders = ReminderEngineServiceImpl.evaluateAfterAnalysis(userId, sessionId, context, occurredAt, List.of());
 

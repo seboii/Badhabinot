@@ -1,18 +1,22 @@
-"""Module E — Postür Analizi (YOLOv8-pose).
+"""Module E — Postür Analizi (MediaPipe Pose).
 
-Üst gövde keypoint'lerini (COCO pose: burun, gözler, kulaklar, omuzlar, dirsekler)
-çıkarır ve çok-sinyalli postür değerlendirmesi için ham geometriyi hesaplar:
-- Omuz eğikliği (asimetri)
-- Öne eğik baş / kamburluk (baş yüksekliği / omuz genişliği)
-- Yana yatma, baş eğikliği (roll), başı aşağı eğme
-- Ekrana yakınlık
+Üst gövde keypoint'lerini **MediaPipe Pose** (33 landmark, her birinde
+``visibility`` = güven) ile çıkarır ve çok-sinyalli postür değerlendirmesi için
+ham geometriyi hesaplar. Önceki **YOLOv8-pose** yerine MediaPipe Pose kullanılır:
+
+- **torch/ultralytics gerektirmez** (pose tarafında) → CPU'da hafif, yüksek fps.
+- Her landmark'ın **``visibility`` güveni** vardır → güven eşiğinin altındaki
+  noktalar "yok" sayılır (kullanıcının istediği "conf değerine göre" davranış).
+- Mimari netleşir: **MediaPipe = iskelet/yüz/el geometrisi**, **YOLO = nesne
+  tespiti** (şişe/bardak/telefon).
 
 Puanlama mantığı ``vision_posture`` modülünde toplanmıştır; bu sınıf yalnızca
-keypoint'leri çıkarır ve durağan (oturum-bağımsız) bir taban skoru üretir.
-Nihai oturum-farkında karar ``PostureEvaluator`` tarafından verilir.
+keypoint'leri çıkarır ve durağan (oturum-bağımsız) bir taban skoru üretir. Nihai
+oturum-farkında **dik / yamuk** kararı ``PostureEvaluator`` tarafından verilir.
 
-Modeli ilk çağrıda lazy yükler; ``.onnx`` model yolu verilirse ONNX Runtime
-üzerinden çalışır (CPU'da PyTorch'tan hızlı olabilir).
+MediaPipe Pose 33 landmark'ı, mevcut geometri çekirdeğinin beklediği COCO-17
+üst-gövde düzenine eşlenir; böylece ``vision_posture`` ve aşağı akış tüketicileri
+(şema, overlay) değişmeden çalışır.
 """
 
 from __future__ import annotations
@@ -20,6 +24,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass, field
 
+import cv2
 import numpy as np
 
 from app.core.config import settings
@@ -32,13 +37,14 @@ from app.services.vision.vision_posture import (
 logger = logging.getLogger(__name__)
 
 try:
-    from ultralytics import YOLO  # type: ignore[import-untyped]
-    _ULTRALYTICS_AVAILABLE = True
-except ImportError:  # pragma: no cover
-    _ULTRALYTICS_AVAILABLE = False
-    logger.warning("ultralytics not installed — pose estimation disabled")
+    import mediapipe as mp  # type: ignore[import-untyped]
+    _mp_pose = mp.solutions.pose  # type: ignore[attr-defined]
+    _MP_AVAILABLE = True
+except (ImportError, AttributeError):  # pragma: no cover
+    _MP_AVAILABLE = False
+    logger.warning("mediapipe not installed or solutions API unavailable — pose estimation disabled")
 
-# COCO keypoint indices (geriye dönük referans için korunur)
+# COCO keypoint indices (geriye dönük referans / şema uyumu için korunur)
 _KP_NOSE = 0
 _KP_LEFT_EYE = 1
 _KP_RIGHT_EYE = 2
@@ -46,22 +52,26 @@ _KP_LEFT_EAR = 3
 _KP_RIGHT_EAR = 4
 _KP_LEFT_SHOULDER = 5
 _KP_RIGHT_SHOULDER = 6
-_KP_LEFT_ELBOW = 7
-_KP_RIGHT_ELBOW = 8
-_KP_LEFT_WRIST = 9
-_KP_RIGHT_WRIST = 10
 
-_KP_CONFIDENCE_FLOOR = 0.3      # bu güvenin altındaki keypoint "yok" sayılır
-_CONFIDENCE_THRESHOLD = 0.4     # YOLO kişi tespiti güven eşiği
+# COCO-17 → MediaPipe Pose 33 landmark eşlemesi.
+#   COCO:  0 nose, 1 l_eye, 2 r_eye, 3 l_ear, 4 r_ear, 5 l_shoulder, 6 r_shoulder,
+#          7 l_elbow, 8 r_elbow, 9 l_wrist, 10 r_wrist, 11 l_hip, 12 r_hip,
+#          13 l_knee, 14 r_knee, 15 l_ankle, 16 r_ankle
+#   MP:    0 nose, 2 l_eye, 5 r_eye, 7 l_ear, 8 r_ear, 11/12 shoulders, 13/14 elbows,
+#          15/16 wrists, 23/24 hips, 25/26 knees, 27/28 ankles
+_COCO_TO_MP: tuple[int, ...] = (0, 2, 5, 7, 8, 11, 12, 13, 14, 15, 16, 23, 24, 25, 26, 27, 28)
 
-_torch_threads_set = False
+# Bu görünürlüğün (visibility) altındaki keypoint "yok" sayılır. Oturur webcam
+# çerçevesinde omuzlar genelde 0.3-0.5 bandında kalır; eşik 0.2 onları düşürmez
+# (aksi halde omuz yoksa postür "belirsiz" olur).
+_KP_CONFIDENCE_FLOOR = 0.2
 
 
 @dataclass
 class PoseKeypoint:
     x: float            # normalized [0, 1]
     y: float            # normalized [0, 1]
-    confidence: float
+    confidence: float   # MediaPipe visibility [0, 1]
 
 
 @dataclass
@@ -79,7 +89,7 @@ class PoseResult:
 
     person_bbox: tuple[float, float, float, float] | None = None  # normalized
 
-    # ── Yeni alanlar (çok-sinyalli postür) ──────────────────────────────
+    # ── Çok-sinyalli postür alanları ────────────────────────────────────
     posture_category: str = "unknown"
     forward_head_ratio: float = 0.0
     lateral_offset: float = 0.0
@@ -91,10 +101,10 @@ class PoseResult:
 
 
 class VisionPoseEstimator:
-    """YOLOv8-pose sarmalayıcısı — üst gövde postür analizi."""
+    """MediaPipe Pose sarmalayıcısı — üst gövde postür analizi (dik / yamuk)."""
 
     def __init__(self) -> None:
-        self._model: object | None = None
+        self._pose: object | None = None
 
     # ------------------------------------------------------------------ #
     # Public API                                                           #
@@ -105,84 +115,59 @@ class VisionPoseEstimator:
         image: np.ndarray,
         owner_bbox: tuple[int, int, int, int] | None = None,
     ) -> PoseResult | None:
-        """*image* (BGR, uint8) üzerinde pose tahmini çalıştırır.
+        """*image* (BGR, uint8) üzerinde MediaPipe Pose tahmini çalıştırır.
 
-        *owner_bbox* (sahibin yüz bbox'ı, piksel) verildiğinde ve birden fazla
-        kişi varsa, sahibin yüz merkezini içeren gövde kutusuna sahip kişi analiz
-        edilir — böylece bir yabancının postürü sahibe atfedilmez.
+        *owner_bbox* (sahibin yüz bbox'ı, piksel) verildiğinde, tespit edilen
+        kişinin başı bu kutuyla örtüşmüyorsa ``None`` döner — böylece bir
+        yabancının postürü sahibe atfedilmez (DeepFace owner-lock ile uyumlu).
 
-        ultralytics yoksa veya kişi yoksa None döner.
+        mediapipe yoksa veya kişi yoksa ``None`` döner.
         """
-        if not _ULTRALYTICS_AVAILABLE:
+        if not _MP_AVAILABLE:
             return None
 
-        model = self._get_model()
         h, w = image.shape[:2]
-
-        results = model(
-            image,
-            verbose=False,
-            conf=_CONFIDENCE_THRESHOLD,
-            imgsz=settings.vision_pose_imgsz,
-        )
-        if not results or not results[0].keypoints:
+        try:
+            pose = self._get_pose()
+            rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+            results = pose.process(rgb)
+        except Exception:
+            # MediaPipe modeli yüklen/çalışamazsa (ör. heavy model indirme izni yok)
+            # TÜM kareyi çökertme; bu karede postür atlanır, diğer dedektörler çalışır.
+            logger.warning("MediaPipe Pose çalıştırılamadı — bu karede postür atlandı", exc_info=True)
+            return None
+        if not getattr(results, "pose_landmarks", None):
             return None
 
-        kps = results[0].keypoints
-        boxes = results[0].boxes
-
-        if kps is None or len(kps.xy) == 0:
-            return None
-
-        # Hangi kişinin analiz edileceğini seç (varsayılan en güvenli; owner_bbox
-        # + çoklu kişi varsa sahibin yüzünü içeren kutu).
-        person_idx = 0
-        if (
-            owner_bbox is not None
-            and boxes is not None
-            and boxes.xyxyn is not None
-            and len(boxes.xyxyn) > 1
-        ):
-            owner_center = (
-                (owner_bbox[0] + owner_bbox[2] / 2.0) / w,
-                (owner_bbox[1] + owner_bbox[3] / 2.0) / h,
-            )
-            person_idx = self._select_person_index(boxes.xyxyn.cpu().numpy(), owner_center)
-        if person_idx >= len(kps.xy):
-            person_idx = 0
-
-        kp_xy = kps.xy[person_idx].cpu().numpy()   # (17, 2) piksel koordinatları
-        kp_conf = kps.conf[person_idx].cpu().numpy() if kps.conf is not None else np.ones(17)
+        landmarks = results.pose_landmarks.landmark  # 33 landmark
 
         # Hem normalize keypoint listesini (yanıt/overlay) hem de geometri için
         # piksel-uzayı nokta listesini (None=güvensiz) tek geçişte oluştur.
         keypoints: list[PoseKeypoint | None] = []
         pixel_points: list[tuple[float, float] | None] = []
-        for i in range(17):
-            if i < len(kp_xy):
-                conf = float(kp_conf[i]) if i < len(kp_conf) else 0.0
-            else:
-                conf = 0.0
-            if conf < _KP_CONFIDENCE_FLOOR or i >= len(kp_xy):
+        for mp_idx in _COCO_TO_MP:
+            lm = landmarks[mp_idx] if mp_idx < len(landmarks) else None
+            vis = float(getattr(lm, "visibility", 0.0)) if lm is not None else 0.0
+            if lm is None or vis < _KP_CONFIDENCE_FLOOR:
                 keypoints.append(None)
                 pixel_points.append(None)
             else:
-                px, py = float(kp_xy[i][0]), float(kp_xy[i][1])
+                px, py = float(lm.x) * w, float(lm.y) * h
                 keypoints.append(PoseKeypoint(
-                    x=round(px / w, 4), y=round(py / h, 4), confidence=round(conf, 3),
+                    x=round(float(lm.x), 4), y=round(float(lm.y), 4), confidence=round(vis, 3),
                 ))
                 pixel_points.append((px, py))
+
+        # Owner-lock: sahip yüz kutusu verildiyse ve tespit edilen kişinin başı
+        # o kutuyla örtüşmüyorsa, bu bir yabancı → postürü sahibe atfetme.
+        if owner_bbox is not None and not self._head_matches_owner(pixel_points, owner_bbox):
+            return None
 
         # ── Çok-sinyalli postür geometrisi (piksel uzayında) ──────────────
         metrics = compute_metrics_from_pixels(pixel_points, w, h)
         base_score, category, _components = score_metrics(metrics)
 
-        # Kişi sınırlayıcı kutusu (aynı seçilen kişi)
-        person_bbox = None
-        if boxes is not None and len(boxes.xyxyn) > person_idx:
-            b = boxes.xyxyn[person_idx].cpu().numpy()
-            person_bbox = (round(float(b[0]), 4), round(float(b[1]), 4),
-                           round(float(b[2]), 4), round(float(b[3]), 4))
+        person_bbox = self._bbox_from_points(pixel_points, w, h)
 
         is_slouching = metrics.reliable and base_score < settings.posture_poor_score
 
@@ -206,53 +191,69 @@ class VisionPoseEstimator:
     # Private helpers                                                      #
     # ------------------------------------------------------------------ #
 
-    def _get_model(self) -> object:
-        if self._model is None:
-            self._apply_torch_threads()
-            model_name = settings.vision_pose_model
-            logger.info("Loading YOLOv8-pose model (%s)…", model_name)
-            self._model = YOLO(model_name)
-        return self._model
+    def _get_pose(self) -> object:
+        if self._pose is None:
+            logger.info("Loading MediaPipe Pose (complexity=%d)…", settings.posture_pose_complexity)
+            # static_image_mode=True: her kare bağımsız işlenir. Bu servis tek
+            # singleton olduğundan ve farklı oturumların kareleri aynı nesneden
+            # geçtiğinden, kareler-arası takip durumunun oturumlar arası sızmasını
+            # önlemek için durağan mod doğru seçimdir (face_mesh gaze ile aynı desen).
+            self._pose = _mp_pose.Pose(
+                static_image_mode=True,
+                model_complexity=settings.posture_pose_complexity,
+                smooth_landmarks=False,
+                enable_segmentation=False,
+                min_detection_confidence=settings.posture_pose_min_confidence,
+            )
+        return self._pose
 
     @staticmethod
-    def _apply_torch_threads() -> None:
-        """CPU thread tavanını uygula (eş zamanlı isteklerde oversubscription'ı önler)."""
-        global _torch_threads_set
-        if _torch_threads_set or settings.vision_torch_threads <= 0:
-            return
-        try:
-            import torch  # type: ignore[import-untyped]
-            torch.set_num_threads(settings.vision_torch_threads)
-            _torch_threads_set = True
-            logger.info("torch CPU threads capped at %d", settings.vision_torch_threads)
-        except Exception:  # pragma: no cover
-            logger.debug("could not set torch threads", exc_info=True)
+    def _head_matches_owner(
+        pixel_points: list[tuple[float, float] | None],
+        owner_bbox: tuple[int, int, int, int],
+    ) -> bool:
+        """Tespit edilen kişinin başı sahibin yüz kutusuyla örtüşüyor mu?
 
-    @staticmethod
-    def _select_person_index(
-        boxes_xyxyn: "np.ndarray",
-        owner_center: tuple[float, float],
-    ) -> int:
-        """Sahibin yüz merkezini içeren kişi kutusunu seç.
-
-        Birden fazla kutu içeriyorsa en küçüğü (en spesifik) seçilir. Hiçbiri
-        içermiyorsa merkezi sahibe en yakın kutu seçilir. ``boxes_xyxyn``
-        satırları normalize (x1, y1, x2, y2).
+        Baş referansı sırasıyla: burun → göz ortası → omuz ortası. Hiçbiri
+        bulunamazsa doğrulanamaz kabul edilip ``True`` döner (aşırı baskılamayı
+        önlemek için). ``owner_bbox`` = (x, y, w, h) piksel.
         """
-        ocx, ocy = owner_center
-        containing: list[tuple[int, float]] = []
-        for i, b in enumerate(boxes_xyxyn):
-            x1, y1, x2, y2 = float(b[0]), float(b[1]), float(b[2]), float(b[3])
-            if x1 <= ocx <= x2 and y1 <= ocy <= y2:
-                containing.append((i, (x2 - x1) * (y2 - y1)))
-        if containing:
-            return min(containing, key=lambda t: t[1])[0]
+        ox, oy, ow, oh = owner_bbox
+        if ow <= 0 or oh <= 0:
+            return True  # geçersiz kutu → doğrulayamayız
 
-        best_i, best_d = 0, float("inf")
-        for i, b in enumerate(boxes_xyxyn):
-            cx = (float(b[0]) + float(b[2])) / 2.0
-            cy = (float(b[1]) + float(b[3])) / 2.0
-            d = (cx - ocx) ** 2 + (cy - ocy) ** 2
-            if d < best_d:
-                best_d, best_i = d, i
-        return best_i
+        head = pixel_points[_KP_NOSE]
+        if head is None:
+            le, re = pixel_points[_KP_LEFT_EYE], pixel_points[_KP_RIGHT_EYE]
+            if le is not None and re is not None:
+                head = ((le[0] + re[0]) / 2.0, (le[1] + re[1]) / 2.0)
+        if head is None:
+            ls, rs = pixel_points[_KP_LEFT_SHOULDER], pixel_points[_KP_RIGHT_SHOULDER]
+            if ls is not None and rs is not None:
+                # Omuz ortası başın ~bir kutu-boyu altında olur; kutuyu yukarı kaydır.
+                head = ((ls[0] + rs[0]) / 2.0, (ls[1] + rs[1]) / 2.0 - oh)
+        if head is None:
+            return True  # baş referansı yok → baskılama
+
+        cx, cy = ox + ow / 2.0, oy + oh / 2.0
+        # Yüz kutusu küçüktür; başın kutunun yakın çevresinde olmasına izin ver.
+        pad_x = ow * 1.5
+        pad_y = oh * 1.5
+        return abs(head[0] - cx) <= pad_x and abs(head[1] - cy) <= pad_y
+
+    @staticmethod
+    def _bbox_from_points(
+        pixel_points: list[tuple[float, float] | None],
+        frame_w: int,
+        frame_h: int,
+    ) -> tuple[float, float, float, float] | None:
+        """Görünür keypoint'lerden normalize kişi sınırlayıcı kutusu üretir."""
+        xs = [p[0] for p in pixel_points if p is not None]
+        ys = [p[1] for p in pixel_points if p is not None]
+        if not xs or not ys:
+            return None
+        x1 = max(0.0, min(xs) / max(frame_w, 1))
+        y1 = max(0.0, min(ys) / max(frame_h, 1))
+        x2 = min(1.0, max(xs) / max(frame_w, 1))
+        y2 = min(1.0, max(ys) / max(frame_h, 1))
+        return (round(x1, 4), round(y1, 4), round(x2, 4), round(y2, 4))

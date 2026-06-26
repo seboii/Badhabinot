@@ -1,8 +1,8 @@
 """Faz B — owner-kısıtlı analiz yardımcıları.
 
 Yalnızca hesap sahibinin analiz edilmesini sağlayan seçim/remap mantığını test
-eder (ağır ML çalıştırmadan): pose kişi-seçimi, el bölge-filtresi ve face-mesh
-owner-crop landmark remap matematiği.
+eder (ağır ML çalıştırmadan): MediaPipe pose owner-lock (baş-kutu örtüşmesi) +
+kişi-kutusu üretimi, el bölge-filtresi ve face-mesh owner-crop landmark remap.
 """
 
 from __future__ import annotations
@@ -16,24 +16,60 @@ from app.services.vision.vision_hand_tracker import VisionHandTracker
 from app.services.vision.vision_pose_estimator import VisionPoseEstimator
 
 
-# ── pose: _select_person_index ───────────────────────────────────────────────
-def test_select_person_index_picks_box_containing_owner() -> None:
-    # Sol kişi ve sağ kişi; owner yüz merkezi sağdakinin içinde.
-    boxes = np.array([[0.0, 0.0, 0.4, 1.0], [0.6, 0.0, 1.0, 1.0]])
-    assert VisionPoseEstimator._select_person_index(boxes, (0.8, 0.5)) == 1
-    assert VisionPoseEstimator._select_person_index(boxes, (0.2, 0.5)) == 0
+# ── pose: MediaPipe owner-lock (_head_matches_owner) ─────────────────────────
+def _pose_pts(
+    *,
+    nose: tuple[float, float] | None = None,
+    eyes: tuple[tuple[float, float], tuple[float, float]] | None = None,
+    shoulders: tuple[tuple[float, float], tuple[float, float]] | None = None,
+) -> list[tuple[float, float] | None]:
+    """17 elemanlı COCO piksel-nokta listesi (kullanılmayanlar None)."""
+    pts: list[tuple[float, float] | None] = [None] * 17
+    pts[0] = nose
+    if eyes:
+        pts[1], pts[2] = eyes
+    if shoulders:
+        pts[5], pts[6] = shoulders
+    return pts
 
 
-def test_select_person_index_prefers_smallest_containing_box() -> None:
-    # Büyük kutu da küçük kutu da merkezi içeriyor → en spesifik (küçük) seçilir.
-    boxes = np.array([[0.0, 0.0, 1.0, 1.0], [0.4, 0.4, 0.6, 0.6]])
-    assert VisionPoseEstimator._select_person_index(boxes, (0.5, 0.5)) == 1
+# owner yüz kutusu (300,140,80,80) → merkez (340,180); pad_x=pad_y=120.
+_OWNER_BBOX = (300, 140, 80, 80)
 
 
-def test_select_person_index_falls_back_to_nearest_when_none_contains() -> None:
-    boxes = np.array([[0.0, 0.0, 0.2, 0.2], [0.8, 0.8, 1.0, 1.0]])
-    # (0.5, 0.1) hiçbirinin içinde değil → kutu merkezine en yakın: index 0.
-    assert VisionPoseEstimator._select_person_index(boxes, (0.5, 0.1)) == 0
+def test_head_matches_owner_true_when_nose_inside_box() -> None:
+    assert VisionPoseEstimator._head_matches_owner(_pose_pts(nose=(340, 180)), _OWNER_BBOX) is True
+
+
+def test_head_matches_owner_false_when_nose_far() -> None:
+    # |600-340| = 260 > 120 → sahip değil (yabancı baskılanır).
+    assert VisionPoseEstimator._head_matches_owner(_pose_pts(nose=(600, 180)), _OWNER_BBOX) is False
+
+
+def test_head_matches_owner_uses_eye_mid_when_no_nose() -> None:
+    pts = _pose_pts(eyes=((330, 175), (350, 175)))  # orta (340,175) kutu içinde
+    assert VisionPoseEstimator._head_matches_owner(pts, _OWNER_BBOX) is True
+
+
+def test_head_matches_owner_true_when_no_head_reference() -> None:
+    # Baş referansı yok → doğrulanamaz → aşırı baskılamayı önlemek için True.
+    assert VisionPoseEstimator._head_matches_owner([None] * 17, _OWNER_BBOX) is True
+
+
+def test_head_matches_owner_degenerate_box_returns_true() -> None:
+    assert VisionPoseEstimator._head_matches_owner(_pose_pts(nose=(0, 0)), (300, 140, 0, 0)) is True
+
+
+# ── pose: kişi-kutusu üretimi (_bbox_from_points) ────────────────────────────
+def test_bbox_from_points_spans_visible_keypoints() -> None:
+    pts = _pose_pts(nose=(320, 100), shoulders=((220, 300), (420, 300)))
+    bbox = VisionPoseEstimator._bbox_from_points(pts, 640, 480)
+    assert bbox == (round(220 / 640, 4), round(100 / 480, 4),
+                    round(420 / 640, 4), round(300 / 480, 4))
+
+
+def test_bbox_from_points_none_when_no_visible_points() -> None:
+    assert VisionPoseEstimator._bbox_from_points([None] * 17, 640, 480) is None
 
 
 # ── hand: _hand_in_region ────────────────────────────────────────────────────

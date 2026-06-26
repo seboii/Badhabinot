@@ -55,13 +55,6 @@ public class UserSettings {
     @Column(name = "ollama_base_url", nullable = false, length = 255)
     private String ollamaBaseUrl;
 
-    @Enumerated(EnumType.STRING)
-    @Column(name = "chat_persona", nullable = false, length = 32)
-    private ChatPersona chatPersona;
-
-    @Column(name = "custom_system_prompt", columnDefinition = "TEXT")
-    private String customSystemPrompt;
-
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
@@ -82,10 +75,8 @@ public class UserSettings {
         this.quietHoursEnd = LocalTime.of(8, 0);
         this.modelMode = ModelMode.API;
         this.notificationsEnabled = true;
-        this.localModelName = "badhabinot:latest";
+        this.localModelName = "badhabinot-coach:latest";
         this.ollamaBaseUrl = "http://ollama:11434";
-        this.chatPersona = ChatPersona.GENERAL_CHAT;
-        this.customSystemPrompt = null;
     }
 
     public static UserSettings createDefault(UUID userId) {
@@ -115,9 +106,7 @@ public class UserSettings {
             ModelMode modelMode,
             boolean notificationsEnabled,
             String localModelName,
-            String ollamaBaseUrl,
-            ChatPersona chatPersona,
-            String customSystemPrompt
+            String ollamaBaseUrl
     ) {
         this.sensitivity = sensitivity;
         this.waterGoalMl = waterGoalMl;
@@ -130,8 +119,6 @@ public class UserSettings {
         this.notificationsEnabled = notificationsEnabled;
         this.localModelName = localModelName;
         this.ollamaBaseUrl = ollamaBaseUrl;
-        this.chatPersona = chatPersona;
-        this.customSystemPrompt = customSystemPrompt;
     }
 
     public UUID getUserId() {
@@ -180,14 +167,6 @@ public class UserSettings {
 
     public String getOllamaBaseUrl() {
         return ollamaBaseUrl;
-    }
-
-    public ChatPersona getChatPersona() {
-        return chatPersona;
-    }
-
-    public String getCustomSystemPrompt() {
-        return customSystemPrompt;
     }
 
     public Instant getUpdatedAt() {

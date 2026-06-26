@@ -1,10 +1,8 @@
 package com.badhabinot.backend.service.monitoring;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -96,7 +94,9 @@ class GroundedChatServiceTest {
     }
 
     @Test
-    void chatRejectsConversationThatDoesNotBelongToUser() {
+    void chatStartsNewConversationWhenIdNotOwned() {
+        // Bayat/yabancı conversation_id (önceki oturum/kullanıcı) ESKIDEN 400 ile sohbeti
+        // engellerdi; ARTIK yeni bir konuşma başlatır (istemci yanıttaki ID ile düzelir).
         UUID userId = UUID.randomUUID();
         UUID foreignConversationId = UUID.randomUUID();
         InternalUserAnalysisContext context = context(userId);
@@ -104,15 +104,32 @@ class GroundedChatServiceTest {
 
         when(userContextService.getMonitoringAnalysisContext(userId)).thenReturn(context);
         when(dailyReportService.getDailyReport(eq(userId), any(LocalDate.class), eq(context))).thenReturn(report);
+        when(chatContextBuilderService.build(eq(userId), eq(context), any(LocalDate.class), eq(report)))
+                .thenReturn(aiContext());
         when(chatMessageRepository.existsByUserIdAndConversationId(userId, foreignConversationId)).thenReturn(false);
+        when(aiChatClient.respond(any(AiChatRequest.class))).thenReturn(new AiChatResponse(
+                UUID.randomUUID().toString(),
+                "Bugün duruşun iyiydi.",
+                List.of(),
+                List.of(),
+                new AiChatResponse.ModelDetails("ollama", "badhabinot-coach:latest", "local")
+        ));
+        when(chatMessageRepository.save(any(ChatMessage.class))).thenAnswer(invocation -> {
+            ChatMessage message = invocation.getArgument(0);
+            ReflectionTestUtils.setField(message, "createdAt", Instant.parse("2026-04-08T09:00:00Z"));
+            return message;
+        });
+        when(chatMessageRepository.findByUserIdAndConversationIdOrderByCreatedAtDesc(
+                eq(userId), any(UUID.class), any(Pageable.class))).thenReturn(List.of());
 
-        assertThatThrownBy(() -> GroundedChatServiceImpl.chat(
+        var response = GroundedChatServiceImpl.chat(
                 jwt(userId),
                 new ChatRequest(foreignConversationId.toString(), "Show me the trend.")
-        )).isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("does not belong");
+        );
 
-        verify(chatMessageRepository, never()).save(any(ChatMessage.class));
+        // Reddetmedi: yeni konuşmada ilerledi ve kullanıcı + asistan mesajlarını kaydetti.
+        assertThat(response.answer()).isNotBlank();
+        verify(chatMessageRepository, times(2)).save(any(ChatMessage.class));
     }
 
     @Test
@@ -196,9 +213,7 @@ class GroundedChatServiceTest {
                 "08:00",
                 true,
                 "llama3.2:3b",
-                "http://localhost:11434",
-                "GENERAL_CHAT",
-                null
+                "http://localhost:11434"
         );
     }
 
