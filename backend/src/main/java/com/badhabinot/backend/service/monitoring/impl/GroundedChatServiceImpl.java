@@ -295,8 +295,11 @@ public class GroundedChatServiceImpl implements IGroundedChatService {
             return UUID.randomUUID();
         }
         UUID parsed = parseConversationId(conversationId);
+        // Bayat/yabancı conversation_id (önceki oturum/kullanıcı ya da istemci-üretimi
+        // yeni ID) sohbeti ENGELLEMEsin: sahibi değilse yeni bir konuşma başlat.
+        // İstemci, yanıtta dönen conversation_id ile sessionStorage'ı kendisi düzeltir.
         if (!chatMessageRepository.existsByUserIdAndConversationId(userId, parsed)) {
-            throw new IllegalArgumentException("conversation_id does not belong to the authenticated user");
+            return UUID.randomUUID();
         }
         return parsed;
     }
@@ -308,8 +311,11 @@ public class GroundedChatServiceImpl implements IGroundedChatService {
                     .orElse(null);
         }
         UUID parsed = parseConversationId(conversationId);
+        // Geçmiş için: bayat/yabancı ID'de hata yerine kullanıcının en son konuşmasına düş.
         if (!chatMessageRepository.existsByUserIdAndConversationId(userId, parsed)) {
-            throw new IllegalArgumentException("conversation_id does not belong to the authenticated user");
+            return chatMessageRepository.findFirstByUserIdOrderByCreatedAtDesc(userId)
+                    .map(ChatMessage::getConversationId)
+                    .orElse(null);
         }
         return parsed;
     }
