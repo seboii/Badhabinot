@@ -2,7 +2,6 @@ package com.badhabinot.backend.service.auth.impl;
 
 import com.badhabinot.backend.dto.auth.AuthenticatedUserResponse;
 import com.badhabinot.backend.dto.auth.ChangePasswordDto;
-import com.badhabinot.backend.dto.auth.FaceLoginRequest;
 import com.badhabinot.backend.dto.auth.LoginRequest;
 import com.badhabinot.backend.dto.auth.LogoutRequest;
 import com.badhabinot.backend.dto.auth.RefreshTokenRequest;
@@ -11,13 +10,7 @@ import com.badhabinot.backend.dto.auth.RegisterResponse;
 import com.badhabinot.backend.dto.auth.TokenResponse;
 import com.badhabinot.backend.common.exception.auth.AuthenticationFailedException;
 import com.badhabinot.backend.common.exception.auth.DuplicateEmailException;
-import com.badhabinot.backend.common.exception.auth.FaceLivenessFailedException;
-import com.badhabinot.backend.common.exception.auth.FaceMismatchException;
-import com.badhabinot.backend.common.exception.auth.FaceNotRegisteredException;
 import com.badhabinot.backend.common.exception.auth.InvalidRefreshTokenException;
-import com.badhabinot.backend.dto.monitoring.FaceLiveVerificationResponse;
-import com.badhabinot.backend.infrastructure.redis.FaceChallengeService;
-import com.badhabinot.backend.integration.python.VisionServiceClient;
 import com.badhabinot.backend.model.auth.AccountStatus;
 import com.badhabinot.backend.model.auth.AuthUser;
 import com.badhabinot.backend.model.auth.RefreshToken;
@@ -48,8 +41,6 @@ public class AuthApplicationServiceImpl implements IAuthApplicationService {
     private final IRefreshTokenService refreshTokenService;
     private final IUserContextService userContextService;
     private final LoginAttemptService loginAttemptService;
-    private final VisionServiceClient visionServiceClient;
-    private final FaceChallengeService faceChallengeService;
 
     public AuthApplicationServiceImpl(
             AuthUserRepository authUserRepository,
@@ -58,9 +49,7 @@ public class AuthApplicationServiceImpl implements IAuthApplicationService {
             ITokenIssuer tokenIssuer,
             IRefreshTokenService refreshTokenService,
             IUserContextService userContextService,
-            LoginAttemptService loginAttemptService,
-            VisionServiceClient visionServiceClient,
-            FaceChallengeService faceChallengeService
+            LoginAttemptService loginAttemptService
     ) {
         this.authUserRepository = authUserRepository;
         this.refreshTokenRepository = refreshTokenRepository;
@@ -69,8 +58,6 @@ public class AuthApplicationServiceImpl implements IAuthApplicationService {
         this.refreshTokenService = refreshTokenService;
         this.userContextService = userContextService;
         this.loginAttemptService = loginAttemptService;
-        this.visionServiceClient = visionServiceClient;
-        this.faceChallengeService = faceChallengeService;
     }
 
 
@@ -168,54 +155,6 @@ public class AuthApplicationServiceImpl implements IAuthApplicationService {
     }
 
 
-    @Transactional(transactionManager = "authTransactionManager")
-    @Override
-    public TokenResponse loginWithFace(FaceLoginRequest request) {
-        String normalizedEmail = normalizeEmail(request.email());
-        loginAttemptService.checkNotBlocked(normalizedEmail);
-
-        AuthUser user = authUserRepository.findByEmail(normalizedEmail).orElse(null);
-        if (user == null) {
-            loginAttemptService.recordFailure(normalizedEmail);
-            throw new AuthenticationFailedException("Invalid email or password");
-        }
-        if (user.getStatus() == AccountStatus.PENDING_APPROVAL) {
-            throw new AuthenticationFailedException("Hesabınız henüz yönetici tarafından onaylanmadı. Lütfen onay bekleyin.");
-        }
-        if (user.getStatus() != AccountStatus.ACTIVE) {
-            loginAttemptService.recordFailure(normalizedEmail);
-            throw new AuthenticationFailedException("Account is not active");
-        }
-
-        var faceStatus = visionServiceClient.faceStatus(user.getId().toString());
-        if (!faceStatus.success()) {
-            throw new FaceNotRegisteredException("No face profile registered for this account. Please sign in with your password.");
-        }
-
-        // Aktif challenge: istemcinin önceden kaydedilmiş bir kareyle geçmesini
-        // engellemek için sunucu rastgele bir eylem ister (göz kırpma / baş çevirme).
-        String expectedAction = faceChallengeService.consume(request.challengeId());
-
-        FaceLiveVerificationResponse verification = visionServiceClient.verifyFaceLive(
-                user.getId().toString(),
-                expectedAction,
-                request.frames(),
-                request.imageContentType()
-        );
-        if (!verification.verified()) {
-            loginAttemptService.recordFailure(normalizedEmail);
-            throw new FaceMismatchException("Face verification failed. Please try again or sign in with your password.");
-        }
-        if (!verification.livenessPassed()) {
-            loginAttemptService.recordFailure(normalizedEmail);
-            throw new FaceLivenessFailedException("Liveness check failed. Please perform the requested action and try again.");
-        }
-
-        loginAttemptService.resetAttempts(normalizedEmail);
-        user.recordLogin();
-        authUserRepository.save(user);
-        return issueTokenResponse(user);
-    }
 
 
     @Transactional(transactionManager = "authTransactionManager")

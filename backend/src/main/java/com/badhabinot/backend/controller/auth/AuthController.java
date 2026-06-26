@@ -1,7 +1,6 @@
 package com.badhabinot.backend.controller.auth;
 
 import com.badhabinot.backend.dto.auth.AuthenticatedUserResponse;
-import com.badhabinot.backend.dto.auth.FaceLoginRequest;
 import com.badhabinot.backend.dto.auth.LoginRequest;
 import com.badhabinot.backend.dto.auth.LogoutRequest;
 import com.badhabinot.backend.dto.auth.PasswordResetConfirmDto;
@@ -14,9 +13,7 @@ import com.badhabinot.backend.common.exception.auth.TooManyLoginAttemptsExceptio
 import com.badhabinot.backend.dto.auth.CaptchaChallengeResponse;
 import com.badhabinot.backend.dto.auth.CaptchaVerifyRequest;
 import com.badhabinot.backend.dto.auth.CaptchaVerifyResponse;
-import com.badhabinot.backend.dto.auth.FaceChallengeResponse;
 import com.badhabinot.backend.infrastructure.redis.CaptchaService;
-import com.badhabinot.backend.infrastructure.redis.FaceChallengeService;
 import com.badhabinot.backend.infrastructure.redis.RateLimiterService;
 import com.badhabinot.backend.model.auth.AuthUser;
 import com.badhabinot.backend.model.auth.UserRole;
@@ -51,7 +48,6 @@ public class AuthController {
     private final IPasswordResetService passwordResetService;
     private final RateLimiterService rateLimiter;
     private final CaptchaService captchaService;
-    private final FaceChallengeService faceChallengeService;
     private final IMailService mailService;
     private final AuthUserRepository authUserRepository;
     private final IPushNotificationService pushNotificationService;
@@ -61,7 +57,6 @@ public class AuthController {
             IPasswordResetService passwordResetService,
             RateLimiterService rateLimiter,
             CaptchaService captchaService,
-            FaceChallengeService faceChallengeService,
             IMailService mailService,
             AuthUserRepository authUserRepository,
             IPushNotificationService pushNotificationService
@@ -70,7 +65,6 @@ public class AuthController {
         this.passwordResetService = passwordResetService;
         this.rateLimiter = rateLimiter;
         this.captchaService = captchaService;
-        this.faceChallengeService = faceChallengeService;
         this.mailService = mailService;
         this.authUserRepository = authUserRepository;
         this.pushNotificationService = pushNotificationService;
@@ -125,18 +119,6 @@ public class AuthController {
     @Operation(summary = "Authenticate an existing BADHABINOT user")
     public TokenResponse login(@Valid @RequestBody LoginRequest request) {
         return authApplicationService.login(request);
-    }
-
-    @PostMapping("/login/face/challenge")
-    @Operation(summary = "Issue a random liveness challenge (blink / head-turn) for face login")
-    public FaceChallengeResponse faceChallenge() {
-        return faceChallengeService.issue();
-    }
-
-    @PostMapping("/login/face")
-    @Operation(summary = "Authenticate using face recognition + active-challenge liveness")
-    public TokenResponse loginWithFace(@Valid @RequestBody FaceLoginRequest request) {
-        return authApplicationService.loginWithFace(request);
     }
 
     @PostMapping("/refresh")
