@@ -126,11 +126,16 @@ class VisionPoseEstimator:
         if not _MP_AVAILABLE:
             return None
 
-        pose = self._get_pose()
         h, w = image.shape[:2]
-
-        rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-        results = pose.process(rgb)
+        try:
+            pose = self._get_pose()
+            rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+            results = pose.process(rgb)
+        except Exception:
+            # MediaPipe modeli yüklen/çalışamazsa (ör. heavy model indirme izni yok)
+            # TÜM kareyi çökertme; bu karede postür atlanır, diğer dedektörler çalışır.
+            logger.warning("MediaPipe Pose çalıştırılamadı — bu karede postür atlandı", exc_info=True)
+            return None
         if not getattr(results, "pose_landmarks", None):
             return None
 
