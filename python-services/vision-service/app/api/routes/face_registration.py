@@ -9,7 +9,6 @@ Endpoints:
 from __future__ import annotations
 
 import base64
-import threading
 
 import cv2
 import numpy as np
@@ -18,24 +17,13 @@ from fastapi import APIRouter, Depends, HTTPException
 from app.core.security import require_internal_api_key
 from app.schemas.vision import (
     FaceDeleteResponse,
-    FaceLiveVerifyRequest,
-    FaceLiveVerifyResponse,
     FaceRegisterRequest,
     FaceRegisterResponse,
-    FaceVerifyRequest,
-    FaceVerifyResponse,
 )
 from app.services.vision.vision_face_auth import VisionFaceAuth
-from app.services.vision.vision_face_mesh import VisionFaceMesh
-from app.services.vision.vision_liveness import verify_liveness
 
 router = APIRouter(prefix="/v1/vision/face", tags=["face-registration"])
 _auth = VisionFaceAuth()
-_mesh = VisionFaceMesh()
-# DeepFace ve MediaPipe thread-safe değil; giriş düşük eşzamanlılıklı olduğundan
-# canlılık doğrulamasını basitçe serileştiriyoruz.
-_live_lock = threading.Lock()
-_MAX_LIVE_FRAMES = 12
 
 
 def _decode_image(image_base64: str) -> np.ndarray:
@@ -85,72 +73,6 @@ async def register_face(
         success=True,
         frames_enrolled=frames,
         message=msg,
-    )
-
-
-@router.post("/{user_id}/verify", response_model=FaceVerifyResponse)
-async def verify_face(
-    user_id: str,
-    request: FaceVerifyRequest,
-    _: None = Depends(require_internal_api_key),
-) -> FaceVerifyResponse:
-    """Verify a face image against stored embeddings for login authentication.
-
-    Returns verified=True only when:
-    - The user has a registered face profile (≥3 frames)
-    - Exactly one face is detected in the image
-    - Cosine similarity against stored embeddings >= 0.85
-    """
-    image = _decode_image(request.image_base64)
-    verified, confidence, message = _auth.verify_face_for_login(user_id, image)
-    return FaceVerifyResponse(verified=verified, confidence=confidence, message=message)
-
-
-@router.post("/{user_id}/verify-live", response_model=FaceLiveVerifyResponse)
-async def verify_face_live(
-    user_id: str,
-    request: FaceLiveVerifyRequest,
-    _: None = Depends(require_internal_api_key),
-) -> FaceLiveVerifyResponse:
-    """Aktif challenge ile yüz girişi: kimlik + canlılık tek istekte doğrulanır.
-
-    - **Kimlik:** dizideki örnek kareler saklı embedding'lerle karşılaştırılır.
-    - **Canlılık:** istenen eylem (BLINK / TURN_HEAD) kare dizisi boyunca EAR/yaw
-      zaman serisinden doğrulanır. Durağan bir fotoğraf bunu geçemez.
-    """
-    frames_b64 = request.frames[:_MAX_LIVE_FRAMES]
-    if not frames_b64:
-        raise HTTPException(status_code=400, detail="no frames provided")
-
-    images = [_decode_image(f) for f in frames_b64]
-
-    with _live_lock:
-        # Kimlik: maliyeti sınırlamak için en çok 3 örnek kareyi dene, en iyisini al.
-        sample_idx = sorted({0, len(images) // 2, len(images) - 1})
-        best_conf = 0.0
-        identity_ok = False
-        for idx in sample_idx:
-            verified, confidence, _msg = _auth.verify_face_for_login(user_id, images[idx])
-            best_conf = max(best_conf, float(confidence))
-            if verified:
-                identity_ok = True
-                break
-
-        liveness = verify_liveness(_mesh, images, request.action)
-
-    if not identity_ok:
-        message = "Yüz eşleşmedi"
-    elif not liveness.passed:
-        message = liveness.detail
-    else:
-        message = "Yüz ve canlılık doğrulandı"
-
-    return FaceLiveVerifyResponse(
-        verified=identity_ok,
-        liveness_passed=liveness.passed,
-        action_detected=liveness.action_detected,
-        confidence=round(best_conf, 4),
-        message=message,
     )
 
 
