@@ -68,9 +68,10 @@ class Settings:
 
     # MediaPipe Pose (postür iskeleti) — YOLOv8-pose yerine.
     #   complexity: 0 (en hızlı) / 1 (denge) / 2 (en doğru, en yavaş).
-    #   min_confidence: kişi tespiti için minimum güven.
-    posture_pose_complexity: int = _env_int("POSTURE_POSE_COMPLEXITY", 1)
-    posture_pose_min_confidence: float = _env_float("POSTURE_POSE_MIN_CONFIDENCE", 0.5)
+    #     2 = oturur webcam çerçevesinde omuz/üst-gövde landmark'ları en güvenilir.
+    #   min_confidence: kişi tespiti için minimum güven (düşük = marjinal çerçevede de yakalar).
+    posture_pose_complexity: int = _env_int("POSTURE_POSE_COMPLEXITY", 2)
+    posture_pose_min_confidence: float = _env_float("POSTURE_POSE_MIN_CONFIDENCE", 0.4)
 
     # CPU thread tavanı (0 = dokunma/torch varsayılanı). Nesne tespiti YOLO'su
     # için geçerli; eş zamanlı isteklerde oversubscription'ı önlemek için 2-4.

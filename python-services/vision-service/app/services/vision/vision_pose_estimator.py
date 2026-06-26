@@ -61,8 +61,10 @@ _KP_RIGHT_SHOULDER = 6
 #          15/16 wrists, 23/24 hips, 25/26 knees, 27/28 ankles
 _COCO_TO_MP: tuple[int, ...] = (0, 2, 5, 7, 8, 11, 12, 13, 14, 15, 16, 23, 24, 25, 26, 27, 28)
 
-# Bu görünürlüğün (visibility) altındaki keypoint "yok" sayılır.
-_KP_CONFIDENCE_FLOOR = 0.3
+# Bu görünürlüğün (visibility) altındaki keypoint "yok" sayılır. Oturur webcam
+# çerçevesinde omuzlar genelde 0.3-0.5 bandında kalır; eşik 0.2 onları düşürmez
+# (aksi halde omuz yoksa postür "belirsiz" olur).
+_KP_CONFIDENCE_FLOOR = 0.2
 
 
 @dataclass
