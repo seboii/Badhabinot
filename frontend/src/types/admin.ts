@@ -32,7 +32,6 @@ export type AdminUserDetail = {
     model_mode: string
     local_model_name: string
     ollama_base_url: string
-    chat_persona: string
     water_goal_ml: number
     water_interval_min: number
     exercise_interval_min: number
@@ -74,7 +73,6 @@ export type AdminUserAiSettingsRequest = {
   model_mode: 'API' | 'LOCAL'
   local_model_name?: string
   ollama_base_url?: string
-  chat_persona?: 'GENERAL_CHAT' | 'BEHAVIOR_COACH' | 'CUSTOM'
 }
 
 export type AdminStats = {

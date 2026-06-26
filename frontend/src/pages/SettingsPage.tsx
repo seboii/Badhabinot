@@ -142,8 +142,6 @@ export function SettingsPage() {
             model_mode: user.settings.model_mode,
             local_model_name: user.settings.local_model_name,
             ollama_base_url: user.settings.ollama_base_url,
-            chat_persona: user.settings.chat_persona,
-            custom_system_prompt: user.settings.custom_system_prompt,
           })
         }
       />
