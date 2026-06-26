@@ -120,9 +120,7 @@ public class GroundedChatServiceImpl implements IGroundedChatService {
                 aiContext,
                 context.modelMode(),
                 context.localModelName(),
-                context.ollamaBaseUrl(),
-                context.chatPersona(),
-                context.customSystemPrompt()
+                context.ollamaBaseUrl()
         ));
 
         Map<String, Object> metadata = new LinkedHashMap<>();
@@ -185,8 +183,7 @@ public class GroundedChatServiceImpl implements IGroundedChatService {
             return new SetupData(conversationId, new AiChatRequest(
                     conversationId.toString(), userId.toString(), context.timezone(), report.reportDate(),
                     request.message(), historyItems, aiContext,
-                    context.modelMode(), context.localModelName(), context.ollamaBaseUrl(),
-                    context.chatPersona(), context.customSystemPrompt()));
+                    context.modelMode(), context.localModelName(), context.ollamaBaseUrl()));
         }));
 
         SseEmitter emitter = new SseEmitter(300_000L);

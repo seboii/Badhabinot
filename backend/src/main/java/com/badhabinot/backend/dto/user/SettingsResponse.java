@@ -1,6 +1,5 @@
 package com.badhabinot.backend.dto.user;
 
-import com.badhabinot.backend.model.user.ChatPersona;
 import com.badhabinot.backend.model.user.ModelMode;
 import com.badhabinot.backend.model.user.Sensitivity;
 import com.fasterxml.jackson.annotation.JsonFormat;
@@ -19,8 +18,6 @@ public record SettingsResponse(
         boolean notificationsEnabled,
         String localModelName,
         String ollamaBaseUrl,
-        ChatPersona chatPersona,
-        String customSystemPrompt,
         Instant updatedAt
 ) {
 }

@@ -196,9 +196,7 @@ class GroundedChatServiceTest {
                 "08:00",
                 true,
                 "llama3.2:3b",
-                "http://localhost:11434",
-                "GENERAL_CHAT",
-                null
+                "http://localhost:11434"
         );
     }
 
