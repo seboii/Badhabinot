@@ -28,8 +28,7 @@ import re
 import sys
 from pathlib import Path
 
-from .prompt_format import build_inference_messages, grounding_reference_text
-from .schema import CoachingExample, MonitoringContext, load_jsonl
+from .schema import ChatExample, load_jsonl
 
 _NUM_RE = re.compile(r"\d+(?:[.,]\d+)?")
 _REFUSAL_MARKERS = ("yardımcı olamam", "erişimim yok", "paylaşamam", "reddet")
@@ -58,23 +57,21 @@ def _to_float(token: str) -> float | None:
         return None
 
 
-def allowed_numbers(ctx: MonitoringContext) -> set[float]:
-    """Bağlamda geçen + tüm prompt bloklarında türetilen sayılar (grounding referansı)."""
-    text = grounding_reference_text(ctx)
+def allowed_numbers(prompt_text: str) -> set[float]:
+    """Prompt'ta (system+user mesajlarında) geçen sayılar — grounding referansı.
+
+    Modelin yanıtında bu kümede OLMAYAN bir sayı = uydurma (grounding ihlali).
+    """
     vals: set[float] = set()
-    for tok in _NUM_RE.findall(text):
+    for tok in _NUM_RE.findall(prompt_text):
         f = _to_float(tok)
         if f is not None:
             vals.add(f)
-    # ham alanlar da serbest
-    for v in (ctx.hydration_progress_ml, ctx.water_goal_ml, ctx.posture_alert_count,
-              ctx.smoking_like_count, ctx.hand_movement_count, ctx.analyses_completed):
-        vals.add(float(v))
     return vals
 
 
-def grounding_score(answer: str, ctx: MonitoringContext) -> float:
-    """Yanıttaki sayıların bağlamda bulunma oranı (1.0 = uydurma yok). Sayı yoksa 1.0.
+def grounding_score(answer: str, prompt_text: str) -> float:
+    """Yanıttaki sayıların prompt'ta bulunma oranı (1.0 = uydurma yok). Sayı yoksa 1.0.
 
     Sayılar float olarak karşılaştırılır (80 == 80.0); ondalık/yuvarlama farkı
     yanlış cezaya yol açmaz.
@@ -82,7 +79,7 @@ def grounding_score(answer: str, ctx: MonitoringContext) -> float:
     answer_nums = [f for f in (_to_float(t) for t in _NUM_RE.findall(answer)) if f is not None]
     if not answer_nums:
         return 1.0
-    allowed = allowed_numbers(ctx)
+    allowed = allowed_numbers(prompt_text)
     grounded = sum(1 for f in answer_nums if any(abs(f - a) < 1e-6 for a in allowed))
     return round(grounded / len(answer_nums), 4)
 
@@ -131,24 +128,25 @@ def evaluate(model_path: str, data_path: str, tag: str, out_path: str | None) ->
     refuse_total = refuse_ok = 0
     rows = []
     for ex in examples:
-        answer = generate(build_inference_messages(ex))
+        prompt_msgs = ex.prompt_messages()
+        prompt_text = " ".join(m["content"] for m in prompt_msgs)
+        question = next((m["content"] for m in reversed(prompt_msgs) if m["role"] == "user"), "")
+        answer = generate(prompt_msgs)
         tr = is_turkish(answer)
         pt = is_plaintext(answer)
         tr_hits += int(tr)
         pt_hits += int(pt)
-        if ex.kind == "refuse":
+        # "Reddetme" örneği = hedef yanıtın kendisi bir reddetme; grounding örneği = diğerleri.
+        if is_refusal(ex.target):
             refuse_total += 1
-            leaked = grounding_score(answer, ex.context) < 1.0 and any(_NUM_RE.findall(answer))
+            leaked = grounding_score(answer, prompt_text) < 1.0 and any(_NUM_RE.findall(answer))
             refuse_ok += int(is_refusal(answer) and not leaked)
             gs = None
-        elif ex.kind == "answer":
-            gs = grounding_score(answer, ex.context)
+        else:
+            gs = grounding_score(answer, prompt_text)
             ground_sum += gs
             ground_n += 1
-        else:
-            gs = None
-        rows.append({"persona": ex.persona, "kind": ex.kind, "q": ex.question,
-                     "answer": answer, "tr": tr, "plaintext": pt, "grounding": gs})
+        rows.append({"q": question, "answer": answer, "tr": tr, "plaintext": pt, "grounding": gs})
 
     report = {
         "tag": tag,
